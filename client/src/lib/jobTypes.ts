@@ -20,6 +20,10 @@ export interface DispatchJob {
   planFile: { url: string; filename?: string }[];
   fieldPhotos: { url: string; filename?: string; thumbnails?: any }[];
   fieldComments: string | null;
+  closureType: string | null;
+  impact: string | null;
+  calendarInfo: string | null;
+  emoji: string | null;
   zone: string;
 }
 

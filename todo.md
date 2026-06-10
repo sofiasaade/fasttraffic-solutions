@@ -214,3 +214,11 @@
 - [x] Surface code/VIN/plate in Scheduler Trucks tab UI
 - [x] Update integration test mock + assertions
 - [x] All tests passing (44)
+
+## Feature 26: Closure Type, Impact & Emoji (Airtable read-only)
+- [x] Add closureType ("Closure Type"), impact ("Impact Category"), calendarInfo ("Calendar info") to AF + JobRecord
+- [x] Map closureType (multi-select joined), impact, calendarInfo + extract emoji in mapRecordToJob
+- [x] Add closureType/impact/calendarInfo/emoji to frontend DispatchJob type
+- [x] Show emoji + closureType + impact in JobDetailInline accordion
+- [x] Show emoji + impact badge (color by difficulty word) + closure type on Scheduler job rows
+- [x] TypeScript clean + 50 tests passing (added airtable.mapping.test.ts)

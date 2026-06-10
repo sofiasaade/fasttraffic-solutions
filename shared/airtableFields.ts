@@ -24,6 +24,9 @@ export const AF = {
   siteContactPhone: "Site Contact Phone Number",
   requestorName: "Requestor Name",
   requestorPhone: "Requestor Phone Number",
+  closureType: "Closure Type",
+  impact: "Impact Category",
+  calendarInfo: "Calendar info",
 } as const;
 
 // Statuses that appear on the Coordinator Dispatch Board
@@ -132,6 +135,14 @@ export interface JobRecord {
   planFile: AirtableAttachment[];
   fieldPhotos: AirtableAttachment[];
   fieldComments: string | null;
+  /** Type(s) of closure, joined with " · " (Airtable field is multi-select). */
+  closureType: string | null;
+  /** Job difficulty / impact level (e.g. "2️⃣ Low", "3️⃣ Medium"). */
+  impact: string | null;
+  /** Raw "Calendar Info" string; the job emoji is extracted from this. */
+  calendarInfo: string | null;
+  /** Leading emoji extracted from calendarInfo, if any. */
+  emoji: string | null;
 }
 
 // Hazard Assessment checklist items (traffic control field work).

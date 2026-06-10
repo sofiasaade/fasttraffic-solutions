@@ -64,6 +64,34 @@ function asMultiSelect(v: unknown): string[] {
   return [];
 }
 
+// Single emoji matcher (one pictographic grapheme incl. surrogate pairs,
+// variation selectors and ZWJ sequences) without relying on the `u` flag's
+// Unicode property escapes (which require a newer TS target).
+const EMOJI_TOKEN =
+  /(?:[\u2600-\u27BF\u2B00-\u2BFF\u2190-\u21FF]|[\uD83C-\uDBFF][\uDC00-\uDFFF])(?:\uFE0F|\u20E3|\u200D(?:[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]))*/;
+
+// Extract the leading run of emojis from a string such as the "Calendar info"
+// field (values often start with one or more emojis, e.g. "📌 🚨 Company...").
+// Returns the joined emoji prefix, or null when none are present.
+function extractEmoji(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const run = new RegExp(`^\\s*(?:${EMOJI_TOKEN.source}\\s*)+`);
+  const m = v.match(run);
+  if (!m) return null;
+  const emojis = m[0].match(new RegExp(EMOJI_TOKEN.source, "g"));
+  return emojis ? emojis.join(" ") : null;
+}
+
+// Join a multi-select Airtable value into a single display string.
+function asJoined(v: unknown, sep = " · "): string | null {
+  if (Array.isArray(v)) {
+    const parts = v.filter((x): x is string => typeof x === "string" && x !== "None");
+    return parts.length ? parts.join(sep) : null;
+  }
+  if (typeof v === "string") return v || null;
+  return null;
+}
+
 function asAttachments(v: unknown): AirtableAttachment[] {
   if (Array.isArray(v)) {
     return v.map((a: any) => ({
@@ -101,6 +129,10 @@ export function mapRecordToJob(record: any): JobRecord {
     planFile: asAttachments(f[AF.planFile]),
     fieldPhotos: asAttachments(f[AF.fieldPhotos]),
     fieldComments: asString(f[AF.fieldComments]),
+    closureType: asJoined(f[AF.closureType]),
+    impact: asString(f[AF.impact]),
+    calendarInfo: asString(f[AF.calendarInfo]),
+    emoji: extractEmoji(f[AF.calendarInfo]),
   };
 }
 

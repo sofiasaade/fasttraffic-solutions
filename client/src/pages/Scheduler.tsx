@@ -43,6 +43,7 @@ import {
   ExternalLink,
   Map as MapIcon,
   ChevronsUpDown,
+  Construction,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,36 @@ const PHASE_COLOR: Record<Phase, string> = {
   Setup: "bg-orange-100 text-orange-800 border-orange-200",
   Pickup: "bg-emerald-100 text-emerald-800 border-emerald-200",
 };
+
+// Strip a leading keycap/number emoji and whitespace from impact values
+// like "2️⃣ Low" -> "Low". Falls back to the trimmed original.
+function impactLabel(impact: string): string {
+  return (
+    impact
+      // keycap digits (0️⃣ .. 9️⃣), variation selectors, leading digits/symbols
+      .replace(/[0-9\uFE0F\u20E3#*]/g, "")
+      .replace(/^[\s.\-:]+/, "")
+      .trim() || impact.trim()
+  );
+}
+
+// Color the Impact (difficulty) badge. Matches common Airtable values
+// (Low / Medium / High / Critical) case-insensitively, with a neutral
+// fallback for anything else.
+function impactBadgeClass(impact: string): string {
+  // Color strictly by the difficulty word — Airtable's leading number
+  // ("2️⃣ Low") does NOT correspond to severity, so ignore digits.
+  const v = impactLabel(impact).toLowerCase();
+  if (/(critical|severe|extreme)/.test(v))
+    return "bg-red-100 text-red-800 border-red-200";
+  if (/(high|hard|major)/.test(v))
+    return "bg-orange-100 text-orange-800 border-orange-200";
+  if (/(med|moderate)/.test(v))
+    return "bg-amber-100 text-amber-800 border-amber-200";
+  if (/(low|easy|minor)/.test(v))
+    return "bg-emerald-100 text-emerald-800 border-emerald-200";
+  return "bg-slate-100 text-slate-700 border-slate-200";
+}
 
 // Status sections mirror the Dispatch board grouping.
 type SectionKey = "submitted" | "approved" | "field" | "cancelled";
@@ -569,14 +600,37 @@ export default function Scheduler() {
         />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+            {job.emoji ? (
+              <span className="text-sm shrink-0 leading-none" title={job.calendarInfo ?? undefined}>
+                {job.emoji}
+              </span>
+            ) : (
+              <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+            )}
             <span className="font-medium text-sm truncate group-hover/jobcell:text-primary">
               {job.company ?? "—"}
             </span>
+            {job.impact && (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border",
+                  impactBadgeClass(job.impact),
+                )}
+                title={`Impact: ${job.impact}`}
+              >
+                {impactLabel(job.impact)}
+              </span>
+            )}
           </div>
           <div className="text-xs text-muted-foreground truncate mt-0.5">
             {job.jobAddress ?? "No address"}
           </div>
+          {job.closureType && (
+            <div className="text-[11px] text-muted-foreground/90 truncate mt-0.5 flex items-center gap-1">
+              <Construction className="size-3 shrink-0" />
+              <span className="truncate">{job.closureType}</span>
+            </div>
+          )}
         </div>
       </button>
 
@@ -1488,6 +1542,24 @@ function JobDetailInline({ job }: { job: Job }) {
             <DetailRow icon={<MapIcon className="size-4" />} label="Municipality / Zone">
               {job.municipality}
               {job.zone ? ` · ${job.zone}` : ""}
+            </DetailRow>
+          )}
+          {job.closureType && (
+            <DetailRow icon={<Construction className="size-4" />} label="Closure Type">
+              {job.emoji ? `${job.emoji} ` : ""}
+              {job.closureType}
+            </DetailRow>
+          )}
+          {job.impact && (
+            <DetailRow icon={<AlertTriangle className="size-4" />} label="Impact / Difficulty">
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide border",
+                  impactBadgeClass(job.impact),
+                )}
+              >
+                {impactLabel(job.impact)}
+              </span>
             </DetailRow>
           )}
         </div>
