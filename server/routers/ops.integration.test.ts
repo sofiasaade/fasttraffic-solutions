@@ -212,6 +212,28 @@ describe("Assignment conflict detection", () => {
   });
 });
 
+describe("Permit map view", () => {
+  it("returns only Permit Approved jobs with their coordinates", async () => {
+    state.dispatchJobs = [
+      makeJob({ id: "recFIELD", status: "Field" }),
+      makeJob({
+        id: "recPERMIT",
+        company: "Permit Co",
+        status: "Permit Approved",
+        lat: 51.05,
+        lon: -114.07,
+      }),
+    ];
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.mapJobs();
+    expect(res.length).toBe(1);
+    expect(res[0].id).toBe("recPERMIT");
+    expect(res[0].lat).toBe(51.05);
+    expect(res[0].lon).toBe(-114.07);
+    expect(res[0].zone).toBeTruthy();
+  });
+});
+
 describe("Change history is append-only and comprehensive", () => {
   it("records an entry for every assignment and never rewrites prior entries", async () => {
     const caller = appRouter.createCaller(adminCtx());

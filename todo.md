@@ -68,3 +68,10 @@
 - [x] Vitest for coordinator.assignTechnicians (phase field mapping + conflict block unless force) using mocked Airtable
 - [x] Vitest for technician.checkIn hazard gate (blocked without assessment)
 - [x] Vitest for change history immutability / append-only behavior
+
+## Feature 11: Permit Approved Map View (coordinator)
+- [x] Backend procedure returning Permit Approved jobs with Lat/Lon
+- [x] Map page using existing Map.tsx component (Google Maps)
+- [x] Markers per job with info window (company, address, dates, status)
+- [x] Add nav entry in CoordinatorShell
+- [x] Handle jobs missing coordinates (geocode fallback + list flag)

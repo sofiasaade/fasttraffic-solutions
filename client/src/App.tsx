@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import DispatchBoard from "./pages/DispatchBoard";
 import OvertimeDashboard from "./pages/OvertimeDashboard";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
+import PermitMap from "./pages/PermitMap";
 import TechnicianApp from "./pages/TechnicianApp";
 
 function FullScreenLoader() {
@@ -48,6 +49,11 @@ function Router() {
           <Route path="/dispatch">
             <CoordinatorShell>
               <DispatchBoard />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/map">
+            <CoordinatorShell>
+              <PermitMap />
             </CoordinatorShell>
           </Route>
           <Route path="/overtime">

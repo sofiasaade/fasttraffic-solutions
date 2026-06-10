@@ -48,6 +48,29 @@ export const coordinatorRouter = router({
     return jobs.map(withZone);
   }),
 
+  // Jobs with Status = Permit Approved, for the coordinator map view.
+  mapJobs: adminProcedure.query(async () => {
+    const jobs = await fetchDispatchJobs();
+    return jobs
+      .filter((j) => j.status === "Permit Approved")
+      .map((j) => {
+        const z = withZone(j);
+        return {
+          id: z.id,
+          company: z.company,
+          jobAddress: z.jobAddress,
+          municipality: z.municipality,
+          startDate: z.startDate,
+          endDate: z.endDate,
+          setupDuration: z.setupDuration,
+          subStatus: z.subStatus,
+          zone: z.zone,
+          lat: z.lat,
+          lon: z.lon,
+        };
+      });
+  }),
+
   jobDetail: adminProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
