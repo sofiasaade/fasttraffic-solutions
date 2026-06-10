@@ -53,6 +53,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
+import { isCancelledJob } from "@shared/jobStatus";
 
 type Phase = "Preparation" | "Setup" | "Pickup";
 const PHASES: Phase[] = ["Preparation", "Setup", "Pickup"];
@@ -64,7 +65,7 @@ const PHASE_COLOR: Record<Phase, string> = {
 };
 
 // Status sections mirror the Dispatch board grouping.
-type SectionKey = "submitted" | "approved" | "field";
+type SectionKey = "submitted" | "approved" | "field" | "cancelled";
 const STATUS_SECTIONS: {
   key: SectionKey;
   status: string;
@@ -84,6 +85,7 @@ const STATUS_SECTIONS: {
     dot: "#ea580c",
   },
   { key: "field", status: "Field", title: "Field", dot: "#16a34a" },
+  { key: "cancelled", status: "Cancelled", title: "Cancelled", dot: "#dc2626" },
 ];
 
 // ---- date helpers (local, no tz drift for day keys) ----
@@ -183,6 +185,7 @@ export default function Scheduler() {
     submitted: false,
     approved: false,
     field: false,
+    cancelled: false,
   });
 
   const days = useMemo(
@@ -283,8 +286,14 @@ export default function Scheduler() {
       submitted: [],
       approved: [],
       field: [],
+      cancelled: [],
     };
     for (const j of weekJobs) {
+      // Cancelled/declined jobs go to their own section regardless of status.
+      if (isCancelledJob(j)) {
+        map.cancelled.push(j);
+        continue;
+      }
       const section = STATUS_SECTIONS.find((s) => s.status === j.status);
       if (section) map[section.key].push(j);
     }

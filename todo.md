@@ -177,3 +177,12 @@
 - [x] Scheduler: third tab Trucks in Resources panel; drag truck to job/day cell -> dialog (date, optional driver, notes)
 - [x] Truck chips render per day cell (distinct dashed style), click to remove
 - [x] Integration test for truck assignment persistence + removal (no Airtable write) (35 tests passing)
+
+
+## Feature 22: Cancelled section in Scheduler (after Field)
+- [x] Include "Cancelled" + "Permit Declined" statuses in MAP_STATUSES so cancelled jobs are fetched (read-only)
+- [x] Add "Cancelled" section after Field in Scheduler grouping
+- [x] Classify a job as cancelled when subStatus/status contains "cancel"/"declin" (shared isCancelledJob, takes priority over status section)
+- [x] Collapsible section header with count and red dot
+- [x] Permit Map: cancelled/declined bucket (red, hidden by default) so they are not mis-colored as approved
+- [x] Unit test for isCancelledJob (8 tests); full suite 43 passing

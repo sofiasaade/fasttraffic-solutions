@@ -36,6 +36,8 @@ export const MAP_STATUSES = [
   "Field",
   "Permit Approved",
   "Permit Request Submitted",
+  "Cancelled",
+  "Permit Declined",
 ] as const;
 export type MapStatus = (typeof MAP_STATUSES)[number];
 

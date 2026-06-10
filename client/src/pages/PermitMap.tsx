@@ -21,7 +21,7 @@ type MapJob = {
 };
 
 // Status grouping + color theme. Any status not matched falls back to "other".
-type StatusKey = "field" | "approved" | "submitted";
+type StatusKey = "field" | "approved" | "submitted" | "cancelled";
 
 const STATUS_THEME: Record<
   StatusKey,
@@ -51,10 +51,19 @@ const STATUS_THEME: Record<
     chipText: "#1d4ed8",
     dot: "#2563eb",
   },
+  cancelled: {
+    label: "Cancelled / Declined",
+    bg: "#dc2626",
+    border: "#991b1b",
+    chipBg: "#fef2f2",
+    chipText: "#b91c1c",
+    dot: "#dc2626",
+  },
 };
 
 function statusKey(status: string | null): StatusKey {
   const s = (status ?? "").toLowerCase();
+  if (s.includes("cancel") || s.includes("declin")) return "cancelled";
   if (s === "field") return "field";
   if (s === "permit approved") return "approved";
   if (s === "permit request submitted") return "submitted";
@@ -78,10 +87,12 @@ export default function PermitMap() {
     field: true,
     approved: true,
     submitted: true,
+    // Cancelled/declined jobs are hidden by default to keep the map clean.
+    cancelled: false,
   });
 
   const counts = useMemo(() => {
-    const c: Record<StatusKey, number> = { field: 0, approved: 0, submitted: 0 };
+    const c: Record<StatusKey, number> = { field: 0, approved: 0, submitted: 0, cancelled: 0 };
     for (const j of (jobs as MapJob[] | undefined) ?? []) c[statusKey(j.status)]++;
     return c;
   }, [jobs]);
