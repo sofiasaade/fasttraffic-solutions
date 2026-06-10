@@ -1,4 +1,13 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  double,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,4 +34,112 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Technician profile. Links a Manus user account (optional) to an Airtable
+ * technician name so the mobile PWA can scope jobs to "me".
+ */
+export const technicians = mysqlTable("technicians", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableName: varchar("airtableName", { length: 128 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 128 }).notNull(),
+  userId: int("userId"),
+  phone: varchar("phone", { length: 32 }),
+  zones: text("zones"),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Technician = typeof technicians.$inferSelect;
+export type InsertTechnician = typeof technicians.$inferInsert;
+
+/**
+ * Hazard assessments. A submitted assessment for a (jobId, technician, phase)
+ * is the hard gate required before check-in.
+ */
+export const hazardAssessments = mysqlTable("hazard_assessments", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  phase: varchar("phase", { length: 32 }).notNull(),
+  answers: text("answers").notNull(),
+  hazardsIdentified: text("hazardsIdentified"),
+  controlMeasures: text("controlMeasures"),
+  ppeConfirmed: boolean("ppeConfirmed").default(false).notNull(),
+  signature: varchar("signature", { length: 128 }),
+  submittedAt: timestamp("submittedAt").defaultNow().notNull(),
+});
+
+export type HazardAssessment = typeof hazardAssessments.$inferSelect;
+export type InsertHazardAssessment = typeof hazardAssessments.$inferInsert;
+
+/**
+ * Time logs: check-in / check-out per technician per job.
+ * These feed directly into overtime calculations.
+ */
+export const timeLogs = mysqlTable("time_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  phase: varchar("phase", { length: 32 }),
+  checkInAt: timestamp("checkInAt"),
+  checkOutAt: timestamp("checkOutAt"),
+  hours: double("hours"),
+  checkInLat: double("checkInLat"),
+  checkInLon: double("checkInLon"),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TimeLog = typeof timeLogs.$inferSelect;
+export type InsertTimeLog = typeof timeLogs.$inferInsert;
+
+/**
+ * Immutable change-history log. Rows are append-only; never updated or deleted.
+ */
+export const changeHistory = mysqlTable("change_history", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  actorUserId: int("actorUserId"),
+  actorName: varchar("actorName", { length: 128 }),
+  action: varchar("action", { length: 64 }).notNull(),
+  fieldName: varchar("fieldName", { length: 128 }),
+  oldValue: text("oldValue"),
+  newValue: text("newValue"),
+  details: text("details"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ChangeHistory = typeof changeHistory.$inferSelect;
+export type InsertChangeHistory = typeof changeHistory.$inferInsert;
+
+/**
+ * In-app notifications for technicians.
+ */
+export const notifications = mysqlTable("notifications", {
+  id: int("id").autoincrement().primaryKey(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }),
+  type: mysqlEnum("type", ["assigned", "modified", "cancelled", "info"]).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  body: text("body"),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+
+/**
+ * App-level settings (e.g. overtime threshold).
+ */
+export const appSettings = mysqlTable("app_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 64 }).notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
+export type InsertAppSetting = typeof appSettings.$inferInsert;
