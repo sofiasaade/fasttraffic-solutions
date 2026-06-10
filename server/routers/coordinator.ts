@@ -34,6 +34,11 @@ import {
   setSetting,
   sumHoursInPeriod,
   upsertJobOverride,
+  listEquipmentCatalog,
+  seedEquipmentCatalog,
+  setEquipmentAssignment,
+  listEquipmentAssignmentsForWeek,
+  removeEquipmentAssignment,
 } from "../opsDb";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
@@ -555,6 +560,100 @@ export const coordinatorRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await removeAssignment(input.id);
+      return { ok: true as const };
+    }),
+
+  /* ------------------------- Equipment (local only) ------------------------- */
+
+  // Draggable equipment catalog for the Scheduler "Equipment" tab.
+  equipmentCatalog: adminProcedure.query(async () => {
+    const rows = await listEquipmentCatalog();
+    if (rows.length === 0) {
+      await seedEquipmentCatalog();
+      return listEquipmentCatalog();
+    }
+    return rows;
+  }),
+
+  // All equipment placements for a visible week (inclusive date range).
+  equipmentAssignments: adminProcedure
+    .input(z.object({ startDate: z.string(), endDate: z.string() }))
+    .query(async ({ input }) => {
+      const rows = await listEquipmentAssignmentsForWeek(
+        input.startDate,
+        input.endDate,
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        jobId: r.airtableJobId,
+        equipmentName: r.equipmentName,
+        scheduledDate: r.scheduledDate,
+        technicianName: r.technicianName,
+        quantity: r.quantity,
+        notes: r.notes,
+      }));
+    }),
+
+  // Place a piece of equipment on a job for a specific day, optionally with a
+  // technician responsible for installing it (e.g. No Parking signs the day before).
+  setEquipment: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        equipmentName: z.string().min(1),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        technicianName: z.string().optional(),
+        quantity: z.number().int().min(1).max(999).optional(),
+        notes: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const job = await fetchJobById(input.jobId);
+      const id = await setEquipmentAssignment({
+        airtableJobId: input.jobId,
+        equipmentName: input.equipmentName,
+        scheduledDate: input.scheduledDate,
+        technicianName: input.technicianName ?? null,
+        quantity: input.quantity ?? 1,
+        notes: input.notes ?? null,
+        actor: {
+          userId: ctx.user.id,
+          name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        },
+      });
+
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "schedule_equipment",
+        fieldName: input.equipmentName,
+        oldValue: null,
+        newValue: `${input.quantity ?? 1}x ${input.equipmentName} @ ${input.scheduledDate}${
+          input.technicianName ? ` (install: ${input.technicianName})` : ""
+        }`,
+        details: input.notes ?? "Equipment scheduled",
+      });
+
+      // If a technician was assigned to install it, notify them.
+      if (input.technicianName) {
+        await createNotification({
+          technicianName: input.technicianName,
+          airtableJobId: input.jobId,
+          type: "assigned",
+          title: `Install ${input.equipmentName} on ${input.scheduledDate}`,
+          body: `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`,
+        });
+      }
+
+      return { ok: true as const, id };
+    }),
+
+  // Remove a single equipment placement (by row id).
+  removeEquipment: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await removeEquipmentAssignment(input.id);
       return { ok: true as const };
     }),
 });

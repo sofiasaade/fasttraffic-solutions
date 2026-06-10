@@ -34,6 +34,18 @@ const state = {
     endTime: string | null;
   }[],
   scheduledSeq: 0,
+  // Equipment catalog + day-pinned equipment placements (local).
+  equipmentCatalog: [] as any[],
+  equipment: [] as {
+    id: number;
+    airtableJobId: string;
+    equipmentName: string;
+    scheduledDate: string;
+    technicianName: string | null;
+    quantity: number;
+    notes: string | null;
+  }[],
+  equipmentSeq: 0,
   // Any of these being > 0 means a read-only violation occurred.
   airtableWriteCalls: [] as { fn: string; id: string }[],
 };
@@ -243,6 +255,37 @@ vi.mock("../opsDb", () => ({
       ),
     ),
   ),
+
+  // Equipment catalog + assignments (local)
+  seedEquipmentCatalog: vi.fn(async () => {
+    state.equipmentCatalog = [
+      { id: 1, name: "No Parking Signs", category: "Signs", color: "#ea580c", active: true },
+      { id: 2, name: "Barricades", category: "Barriers", color: "#2563eb", active: true },
+    ];
+  }),
+  listEquipmentCatalog: vi.fn(async () => state.equipmentCatalog),
+  createEquipmentItem: vi.fn(async () => {}),
+  setEquipmentAssignment: vi.fn(async (input: any) => {
+    const id = ++state.equipmentSeq;
+    state.equipment.push({
+      id,
+      airtableJobId: input.airtableJobId,
+      equipmentName: input.equipmentName,
+      scheduledDate: input.scheduledDate,
+      technicianName: input.technicianName ?? null,
+      quantity: input.quantity ?? 1,
+      notes: input.notes ?? null,
+    });
+    return id;
+  }),
+  listEquipmentAssignmentsForWeek: vi.fn(async (start: string, end: string) =>
+    state.equipment.filter(
+      (r) => r.scheduledDate >= start && r.scheduledDate <= end,
+    ),
+  ),
+  removeEquipmentAssignment: vi.fn(async (id: number) => {
+    state.equipment = state.equipment.filter((r) => r.id !== id);
+  }),
 }));
 
 import { appRouter } from "../routers";
@@ -289,6 +332,9 @@ beforeEach(() => {
   state.notes = [];
   state.scheduled = [];
   state.scheduledSeq = 0;
+  state.equipmentCatalog = [];
+  state.equipment = [];
+  state.equipmentSeq = 0;
   state.airtableWriteCalls = [];
 });
 
@@ -516,6 +562,57 @@ describe("Day & time scheduler (local, no Airtable write)", () => {
     const id = res.ok ? res.id : 0;
     await caller.coordinator.removeScheduled({ id });
     expect(state.scheduled.length).toBe(0);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+});
+
+describe("Equipment scheduling (local, no Airtable write)", () => {
+  it("seeds and returns the equipment catalog", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const rows = await caller.coordinator.equipmentCatalog();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.map((r: any) => r.name)).toContain("No Parking Signs");
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("places equipment on a job/day, notifies the installer, and lists it for the week", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setEquipment({
+      jobId: "recJOB1",
+      equipmentName: "No Parking Signs",
+      scheduledDate: "2026-06-14",
+      technicianName: "Hector",
+      quantity: 6,
+      notes: "North curb",
+    });
+    expect(res.ok).toBe(true);
+    expect(state.equipment.length).toBe(1);
+    // Installer was notified.
+    expect(state.notifications.some((n) => n.technicianName === "Hector")).toBe(true);
+    // Change history recorded.
+    expect(state.changeHistory.some((h) => h.action === "schedule_equipment")).toBe(true);
+    expect(state.airtableWriteCalls.length).toBe(0);
+
+    const week = await caller.coordinator.equipmentAssignments({
+      startDate: "2026-06-08",
+      endDate: "2026-06-14",
+    });
+    expect(week.length).toBe(1);
+    expect(week[0].equipmentName).toBe("No Parking Signs");
+    expect(week[0].quantity).toBe(6);
+    expect(week[0].jobId).toBe("recJOB1");
+  });
+
+  it("removes an equipment placement by id", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setEquipment({
+      jobId: "recJOB1",
+      equipmentName: "Barricades",
+      scheduledDate: "2026-06-15",
+    });
+    const id = res.id;
+    await caller.coordinator.removeEquipment({ id });
+    expect(state.equipment.length).toBe(0);
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 });

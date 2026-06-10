@@ -243,3 +243,47 @@ export const jobOverrides = mysqlTable("job_overrides", {
 
 export type JobOverride = typeof jobOverrides.$inferSelect;
 export type InsertJobOverride = typeof jobOverrides.$inferInsert;
+
+
+/**
+ * Equipment catalog: the list of draggable equipment items shown in the
+ * Scheduler "Equipment" tab (e.g. No Parking signs, Barricades, Arrow Board,
+ * Tables). Local-only; Airtable is read-only.
+ */
+export const equipmentCatalog = mysqlTable("equipment_catalog", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull().unique(),
+  category: varchar("category", { length: 64 }),
+  /** Hex color used for the chip in the timeline. */
+  color: varchar("color", { length: 16 }),
+  active: boolean("active").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EquipmentCatalogItem = typeof equipmentCatalog.$inferSelect;
+export type InsertEquipmentCatalogItem = typeof equipmentCatalog.$inferInsert;
+
+/**
+ * Equipment assignments: a piece of equipment scheduled to a job on a specific
+ * day, optionally with a technician responsible for installing it (e.g. placing
+ * the No Parking signs the day before). Local-only.
+ */
+export const equipmentAssignments = mysqlTable("equipment_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  equipmentName: varchar("equipmentName", { length: 128 }).notNull(),
+  /** Local date of the equipment placement, stored as YYYY-MM-DD. */
+  scheduledDate: varchar("scheduledDate", { length: 10 }).notNull(),
+  /** Optional technician responsible for installing/placing the equipment. */
+  technicianName: varchar("technicianName", { length: 128 }),
+  quantity: int("quantity").default(1).notNull(),
+  notes: text("notes"),
+  createdByUserId: int("createdByUserId"),
+  createdByName: varchar("createdByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EquipmentAssignment = typeof equipmentAssignments.$inferSelect;
+export type InsertEquipmentAssignment =
+  typeof equipmentAssignments.$inferInsert;

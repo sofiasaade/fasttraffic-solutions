@@ -145,3 +145,19 @@
 - [x] Invalidate boardJobs/jobDetail in AssignmentDialog and JobModifyDialog
 - [x] Update integration tests to assert NO Airtable writes occur (25 tests passing)
 - [x] Update landing copy (Airtable is a read-only source)
+
+
+## Feature 18: Equipment tab in Scheduler (drag equipment to job/day)
+- [x] equipment_catalog table (id, name, category, color, active) seeded with defaults
+- [x] equipment_assignments table (jobId, equipmentName, scheduledDate, technicianName?, quantity, notes, createdBy)
+- [x] opsDb helpers: listEquipmentCatalog, seedEquipmentCatalog, setEquipmentAssignment, listEquipmentAssignmentsForWeek, removeEquipmentAssignment
+- [x] coordinator procedures: equipmentCatalog, equipmentAssignments(week), setEquipment, removeEquipment
+- [x] Scheduler: Resources panel with Workers / Equipment tabs (like Assignar reference)
+- [x] Drag equipment onto a job/day cell -> dialog (date, optional technician to install, quantity, notes)
+- [x] Equipment chips render per day cell (distinct style, catalog color), click to remove
+- [x] Integration test for equipment assignment persistence + removal (no Airtable write) (31 tests passing)
+
+## Feature 19: Branding (orange + blue) and logo
+- [x] Apply orange/blue brand palette across theme tokens (orange primary, navy sidebar)
+- [x] Show FTS logo next to Fast Traffic name (coordinator sidebar, tech header, login)
+- [x] Show company logo next to "Fast Traffic OS" in login and dashboard sidebar

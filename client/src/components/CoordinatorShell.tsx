@@ -31,9 +31,11 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
     <div className="min-h-screen flex bg-background">
       <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
         <div className="flex items-center gap-2.5 px-5 h-16 border-b border-sidebar-border">
-          <div className="size-9 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <Cone className="size-5 text-primary-foreground" />
-          </div>
+          <img
+            src="/manus-storage/fts-icon-192_a254898a.png"
+            alt="Fast Traffic Solutions logo"
+            className="size-9 rounded-lg object-cover shrink-0 ring-1 ring-sidebar-border"
+          />
           <div className="leading-tight">
             <div className="font-extrabold tracking-tight">Fast Traffic</div>
             <div className="text-[11px] uppercase tracking-widest text-sidebar-foreground/60">
@@ -93,7 +95,12 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden flex items-center justify-between h-14 px-4 bg-sidebar text-sidebar-foreground">
           <div className="flex items-center gap-2 font-bold">
-            <Cone className="size-5 text-primary" /> Fast Traffic
+            <img
+              src="/manus-storage/fts-icon-192_a254898a.png"
+              alt="Fast Traffic Solutions logo"
+              className="size-6 rounded-md object-cover"
+            />{" "}
+            Fast Traffic
           </div>
           <button onClick={() => logout()}>
             <LogOut className="size-5" />

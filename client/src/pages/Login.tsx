@@ -25,9 +25,11 @@ export default function Login() {
         <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex items-center gap-3">
-          <div className="size-12 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-            <Cone className="size-7 text-primary-foreground" />
-          </div>
+          <img
+            src="/manus-storage/fts-icon-192_a254898a.png"
+            alt="Fast Traffic Solutions logo"
+            className="size-12 rounded-xl object-cover shadow-lg shadow-primary/30"
+          />
           <div>
             <div className="text-xl font-extrabold tracking-tight">
               Fast Traffic OS

@@ -24,9 +24,11 @@ export default function TechShell({
       <header className="sticky top-0 z-20 bg-sidebar text-sidebar-foreground">
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-2">
-            <div className="size-8 rounded-lg bg-primary flex items-center justify-center">
-              <Cone className="size-4.5 text-primary-foreground" />
-            </div>
+            <img
+              src="/manus-storage/fts-icon-192_a254898a.png"
+              alt="Fast Traffic Solutions logo"
+              className="size-8 rounded-lg object-cover"
+            />
             <span className="font-bold">{title ?? "Fast Traffic"}</span>
           </div>
           <div className="flex items-center gap-1">

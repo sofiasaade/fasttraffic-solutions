@@ -367,6 +367,9 @@ import {
   jobNotes,
   InsertJobNote,
   jobOverrides,
+  equipmentCatalog,
+  InsertEquipmentCatalogItem,
+  equipmentAssignments,
 } from "../drizzle/schema";
 
 const PHASES = ["Preparation", "Setup", "Pickup"] as const;
@@ -655,4 +658,107 @@ export async function getJobOverridesMap(jobIds: string[]) {
     map.set(r.airtableJobId, { endDate: r.endDate, subStatus: r.subStatus });
   }
   return map;
+}
+
+
+/* --------------------------- Equipment Catalog --------------------------- */
+// Draggable equipment items for the Scheduler "Equipment" tab. Local-only.
+
+const DEFAULT_EQUIPMENT: {
+  name: string;
+  category: string;
+  color: string;
+}[] = [
+  { name: "No Parking Signs", category: "Signage", color: "#dc2626" },
+  { name: "Barricades", category: "Barriers", color: "#ea580c" },
+  { name: "Arrow Board / Robot", category: "Electronic", color: "#2563eb" },
+  { name: "VMS Board", category: "Electronic", color: "#0ea5e9" },
+  { name: "Tables", category: "Equipment", color: "#7c3aed" },
+  { name: "Cones", category: "Signage", color: "#f59e0b" },
+  { name: "Crash Truck / TMA", category: "Vehicles", color: "#16a34a" },
+  { name: "Delineators", category: "Signage", color: "#db2777" },
+];
+
+export async function seedEquipmentCatalog() {
+  const d = await db();
+  let order = 0;
+  for (const item of DEFAULT_EQUIPMENT) {
+    await d
+      .insert(equipmentCatalog)
+      .values({
+        name: item.name,
+        category: item.category,
+        color: item.color,
+        sortOrder: order++,
+      })
+      .onDuplicateKeyUpdate({
+        set: { category: item.category, color: item.color },
+      });
+  }
+}
+
+export async function listEquipmentCatalog() {
+  const d = await db();
+  return d
+    .select()
+    .from(equipmentCatalog)
+    .where(eq(equipmentCatalog.active, true))
+    .orderBy(equipmentCatalog.sortOrder, equipmentCatalog.name);
+}
+
+export async function createEquipmentItem(data: InsertEquipmentCatalogItem) {
+  const d = await db();
+  await d
+    .insert(equipmentCatalog)
+    .values(data)
+    .onDuplicateKeyUpdate({ set: { active: true } });
+}
+
+/* ------------------------- Equipment Assignments ------------------------- */
+
+export async function setEquipmentAssignment(input: {
+  airtableJobId: string;
+  equipmentName: string;
+  scheduledDate: string; // YYYY-MM-DD
+  technicianName?: string | null;
+  quantity?: number;
+  notes?: string | null;
+  actor?: { userId?: number; name?: string };
+}): Promise<number> {
+  const d = await db();
+  const res = await d.insert(equipmentAssignments).values({
+    airtableJobId: input.airtableJobId,
+    equipmentName: input.equipmentName,
+    scheduledDate: input.scheduledDate,
+    technicianName: input.technicianName ?? null,
+    quantity: input.quantity ?? 1,
+    notes: input.notes ?? null,
+    createdByUserId: input.actor?.userId ?? null,
+    createdByName: input.actor?.name ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+export async function listEquipmentAssignmentsForWeek(
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(equipmentAssignments)
+    .where(
+      and(
+        gte(equipmentAssignments.scheduledDate, startDate),
+        lte(equipmentAssignments.scheduledDate, endDate),
+      ),
+    )
+    .orderBy(equipmentAssignments.scheduledDate);
+}
+
+export async function removeEquipmentAssignment(id: number) {
+  const d = await db();
+  await d
+    .delete(equipmentAssignments)
+    .where(eq(equipmentAssignments.id, id));
 }

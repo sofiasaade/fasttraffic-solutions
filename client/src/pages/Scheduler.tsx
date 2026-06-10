@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ import {
   Building2,
   AlertTriangle,
   X,
+  Package,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -100,15 +103,43 @@ type ScheduledRow = {
   endTime: string | null;
 };
 
+type EquipmentRow = {
+  id: number;
+  jobId: string;
+  equipmentName: string;
+  scheduledDate: string;
+  technicianName: string | null;
+  quantity: number;
+  notes: string | null;
+};
+
+type EquipmentItem = {
+  id: number;
+  name: string;
+  category: string | null;
+  color: string | null;
+};
+
+// Drag payload: either a worker or an equipment item.
+type DragPayload =
+  | { kind: "worker"; techName: string; techDisplay: string }
+  | { kind: "equipment"; equipmentName: string; color: string | null };
+
+type PanelTab = "workers" | "equipment";
+
 export default function Scheduler() {
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
   const techQuery = trpc.coordinator.technicians.useQuery();
+  const equipmentCatalogQuery = trpc.coordinator.equipmentCatalog.useQuery();
   const utils = trpc.useUtils();
   const setScheduled = trpc.coordinator.setScheduled.useMutation();
   const removeScheduled = trpc.coordinator.removeScheduled.useMutation();
+  const setEquipment = trpc.coordinator.setEquipment.useMutation();
+  const removeEquipment = trpc.coordinator.removeEquipment.useMutation();
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<PanelTab>("workers");
   const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
     submitted: false,
     approved: false,
@@ -128,7 +159,20 @@ export default function Scheduler() {
   });
   const scheduled = (schedQuery.data ?? []) as ScheduledRow[];
 
-  // Drop dialog state
+  // Equipment placements for the visible week.
+  const equipQuery = trpc.coordinator.equipmentAssignments.useQuery({
+    startDate: dayKeys[0],
+    endDate: dayKeys[6],
+  });
+  const equipment = (equipQuery.data ?? []) as EquipmentRow[];
+  const catalog = (equipmentCatalogQuery.data ?? []) as EquipmentItem[];
+  const colorByEquipment = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of catalog) m.set(e.name, e.color ?? "#475569");
+    return m;
+  }, [catalog]);
+
+  // Worker drop dialog state
   const [drop, setDrop] = useState<{
     job: Job;
     dayKey: string;
@@ -141,6 +185,16 @@ export default function Scheduler() {
   const [pendingForce, setPendingForce] = useState<{
     conflicts: { technician: string; otherJobLabel: string }[];
   } | null>(null);
+
+  // Equipment drop dialog state
+  const [equipDrop, setEquipDrop] = useState<{
+    job: Job;
+    dayKey: string;
+    equipmentName: string;
+  } | null>(null);
+  const [equipQty, setEquipQty] = useState(1);
+  const [equipTech, setEquipTech] = useState<string>("none");
+  const [equipNotes, setEquipNotes] = useState("");
 
   // Jobs that overlap the visible week (start..end intersects the week).
   const weekJobs = useMemo(() => {
@@ -195,17 +249,34 @@ export default function Scheduler() {
     );
   }, [techQuery.data, search]);
 
+  const filteredEquipment = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return catalog;
+    return catalog.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        (e.category ?? "").toLowerCase().includes(q),
+    );
+  }, [catalog, search]);
+
   const jobCoversDay = useCallback((job: Job, dk: string) => {
     const s = parseDayKey(job.startDate);
     const e = parseDayKey(job.endDate) || s;
     return dk >= s && dk <= e;
   }, []);
 
-  // Scheduled chips for a (job, day).
+  // Scheduled worker chips for a (job, day).
   const chipsFor = useCallback(
     (jobId: string, dk: string) =>
       scheduled.filter((r) => r.jobId === jobId && r.scheduledDate === dk),
     [scheduled],
+  );
+
+  // Equipment chips for a (job, day).
+  const equipFor = useCallback(
+    (jobId: string, dk: string) =>
+      equipment.filter((r) => r.jobId === jobId && r.scheduledDate === dk),
+    [equipment],
   );
 
   // ---- drag handlers ----
@@ -214,10 +285,18 @@ export default function Scheduler() {
     techName: string,
     techDisplay: string,
   ) => {
-    e.dataTransfer.setData(
-      "application/json",
-      JSON.stringify({ techName, techDisplay }),
-    );
+    const payload: DragPayload = { kind: "worker", techName, techDisplay };
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  const onDragStartEquipment = (
+    e: React.DragEvent,
+    equipmentName: string,
+    color: string | null,
+  ) => {
+    const payload: DragPayload = { kind: "equipment", equipmentName, color };
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
     e.dataTransfer.effectAllowed = "copy";
   };
 
@@ -226,12 +305,24 @@ export default function Scheduler() {
     const raw = e.dataTransfer.getData("application/json");
     if (!raw) return;
     try {
-      const { techName, techDisplay } = JSON.parse(raw);
-      setPhase("Setup");
-      setStartTime("08:00");
-      setEndTime("16:00");
-      setPendingForce(null);
-      setDrop({ job, dayKey: dk, techName, techDisplay });
+      const payload = JSON.parse(raw) as DragPayload;
+      if (payload.kind === "worker") {
+        setPhase("Setup");
+        setStartTime("08:00");
+        setEndTime("16:00");
+        setPendingForce(null);
+        setDrop({
+          job,
+          dayKey: dk,
+          techName: payload.techName,
+          techDisplay: payload.techDisplay,
+        });
+      } else {
+        setEquipQty(1);
+        setEquipTech("none");
+        setEquipNotes("");
+        setEquipDrop({ job, dayKey: dk, equipmentName: payload.equipmentName });
+      }
     } catch {
       /* ignore */
     }
@@ -258,10 +349,33 @@ export default function Scheduler() {
     utils.coordinator.scheduledAssignments.invalidate();
   };
 
+  const doScheduleEquipment = async () => {
+    if (!equipDrop) return;
+    await setEquipment.mutateAsync({
+      jobId: equipDrop.job.id,
+      equipmentName: equipDrop.equipmentName,
+      scheduledDate: equipDrop.dayKey,
+      technicianName: equipTech === "none" ? undefined : equipTech,
+      quantity: equipQty,
+      notes: equipNotes.trim() || undefined,
+    });
+    toast.success(
+      `${equipQty}× ${equipDrop.equipmentName} scheduled on ${equipDrop.dayKey}.`,
+    );
+    setEquipDrop(null);
+    utils.coordinator.equipmentAssignments.invalidate();
+  };
+
   const removeChip = async (row: ScheduledRow) => {
     await removeScheduled.mutateAsync({ id: row.id });
     toast.success(`Removed ${row.technicianName} from ${row.scheduledDate}.`);
     utils.coordinator.scheduledAssignments.invalidate();
+  };
+
+  const removeEquipChip = async (row: EquipmentRow) => {
+    await removeEquipment.mutateAsync({ id: row.id });
+    toast.success(`Removed ${row.equipmentName} from ${row.scheduledDate}.`);
+    utils.coordinator.equipmentAssignments.invalidate();
   };
 
   const weekLabel = `${days[0].toLocaleDateString(undefined, {
@@ -297,6 +411,7 @@ export default function Scheduler() {
       {dayKeys.map((dk, i) => {
         const covers = jobCoversDay(job, dk);
         const chips = chipsFor(job.id, dk);
+        const equips = equipFor(job.id, dk);
         return (
           <div
             key={i}
@@ -317,7 +432,7 @@ export default function Scheduler() {
               )}
               {chips.map((c) => (
                 <button
-                  key={c.id}
+                  key={`w-${c.id}`}
                   type="button"
                   onClick={() => removeChip(c)}
                   title={`${c.technicianName} • ${c.phase}${
@@ -333,6 +448,32 @@ export default function Scheduler() {
                   <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0" />
                 </button>
               ))}
+              {equips.map((eq) => {
+                const color = colorByEquipment.get(eq.equipmentName) ?? "#475569";
+                return (
+                  <button
+                    key={`e-${eq.id}`}
+                    type="button"
+                    onClick={() => removeEquipChip(eq)}
+                    title={`${eq.quantity}× ${eq.equipmentName}${
+                      eq.technicianName ? ` • install: ${eq.technicianName}` : ""
+                    }${eq.notes ? ` • ${eq.notes}` : ""} — click to remove`}
+                    className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate flex items-center gap-1"
+                    style={{
+                      backgroundColor: `${color}1a`,
+                      borderColor: `${color}55`,
+                      color,
+                    }}
+                  >
+                    <Package className="size-3 shrink-0" />
+                    <span className="truncate">
+                      {eq.quantity > 1 ? `${eq.quantity}× ` : ""}
+                      {eq.equipmentName}
+                    </span>
+                    <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0 ml-auto" />
+                  </button>
+                );
+              })}
             </div>
           </div>
         );
@@ -347,7 +488,7 @@ export default function Scheduler() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Scheduler</h1>
           <p className="text-sm text-muted-foreground">
-            Drag a worker onto a job/day to schedule a day &amp; time. Jobs
+            Drag a worker or equipment onto a job/day to schedule it. Jobs
             grouped by permit status.
           </p>
         </div>
@@ -445,7 +586,7 @@ export default function Scheduler() {
                       >
                         <ChevronDown
                           className={cn(
-                            "size-4 text-muted-foreground transition-transform",
+                            "size-4 transition-transform",
                             isCollapsed && "-rotate-90",
                           )}
                         />
@@ -469,58 +610,129 @@ export default function Scheduler() {
           )}
         </div>
 
-        {/* Workers panel */}
+        {/* Resources panel: Workers / Equipment tabs */}
         <aside className="w-72 border-l border-border bg-card/40 flex flex-col shrink-0">
           <div className="p-3 border-b border-border">
-            <h2 className="font-bold text-sm">Workers</h2>
+            <h2 className="font-bold text-sm mb-2">Resources</h2>
+            {/* Tabs */}
+            <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-lg mb-2">
+              <button
+                type="button"
+                onClick={() => setTab("workers")}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 text-xs font-medium rounded-md py-1.5 transition-colors",
+                  tab === "workers"
+                    ? "bg-card shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Users className="size-3.5" />
+                Workers
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("equipment")}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 text-xs font-medium rounded-md py-1.5 transition-colors",
+                  tab === "equipment"
+                    ? "bg-card shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Package className="size-3.5" />
+                Equipment
+              </button>
+            </div>
             <p className="text-[11px] text-muted-foreground mb-2">
-              Drag a name onto a job/day cell.
+              {tab === "workers"
+                ? "Drag a name onto a job/day cell."
+                : "Drag equipment onto a job/day cell (e.g. No Parking signs the day before)."}
             </p>
             <div className="relative">
               <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search workers"
+                placeholder={
+                  tab === "workers" ? "Search workers" : "Search equipment"
+                }
                 className="pl-8 h-9"
               />
             </div>
           </div>
+
           <div className="flex-1 overflow-y-auto">
-            {workers.length === 0 ? (
+            {tab === "workers" ? (
+              workers.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground">
+                  No workers found.
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {workers.map((w) => {
+                    let bookedDays = 0;
+                    bookedByDay.forEach((set) => {
+                      if (set.has(w.airtableName)) bookedDays += 1;
+                    });
+                    return (
+                      <li
+                        key={w.id}
+                        draggable
+                        onDragStart={(e) =>
+                          onDragStartWorker(e, w.airtableName, w.displayName)
+                        }
+                        className="px-3 py-2.5 flex items-start gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
+                      >
+                        <GripVertical className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {w.displayName}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {w.zones ? w.zones : "No zones"}
+                            {bookedDays > 0 && (
+                              <span className="ml-1 text-amber-600">
+                                • {bookedDays}d booked
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : filteredEquipment.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground">
-                No workers found.
+                No equipment found.
               </div>
             ) : (
               <ul className="divide-y divide-border">
-                {workers.map((w) => {
-                  // Booked anywhere in the visible week?
-                  let bookedDays = 0;
-                  bookedByDay.forEach((set) => {
-                    if (set.has(w.airtableName)) bookedDays += 1;
-                  });
+                {filteredEquipment.map((eq) => {
+                  const color = eq.color ?? "#475569";
                   return (
                     <li
-                      key={w.id}
+                      key={eq.id}
                       draggable
                       onDragStart={(e) =>
-                        onDragStartWorker(e, w.airtableName, w.displayName)
+                        onDragStartEquipment(e, eq.name, eq.color)
                       }
-                      className="px-3 py-2.5 flex items-start gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
+                      className="px-3 py-2.5 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
                     >
-                      <GripVertical className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+                      <GripVertical className="size-4 text-muted-foreground shrink-0" />
+                      <span
+                        className="size-3 rounded-sm shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">
-                          {w.displayName}
+                          {eq.name}
                         </div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {w.zones ? w.zones : "No zones"}
-                          {bookedDays > 0 && (
-                            <span className="ml-1 text-amber-600">
-                              • {bookedDays}d booked
-                            </span>
-                          )}
-                        </div>
+                        {eq.category && (
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {eq.category}
+                          </div>
+                        )}
                       </div>
                     </li>
                   );
@@ -531,7 +743,7 @@ export default function Scheduler() {
         </aside>
       </div>
 
-      {/* Schedule-on-drop dialog */}
+      {/* Schedule-worker-on-drop dialog */}
       <Dialog
         open={!!drop}
         onOpenChange={(v) => {
@@ -656,6 +868,98 @@ export default function Scheduler() {
                 Schedule
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule-equipment-on-drop dialog */}
+      <Dialog
+        open={!!equipDrop}
+        onOpenChange={(v) => {
+          if (!v) setEquipDrop(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule equipment</DialogTitle>
+            <DialogDescription>
+              {equipDrop && (
+                <>
+                  Place <strong>{equipDrop.equipmentName}</strong> for{" "}
+                  <strong>{equipDrop.job.company ?? "this job"}</strong> (
+                  {equipDrop.job.jobAddress ?? "no address"}) on{" "}
+                  <strong>{equipDrop.dayKey}</strong>.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Quantity
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={999}
+                  value={equipQty}
+                  onChange={(e) =>
+                    setEquipQty(Math.max(1, Number(e.target.value) || 1))
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Install by (optional)
+                </label>
+                <Select value={equipTech} onValueChange={setEquipTech}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No worker" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No worker</SelectItem>
+                    {(techQuery.data ?? []).map((w) => (
+                      <SelectItem key={w.id} value={w.airtableName}>
+                        {w.displayName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Notes (optional)
+              </label>
+              <Textarea
+                value={equipNotes}
+                onChange={(e) => setEquipNotes(e.target.value)}
+                placeholder="e.g. Place No Parking signs along the north curb"
+                rows={2}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Tip: schedule No Parking signs the day before the closure, and
+              assign a worker to install them.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEquipDrop(null)}>
+              <X className="size-4 mr-1" />
+              Cancel
+            </Button>
+            <Button
+              onClick={doScheduleEquipment}
+              disabled={setEquipment.isPending}
+            >
+              {setEquipment.isPending && (
+                <Loader2 className="size-4 mr-1 animate-spin" />
+              )}
+              Schedule
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
