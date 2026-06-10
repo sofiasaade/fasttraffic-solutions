@@ -20,6 +20,7 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Loader2,
   GripVertical,
   Search,
@@ -39,6 +40,29 @@ const PHASE_COLOR: Record<Phase, string> = {
   Setup: "bg-orange-100 text-orange-800 border-orange-200",
   Pickup: "bg-emerald-100 text-emerald-800 border-emerald-200",
 };
+
+// Status sections mirror the Dispatch board grouping.
+type SectionKey = "submitted" | "approved" | "field";
+const STATUS_SECTIONS: {
+  key: SectionKey;
+  status: string;
+  title: string;
+  dot: string;
+}[] = [
+  {
+    key: "submitted",
+    status: "Permit Request Submitted",
+    title: "Permit Request Submitted",
+    dot: "#2563eb",
+  },
+  {
+    key: "approved",
+    status: "Permit Approved",
+    title: "Permit Approved",
+    dot: "#ea580c",
+  },
+  { key: "field", status: "Field", title: "Field", dot: "#16a34a" },
+];
 
 // ---- date helpers (local, no tz drift for day keys) ----
 function startOfWeek(d: Date): Date {
@@ -62,19 +86,47 @@ function dayKeyLocal(d: Date): string {
 }
 function parseDayKey(s: string | null): string {
   if (!s) return "";
-  // Airtable date strings are ISO; take the date part.
   return s.slice(0, 10);
 }
 const WEEKDAY = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+type ScheduledRow = {
+  id: number;
+  jobId: string;
+  phase: string;
+  technicianName: string;
+  scheduledDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+};
 
 export default function Scheduler() {
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
   const techQuery = trpc.coordinator.technicians.useQuery();
   const utils = trpc.useUtils();
-  const assign = trpc.coordinator.assignTechnicians.useMutation();
+  const setScheduled = trpc.coordinator.setScheduled.useMutation();
+  const removeScheduled = trpc.coordinator.removeScheduled.useMutation();
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [search, setSearch] = useState("");
+  const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
+    submitted: false,
+    approved: false,
+    field: false,
+  });
+
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    [weekStart],
+  );
+  const dayKeys = useMemo(() => days.map(dayKeyLocal), [days]);
+
+  // Day-pinned scheduled assignments for the visible week.
+  const schedQuery = trpc.coordinator.scheduledAssignments.useQuery({
+    startDate: dayKeys[0],
+    endDate: dayKeys[6],
+  });
+  const scheduled = (schedQuery.data ?? []) as ScheduledRow[];
 
   // Drop dialog state
   const [drop, setDrop] = useState<{
@@ -84,18 +136,14 @@ export default function Scheduler() {
     techDisplay: string;
   } | null>(null);
   const [phase, setPhase] = useState<Phase>("Setup");
+  const [startTime, setStartTime] = useState("08:00");
+  const [endTime, setEndTime] = useState("16:00");
   const [pendingForce, setPendingForce] = useState<{
     conflicts: { technician: string; otherJobLabel: string }[];
   } | null>(null);
 
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart],
-  );
-  const dayKeys = useMemo(() => days.map(dayKeyLocal), [days]);
-
   // Jobs that overlap the visible week (start..end intersects the week).
-  const jobs = useMemo(() => {
+  const weekJobs = useMemo(() => {
     const list = (jobsQuery.data ?? []) as Job[];
     const weekFirst = dayKeys[0];
     const weekLast = dayKeys[6];
@@ -111,6 +159,31 @@ export default function Scheduler() {
       );
   }, [jobsQuery.data, dayKeys]);
 
+  // Group jobs by status section (like the dispatch board).
+  const grouped = useMemo(() => {
+    const map: Record<SectionKey, Job[]> = {
+      submitted: [],
+      approved: [],
+      field: [],
+    };
+    for (const j of weekJobs) {
+      const section = STATUS_SECTIONS.find((s) => s.status === j.status);
+      if (section) map[section.key].push(j);
+    }
+    return map;
+  }, [weekJobs]);
+
+  // Technicians already booked (day-pinned) per day this week.
+  const bookedByDay = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const r of scheduled) {
+      if (!r.scheduledDate) continue;
+      if (!m.has(r.scheduledDate)) m.set(r.scheduledDate, new Set());
+      m.get(r.scheduledDate)!.add(r.technicianName);
+    }
+    return m;
+  }, [scheduled]);
+
   const workers = useMemo(() => {
     const list = techQuery.data ?? [];
     const q = search.trim().toLowerCase();
@@ -122,21 +195,18 @@ export default function Scheduler() {
     );
   }, [techQuery.data, search]);
 
-  // Does a job span a given day?
   const jobCoversDay = useCallback((job: Job, dk: string) => {
     const s = parseDayKey(job.startDate);
     const e = parseDayKey(job.endDate) || s;
-    return s <= dk && dk >= s && dk <= e;
+    return dk >= s && dk <= e;
   }, []);
 
-  const assignedTechsForJob = useCallback((job: Job) => {
-    const all = new Set<string>([
-      ...job.techPrep,
-      ...job.techSetup,
-      ...job.techPickup,
-    ]);
-    return Array.from(all);
-  }, []);
+  // Scheduled chips for a (job, day).
+  const chipsFor = useCallback(
+    (jobId: string, dk: string) =>
+      scheduled.filter((r) => r.jobId === jobId && r.scheduledDate === dk),
+    [scheduled],
+  );
 
   // ---- drag handlers ----
   const onDragStartWorker = (
@@ -158,6 +228,8 @@ export default function Scheduler() {
     try {
       const { techName, techDisplay } = JSON.parse(raw);
       setPhase("Setup");
+      setStartTime("08:00");
+      setEndTime("16:00");
       setPendingForce(null);
       setDrop({ job, dayKey: dk, techName, techDisplay });
     } catch {
@@ -165,40 +237,31 @@ export default function Scheduler() {
     }
   };
 
-  const currentPhaseTechs = (job: Job, p: Phase): string[] =>
-    p === "Preparation"
-      ? job.techPrep
-      : p === "Setup"
-      ? job.techSetup
-      : job.techPickup;
-
-  const doAssign = async (force: boolean) => {
+  const doSchedule = async (force: boolean) => {
     if (!drop) return;
-    const existing = currentPhaseTechs(drop.job, phase);
-    if (existing.includes(drop.techName) && !force) {
-      toast.info(`${drop.techDisplay} is already on ${phase} for this job.`);
-      setDrop(null);
-      return;
-    }
-    const technicians = existing.includes(drop.techName)
-      ? existing
-      : [...existing, drop.techName];
-
-    const res = await assign.mutateAsync({
+    const res = await setScheduled.mutateAsync({
       jobId: drop.job.id,
       phase,
-      technicians,
+      technicianName: drop.techName,
+      scheduledDate: drop.dayKey,
+      startTime,
+      endTime,
       force,
     });
-
     if (!res.ok) {
       setPendingForce({ conflicts: res.conflicts });
       return;
     }
-    toast.success(`${drop.techDisplay} assigned to ${phase}.`);
+    toast.success(`${drop.techDisplay} scheduled for ${phase} on ${drop.dayKey}.`);
     setDrop(null);
     setPendingForce(null);
-    utils.coordinator.boardJobs.invalidate();
+    utils.coordinator.scheduledAssignments.invalidate();
+  };
+
+  const removeChip = async (row: ScheduledRow) => {
+    await removeScheduled.mutateAsync({ id: row.id });
+    toast.success(`Removed ${row.technicianName} from ${row.scheduledDate}.`);
+    utils.coordinator.scheduledAssignments.invalidate();
   };
 
   const weekLabel = `${days[0].toLocaleDateString(undefined, {
@@ -212,6 +275,71 @@ export default function Scheduler() {
 
   const loading = jobsQuery.isLoading || techQuery.isLoading;
 
+  const renderJobRow = (job: Job) => (
+    <div
+      key={job.id}
+      className="grid grid-cols-[240px_repeat(7,1fr)] border-b border-border hover:bg-accent/20"
+    >
+      {/* Job label */}
+      <div className="px-4 py-3 border-r border-border">
+        <div className="flex items-center gap-1.5">
+          <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+          <span className="font-medium text-sm truncate">
+            {job.company ?? "—"}
+          </span>
+        </div>
+        <div className="text-xs text-muted-foreground truncate mt-0.5">
+          {job.jobAddress ?? "No address"}
+        </div>
+      </div>
+
+      {/* Day cells */}
+      {dayKeys.map((dk, i) => {
+        const covers = jobCoversDay(job, dk);
+        const chips = chipsFor(job.id, dk);
+        return (
+          <div
+            key={i}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(e) => onDropCell(e, job, dk)}
+            className={cn(
+              "border-l border-border min-h-[64px] p-1.5 transition-colors",
+              covers ? "bg-primary/5" : "bg-transparent",
+              "hover:bg-primary/10",
+            )}
+          >
+            <div className="space-y-1">
+              {covers && dk === parseDayKey(job.startDate) && (
+                <div className="h-1.5 rounded-full bg-primary/40" />
+              )}
+              {chips.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => removeChip(c)}
+                  title={`${c.technicianName} • ${c.phase}${
+                    c.startTime ? ` • ${c.startTime}-${c.endTime ?? ""}` : ""
+                  } — click to remove`}
+                  className={cn(
+                    "group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate flex items-center justify-between gap-1",
+                    PHASE_COLOR[c.phase as Phase] ??
+                      "bg-card text-foreground border-border",
+                  )}
+                >
+                  <span className="truncate">{c.technicianName}</span>
+                  <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
@@ -219,8 +347,8 @@ export default function Scheduler() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Scheduler</h1>
           <p className="text-sm text-muted-foreground">
-            Drag a worker onto a job/day to assign. Jobs shown by company &
-            address.
+            Drag a worker onto a job/day to schedule a day &amp; time. Jobs
+            grouped by permit status.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -293,79 +421,49 @@ export default function Scheduler() {
                 })}
               </div>
 
-              {/* Job rows */}
-              {jobs.length === 0 ? (
+              {weekJobs.length === 0 ? (
                 <div className="p-10 text-center text-sm text-muted-foreground">
                   No jobs scheduled in this week.
                 </div>
               ) : (
-                jobs.map((job) => (
-                  <div
-                    key={job.id}
-                    className="grid grid-cols-[240px_repeat(7,1fr)] border-b border-border hover:bg-accent/20"
-                  >
-                    {/* Job label */}
-                    <div className="px-4 py-3 border-r border-border">
-                      <div className="flex items-center gap-1.5">
-                        <Building2 className="size-3.5 text-muted-foreground shrink-0" />
-                        <span className="font-medium text-sm truncate">
-                          {job.company ?? "—"}
-                        </span>
-                      </div>
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">
-                        {job.jobAddress ?? "No address"}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground mt-0.5">
-                        {job.status}
-                      </div>
-                    </div>
-
-                    {/* Day cells */}
-                    {dayKeys.map((dk, i) => {
-                      const covers = jobCoversDay(job, dk);
-                      const techs = assignedTechsForJob(job);
-                      return (
-                        <div
-                          key={i}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = "copy";
-                          }}
-                          onDrop={(e) => onDropCell(e, job, dk)}
+                STATUS_SECTIONS.map((section) => {
+                  const sectionJobs = grouped[section.key];
+                  if (sectionJobs.length === 0) return null;
+                  const isCollapsed = collapsed[section.key];
+                  return (
+                    <div key={section.key}>
+                      {/* Section header */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCollapsed((c) => ({
+                            ...c,
+                            [section.key]: !c[section.key],
+                          }))
+                        }
+                        className="w-full flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px] z-[5]"
+                      >
+                        <ChevronDown
                           className={cn(
-                            "border-l border-border min-h-[64px] p-1.5 transition-colors",
-                            covers ? "bg-primary/5" : "bg-transparent",
-                            "hover:bg-primary/10",
+                            "size-4 text-muted-foreground transition-transform",
+                            isCollapsed && "-rotate-90",
                           )}
-                        >
-                          {/* Show a bar on the first covered day to indicate the span start,
-                              and assignment chips */}
-                          {covers && (
-                            <div className="space-y-1">
-                              {dk === parseDayKey(job.startDate) && (
-                                <div className="h-1.5 rounded-full bg-primary/40" />
-                              )}
-                              {techs.slice(0, 3).map((t) => (
-                                <div
-                                  key={t}
-                                  className="text-[10px] leading-tight px-1.5 py-0.5 rounded bg-card border truncate"
-                                  title={t}
-                                >
-                                  {t}
-                                </div>
-                              ))}
-                              {techs.length > 3 && (
-                                <div className="text-[10px] text-muted-foreground">
-                                  +{techs.length - 3} more
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))
+                        />
+                        <span
+                          className="size-2.5 rounded-full"
+                          style={{ backgroundColor: section.dot }}
+                        />
+                        <span className="font-semibold text-sm">
+                          {section.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          ({sectionJobs.length})
+                        </span>
+                      </button>
+                      {!isCollapsed && sectionJobs.map(renderJobRow)}
+                    </div>
+                  );
+                })
               )}
             </div>
           )}
@@ -395,35 +493,45 @@ export default function Scheduler() {
               </div>
             ) : (
               <ul className="divide-y divide-border">
-                {workers.map((w) => (
-                  <li
-                    key={w.id}
-                    draggable
-                    onDragStart={(e) =>
-                      onDragStartWorker(e, w.airtableName, w.displayName)
-                    }
-                    className="px-3 py-2.5 flex items-start gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
-                  >
-                    <GripVertical className="size-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {w.displayName}
-                      </div>
-                      {w.zones && (
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {w.zones}
+                {workers.map((w) => {
+                  // Booked anywhere in the visible week?
+                  let bookedDays = 0;
+                  bookedByDay.forEach((set) => {
+                    if (set.has(w.airtableName)) bookedDays += 1;
+                  });
+                  return (
+                    <li
+                      key={w.id}
+                      draggable
+                      onDragStart={(e) =>
+                        onDragStartWorker(e, w.airtableName, w.displayName)
+                      }
+                      className="px-3 py-2.5 flex items-start gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
+                    >
+                      <GripVertical className="size-4 text-muted-foreground mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {w.displayName}
                         </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {w.zones ? w.zones : "No zones"}
+                          {bookedDays > 0 && (
+                            <span className="ml-1 text-amber-600">
+                              • {bookedDays}d booked
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
         </aside>
       </div>
 
-      {/* Assign-on-drop dialog */}
+      {/* Schedule-on-drop dialog */}
       <Dialog
         open={!!drop}
         onOpenChange={(v) => {
@@ -435,11 +543,11 @@ export default function Scheduler() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign technician</DialogTitle>
+            <DialogTitle>Schedule technician</DialogTitle>
             <DialogDescription>
               {drop && (
                 <>
-                  Assign <strong>{drop.techDisplay}</strong> to{" "}
+                  Schedule <strong>{drop.techDisplay}</strong> for{" "}
                   <strong>{drop.job.company ?? "this job"}</strong> (
                   {drop.job.jobAddress ?? "no address"}) on{" "}
                   <strong>{drop.dayKey}</strong>.
@@ -475,16 +583,39 @@ export default function Scheduler() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Start time
+                </label>
+                <Input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  End time
+                </label>
+                <Input
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                />
+              </div>
+            </div>
+
             {pendingForce && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
                 <div className="flex items-center gap-2 text-amber-800 font-medium text-sm">
                   <AlertTriangle className="size-4" />
-                  Scheduling conflict detected
+                  Worker already booked that day
                 </div>
                 <ul className="mt-1.5 text-xs text-amber-700 space-y-1">
                   {pendingForce.conflicts.map((c, idx) => (
                     <li key={idx}>
-                      {c.technician} overlaps with: {c.otherJobLabel}
+                      {c.technician} is booked on: {c.otherJobLabel}
                     </li>
                   ))}
                 </ul>
@@ -506,23 +637,23 @@ export default function Scheduler() {
             {pendingForce ? (
               <Button
                 variant="destructive"
-                onClick={() => doAssign(true)}
-                disabled={assign.isPending}
+                onClick={() => doSchedule(true)}
+                disabled={setScheduled.isPending}
               >
-                {assign.isPending && (
+                {setScheduled.isPending && (
                   <Loader2 className="size-4 mr-1 animate-spin" />
                 )}
-                Assign anyway
+                Schedule anyway
               </Button>
             ) : (
               <Button
-                onClick={() => doAssign(false)}
-                disabled={assign.isPending}
+                onClick={() => doSchedule(false)}
+                disabled={setScheduled.isPending}
               >
-                {assign.isPending && (
+                {setScheduled.isPending && (
                   <Loader2 className="size-4 mr-1 animate-spin" />
                 )}
-                Assign
+                Schedule
               </Button>
             )}
           </DialogFooter>

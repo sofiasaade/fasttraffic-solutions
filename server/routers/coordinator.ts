@@ -27,6 +27,10 @@ import {
   getOvertimeThreshold,
   seedTechnicians,
   setPhaseAssignments,
+  setScheduledAssignment,
+  listScheduledAssignmentsForWeek,
+  removeAssignment,
+  listBookedTechniciansOnDate,
   setSetting,
   sumHoursInPeriod,
   upsertJobOverride,
@@ -434,5 +438,123 @@ export const coordinatorRouter = router({
     .mutation(async ({ input }) => {
       await setSetting("overtime_threshold", String(input.threshold));
       return { ok: true as const, threshold: input.threshold };
+    }),
+
+  /* ---------------- Day & time-specific scheduler (local only) ---------- */
+
+  // All day-pinned assignments for a visible week (inclusive date range).
+  scheduledAssignments: adminProcedure
+    .input(z.object({ startDate: z.string(), endDate: z.string() }))
+    .query(async ({ input }) => {
+      const rows = await listScheduledAssignmentsForWeek(
+        input.startDate,
+        input.endDate,
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        jobId: r.airtableJobId,
+        phase: r.phase,
+        technicianName: r.technicianName,
+        scheduledDate: r.scheduledDate,
+        startTime: r.startTime,
+        endTime: r.endTime,
+      }));
+    }),
+
+  // Pin a technician to a job on a specific day + time window.
+  setScheduled: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        phase: phaseSchema,
+        technicianName: z.string(),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional(),
+        endTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .optional(),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const job = await fetchJobById(input.jobId);
+
+      // Availability check: is this technician already booked that day on a
+      // DIFFERENT job? Block unless forced.
+      const bookedNames = await listBookedTechniciansOnDate(input.scheduledDate);
+      const sameDayRows = await listScheduledAssignmentsForWeek(
+        input.scheduledDate,
+        input.scheduledDate,
+      );
+      const conflict = sameDayRows.find(
+        (r) =>
+          r.technicianName === input.technicianName &&
+          r.airtableJobId !== input.jobId,
+      );
+      if (conflict && !input.force) {
+        let label = conflict.airtableJobId;
+        try {
+          const oj = await fetchJobById(conflict.airtableJobId);
+          label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
+        } catch {
+          /* keep id */
+        }
+        return {
+          ok: false as const,
+          conflicts: [
+            { technician: input.technicianName, otherJobLabel: label },
+          ],
+        };
+      }
+
+      const id = await setScheduledAssignment({
+        airtableJobId: input.jobId,
+        phase: input.phase,
+        technicianName: input.technicianName,
+        scheduledDate: input.scheduledDate,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
+        actor: {
+          userId: ctx.user.id,
+          name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        },
+      });
+
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "schedule_assignment",
+        fieldName: input.phase,
+        oldValue: null,
+        newValue: `${input.technicianName} @ ${input.scheduledDate}${
+          input.startTime ? ` ${input.startTime}-${input.endTime ?? ""}` : ""
+        }`,
+        details: bookedNames.includes(input.technicianName) && conflict
+          ? "Scheduled (forced over day conflict)"
+          : "Scheduled",
+      });
+
+      await createNotification({
+        technicianName: input.technicianName,
+        airtableJobId: input.jobId,
+        type: "assigned",
+        title: `Scheduled: ${input.phase} on ${input.scheduledDate}`,
+        body: `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`,
+      });
+
+      return { ok: true as const, id };
+    }),
+
+  // Remove a single day-pinned assignment (by row id).
+  removeScheduled: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await removeAssignment(input.id);
+      return { ok: true as const };
     }),
 });

@@ -181,6 +181,11 @@ export const jobAssignments = mysqlTable("job_assignments", {
   airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
   phase: varchar("phase", { length: 32 }).notNull(),
   technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  // Optional day/time scheduling (local only). When set, the assignment is
+  // pinned to a specific calendar day and time window in the Scheduler.
+  scheduledDate: varchar("scheduledDate", { length: 10 }),
+  startTime: varchar("startTime", { length: 5 }),
+  endTime: varchar("endTime", { length: 5 }),
   createdByUserId: int("createdByUserId"),
   createdByName: varchar("createdByName", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -105,24 +105,29 @@
 - [x] Show existing assignments as chips inside the timeline cells
 - [x] Nav entry + route wired; type-check + 23 tests passing
 
-## Feature 15: Day & time-specific scheduler assignments
-- [ ] Add scheduler_assignments table (jobId, technicianName, phase, scheduledDate, startTime, endTime, createdBy, createdAt)
-- [ ] Backend: createSchedulerAssignment / listSchedulerAssignmentsForWeek / deleteSchedulerAssignment
-- [ ] Drop flow saves day + time (start/end) to scheduler_assignments AND keeps Airtable phase field in sync
-- [ ] Render chips only in the specific day cell from saved scheduler assignments
-- [ ] Time selection in drop dialog (start/end), default from setup type
-- [ ] Worker availability: flag/disable workers already booked on that day in the panel
-- [ ] Remove an assignment from a cell (click chip -> remove)
-- [ ] Integration test for scheduler assignment persistence + conflict
+## Feature 15: Day & time-specific scheduler assignments (LOCAL only)
+- [x] Extend job_assignments with scheduledDate, startTime, endTime columns (local store, no Airtable write)
+- [x] Backend: setScheduled / scheduledAssignments (week) / removeScheduled procedures
+- [x] Drop flow saves day + time (start/end) locally only
+- [x] Render chips only in the specific day cell from saved scheduler assignments
+- [x] Time selection in drop dialog (start/end)
+- [x] Worker availability: flag workers already booked that week in the panel
+- [x] Remove an assignment from a cell (click chip -> remove)
+- [x] Integration test for scheduler assignment persistence + conflict + removal (28 tests passing)
+
+## Feature 17: Scheduler jobs grouped by status (like Dashboard)
+- [x] Group scheduler job rows into Permit Request Submitted / Permit Approved / Field
+- [x] Collapsible section headers with counts
+- [x] Preserve week navigation, search, and drag-and-drop within grouped layout
 
 ## Feature 16: Airtable READ-ONLY (no writes back until user says otherwise)
-- [ ] Remove all updateJobFields / appendToTextField writes to Airtable across the codebase
-- [ ] assignTechnicians: persist assignment locally (assignments table), NOT to Airtable phase fields
-- [ ] Build local assignments model so phase assignment + scheduler day/time share one source
-- [ ] modifyJob (extend/shorten end date, sub-status): record locally as an override + change history, do NOT write Airtable
-- [ ] Technician field notes / photos: store locally only, do NOT write to Airtable Field Comments / Field Photos
-- [ ] Coordinator reads merge Airtable (base data) + local assignments/overrides for display
-- [ ] Update tests to assert NO Airtable write calls happen
+- [x] Remove all updateJobFields / appendToTextField writes to Airtable across the codebase
+- [x] assignTechnicians: persist assignment locally (assignments table), NOT to Airtable phase fields
+- [x] Build local assignments model so phase assignment + scheduler day/time share one source
+- [x] modifyJob (extend/shorten end date, sub-status): record locally as an override + change history, do NOT write Airtable
+- [x] Technician field notes / photos: store locally only, do NOT write to Airtable Field Comments / Field Photos
+- [x] Coordinator reads merge Airtable (base data) + local assignments/overrides for display
+- [x] Update tests to assert NO Airtable write calls happen
 
 
 ## Read-Only Airtable Refactor (operations data stored locally)

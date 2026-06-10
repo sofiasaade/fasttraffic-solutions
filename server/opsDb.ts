@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   appSettings,
@@ -372,13 +372,18 @@ import {
 const PHASES = ["Preparation", "Setup", "Pickup"] as const;
 type Phase = (typeof PHASES)[number];
 
-/** All assignment rows for a job (all phases). */
+/** Phase-level assignment rows for a job (excludes day-pinned scheduler rows). */
 export async function listAssignmentsForJob(airtableJobId: string) {
   const d = await db();
   return d
     .select()
     .from(jobAssignments)
-    .where(eq(jobAssignments.airtableJobId, airtableJobId));
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, airtableJobId),
+        isNull(jobAssignments.scheduledDate),
+      ),
+    );
 }
 
 /** Assignment rows for many jobs at once, grouped into a Map keyed by jobId. */
@@ -389,7 +394,12 @@ export async function getAssignmentsMap(jobIds: string[]) {
   const rows = await d
     .select()
     .from(jobAssignments)
-    .where(inArray(jobAssignments.airtableJobId, jobIds));
+    .where(
+      and(
+        inArray(jobAssignments.airtableJobId, jobIds),
+        isNull(jobAssignments.scheduledDate),
+      ),
+    );
   for (const r of rows) {
     if (!map.has(r.airtableJobId)) {
       map.set(r.airtableJobId, { Preparation: [], Setup: [], Pickup: [] });
@@ -417,6 +427,7 @@ export async function setPhaseAssignments(
       and(
         eq(jobAssignments.airtableJobId, airtableJobId),
         eq(jobAssignments.phase, phase),
+        isNull(jobAssignments.scheduledDate),
       ),
     );
   const old = existing.map((r) => r.technicianName);
@@ -427,6 +438,7 @@ export async function setPhaseAssignments(
       and(
         eq(jobAssignments.airtableJobId, airtableJobId),
         eq(jobAssignments.phase, phase),
+        isNull(jobAssignments.scheduledDate),
       ),
     );
 
@@ -443,19 +455,25 @@ export async function setPhaseAssignments(
   return old;
 }
 
-/** Jobs (ids) a technician is assigned to, across all phases, with phases. */
+/**
+ * Jobs (ids) a technician is assigned to, with the set of phases. Combines both
+ * phase-level rows and day-pinned scheduler rows so the technician sees every
+ * job they are on. Phases are de-duplicated.
+ */
 export async function listJobIdsForTechnician(technicianName: string) {
   const d = await db();
   const rows = await d
     .select()
     .from(jobAssignments)
     .where(eq(jobAssignments.technicianName, technicianName));
-  const byJob = new Map<string, string[]>();
+  const byJob = new Map<string, Set<string>>();
   for (const r of rows) {
-    if (!byJob.has(r.airtableJobId)) byJob.set(r.airtableJobId, []);
-    byJob.get(r.airtableJobId)!.push(r.phase);
+    if (!byJob.has(r.airtableJobId)) byJob.set(r.airtableJobId, new Set());
+    byJob.get(r.airtableJobId)!.add(r.phase);
   }
-  return byJob;
+  const out = new Map<string, string[]>();
+  byJob.forEach((phases, jobId) => out.set(jobId, Array.from(phases)));
+  return out;
 }
 
 /** All assignment rows where a technician appears (for conflict detection). */
@@ -465,6 +483,95 @@ export async function listAllAssignmentsForTechnician(technicianName: string) {
     .select()
     .from(jobAssignments)
     .where(eq(jobAssignments.technicianName, technicianName));
+}
+
+/* -------------------- Day & time-specific scheduling -------------------- */
+// These reuse the same job_assignments table (single source of truth) but set
+// scheduledDate/startTime/endTime so an assignment is pinned to a calendar day.
+
+/**
+ * Create a day/time-pinned assignment for (job, phase, technician, date).
+ * Idempotent per (job, phase, technician, date): updates the time window if a
+ * row already exists for that exact combination. Returns the row id.
+ */
+export async function setScheduledAssignment(input: {
+  airtableJobId: string;
+  phase: string;
+  technicianName: string;
+  scheduledDate: string; // YYYY-MM-DD
+  startTime?: string | null; // HH:MM
+  endTime?: string | null; // HH:MM
+  actor?: { userId?: number; name?: string };
+}): Promise<number> {
+  const d = await db();
+  const existing = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, input.airtableJobId),
+        eq(jobAssignments.phase, input.phase),
+        eq(jobAssignments.technicianName, input.technicianName),
+        eq(jobAssignments.scheduledDate, input.scheduledDate),
+      ),
+    );
+  if (existing.length > 0) {
+    await d
+      .update(jobAssignments)
+      .set({
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
+      })
+      .where(eq(jobAssignments.id, existing[0].id));
+    return existing[0].id;
+  }
+  const res = await d.insert(jobAssignments).values({
+    airtableJobId: input.airtableJobId,
+    phase: input.phase,
+    technicianName: input.technicianName,
+    scheduledDate: input.scheduledDate,
+    startTime: input.startTime ?? null,
+    endTime: input.endTime ?? null,
+    createdByUserId: input.actor?.userId ?? null,
+    createdByName: input.actor?.name ?? null,
+  });
+  // drizzle-mysql returns insertId on the first result element
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+/** All day/time-pinned assignments overlapping a date range (inclusive). */
+export async function listScheduledAssignmentsForWeek(
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        isNotNull(jobAssignments.scheduledDate),
+        gte(jobAssignments.scheduledDate, startDate),
+        lte(jobAssignments.scheduledDate, endDate),
+      ),
+    );
+  return rows;
+}
+
+/** Remove a single assignment row by id. */
+export async function removeAssignment(id: number) {
+  const d = await db();
+  await d.delete(jobAssignments).where(eq(jobAssignments.id, id));
+}
+
+/** Technician names already booked (day-pinned) on a given calendar date. */
+export async function listBookedTechniciansOnDate(scheduledDate: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.scheduledDate, scheduledDate));
+  return Array.from(new Set(rows.map((r) => r.technicianName)));
 }
 
 /* ----------------------------- Job Photos ----------------------------- */

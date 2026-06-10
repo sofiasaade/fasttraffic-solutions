@@ -23,6 +23,17 @@ const state = {
   overrides: {} as Record<string, { endDate: string | null; subStatus: string | null }>,
   photos: [] as any[],
   notes: [] as any[],
+  // Day-pinned scheduler assignments (local).
+  scheduled: [] as {
+    id: number;
+    airtableJobId: string;
+    phase: string;
+    technicianName: string;
+    scheduledDate: string;
+    startTime: string | null;
+    endTime: string | null;
+  }[],
+  scheduledSeq: 0,
   // Any of these being > 0 means a read-only violation occurred.
   airtableWriteCalls: [] as { fn: string; id: string }[],
 };
@@ -188,6 +199,50 @@ vi.mock("../opsDb", () => ({
   listJobNotes: vi.fn(async (jobId: string) =>
     state.notes.filter((n) => n.airtableJobId === jobId),
   ),
+
+  // Day & time-specific scheduling (local)
+  setScheduledAssignment: vi.fn(async (input: any) => {
+    const existing = state.scheduled.find(
+      (r) =>
+        r.airtableJobId === input.airtableJobId &&
+        r.phase === input.phase &&
+        r.technicianName === input.technicianName &&
+        r.scheduledDate === input.scheduledDate,
+    );
+    if (existing) {
+      existing.startTime = input.startTime ?? null;
+      existing.endTime = input.endTime ?? null;
+      return existing.id;
+    }
+    const id = ++state.scheduledSeq;
+    state.scheduled.push({
+      id,
+      airtableJobId: input.airtableJobId,
+      phase: input.phase,
+      technicianName: input.technicianName,
+      scheduledDate: input.scheduledDate,
+      startTime: input.startTime ?? null,
+      endTime: input.endTime ?? null,
+    });
+    return id;
+  }),
+  listScheduledAssignmentsForWeek: vi.fn(async (start: string, end: string) =>
+    state.scheduled.filter(
+      (r) => r.scheduledDate >= start && r.scheduledDate <= end,
+    ),
+  ),
+  removeAssignment: vi.fn(async (id: number) => {
+    state.scheduled = state.scheduled.filter((r) => r.id !== id);
+  }),
+  listBookedTechniciansOnDate: vi.fn(async (date: string) =>
+    Array.from(
+      new Set(
+        state.scheduled
+          .filter((r) => r.scheduledDate === date)
+          .map((r) => r.technicianName),
+      ),
+    ),
+  ),
 }));
 
 import { appRouter } from "../routers";
@@ -232,6 +287,8 @@ beforeEach(() => {
   state.overrides = {};
   state.photos = [];
   state.notes = [];
+  state.scheduled = [];
+  state.scheduledSeq = 0;
   state.airtableWriteCalls = [];
 });
 
@@ -380,6 +437,86 @@ describe("Technician field notes & photos are local", () => {
     const jobs = await caller.technician.myJobs();
     const job = jobs.find((j) => j.id === "recJOB1");
     expect(job?.fieldComments).toContain("Cones placed");
+  });
+});
+
+describe("Day & time scheduler (local, no Airtable write)", () => {
+  it("persists a day/time-pinned assignment and lists it for the week", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Hector",
+      scheduledDate: "2026-06-16",
+      startTime: "08:00",
+      endTime: "16:00",
+    });
+    expect(res.ok).toBe(true);
+    expect(state.scheduled.length).toBe(1);
+    expect(state.airtableWriteCalls.length).toBe(0);
+
+    const week = await caller.coordinator.scheduledAssignments({
+      startDate: "2026-06-15",
+      endDate: "2026-06-21",
+    });
+    expect(week.length).toBe(1);
+    expect(week[0].technicianName).toBe("Hector");
+    expect(week[0].scheduledDate).toBe("2026-06-16");
+    expect(week[0].startTime).toBe("08:00");
+  });
+
+  it("blocks scheduling a worker already booked that day on another job unless forced", async () => {
+    state.jobs["recJOB2"] = makeJob({ id: "recJOB2", company: "Other" });
+    state.scheduled.push({
+      id: ++state.scheduledSeq,
+      airtableJobId: "recJOB2",
+      phase: "Setup",
+      technicianName: "Hector",
+      scheduledDate: "2026-06-16",
+      startTime: null,
+      endTime: null,
+    });
+    const caller = appRouter.createCaller(adminCtx());
+    const blocked = await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Hector",
+      scheduledDate: "2026-06-16",
+    });
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) expect(blocked.conflicts[0].technician).toBe("Hector");
+    // Not persisted for recJOB1.
+    expect(
+      state.scheduled.filter((r) => r.airtableJobId === "recJOB1").length,
+    ).toBe(0);
+
+    const forced = await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Hector",
+      scheduledDate: "2026-06-16",
+      force: true,
+    });
+    expect(forced.ok).toBe(true);
+    expect(
+      state.scheduled.filter((r) => r.airtableJobId === "recJOB1").length,
+    ).toBe(1);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("removes a scheduled assignment by id", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Pickup",
+      technicianName: "Hector",
+      scheduledDate: "2026-06-17",
+    });
+    expect(res.ok).toBe(true);
+    const id = res.ok ? res.id : 0;
+    await caller.coordinator.removeScheduled({ id });
+    expect(state.scheduled.length).toBe(0);
+    expect(state.airtableWriteCalls.length).toBe(0);
   });
 });
 
