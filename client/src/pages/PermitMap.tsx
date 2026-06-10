@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { MapView } from "@/components/Map";
 import { trpc } from "@/lib/trpc";
 import { fmtDate, fmtTimeRange } from "@/lib/format";
@@ -58,6 +58,13 @@ export default function PermitMap() {
     async (map: google.maps.Map, list: MapJob[]) => {
       const g = window.google;
       if (!g) return;
+
+      // Ensure the marker library is loaded before creating AdvancedMarkers.
+      const markerLib = (await g.maps.importLibrary(
+        "marker",
+      )) as google.maps.MarkerLibrary;
+      const { AdvancedMarkerElement, PinElement } = markerLib;
+
       infoRef.current = new g.maps.InfoWindow();
       const geocoder = new g.maps.Geocoder();
       const bounds = new g.maps.LatLngBounds();
@@ -94,10 +101,17 @@ export default function PermitMap() {
           continue;
         }
 
-        const marker = new g.maps.marker.AdvancedMarkerElement({
+        const pin = new PinElement({
+          background: "#ea580c",
+          borderColor: "#9a3412",
+          glyphColor: "#ffffff",
+          scale: 1.1,
+        });
+        const marker = new AdvancedMarkerElement({
           map,
           position: pos,
           title: j.company ?? "Job",
+          content: pin.element,
         });
         marker.addListener("click", () => {
           infoRef.current?.setContent(infoHtml(j));
@@ -130,6 +144,14 @@ export default function PermitMap() {
     },
     [jobs, placeMarkers],
   );
+
+  // If the jobs data arrives (or changes) after the map is already initialized,
+  // (re)place the markers. Guards against the data/map load race condition.
+  useEffect(() => {
+    if (mapRef.current && jobs && jobs.length) {
+      placeMarkers(mapRef.current, jobs as MapJob[]);
+    }
+  }, [jobs, placeMarkers]);
 
   // Focus a job from the side list.
   const focusJob = (j: MapJob) => {

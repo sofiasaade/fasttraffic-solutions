@@ -75,3 +75,9 @@
 - [x] Markers per job with info window (company, address, dates, status)
 - [x] Add nav entry in CoordinatorShell
 - [x] Handle jobs missing coordinates (geocode fallback + list flag)
+
+## Bug: Permit Map pins not visible
+- [x] Pins not rendering even though all 8 Permit Approved jobs have valid Lat/Lon
+- [x] Fix marker creation (use PinElement content; ensure markerLibrary loaded)
+- [x] Recolocate markers when data arrives after map init (race condition)
+- [ ] Verify markers appear and map fits bounds in authenticated UI (pending user/owner login)
