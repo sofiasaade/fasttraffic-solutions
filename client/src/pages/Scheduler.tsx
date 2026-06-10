@@ -89,6 +89,48 @@ function impactBadgeClass(impact: string): string {
   return "bg-slate-100 text-slate-700 border-slate-200";
 }
 
+// Categorize the Airtable "Setup Duration" single-select and color it to match
+// the colors configured in Airtable:
+//   24 Hours Set Up                 -> purpleBright
+//   Daily / Daytime Work (...)      -> yellowLight1
+//   Nightime / Nightly Set Up (...) -> blueBright
+// Returns a short label + badge classes. Unknown values get a neutral style.
+function setupDurationBadge(value: string): { label: string; cls: string } {
+  const v = value.toLowerCase();
+  if (/24\s*hour/.test(v)) {
+    return {
+      label: "24 Hours",
+      cls: "bg-purple-100 text-purple-800 border-purple-200",
+    };
+  }
+  if (/night/.test(v)) {
+    // Pull the time window from the parentheses if present.
+    const m = value.match(/\(([^)]*\d[^)]*)\)/);
+    const several = /several/i.test(v);
+    return {
+      label: several
+        ? `Nightly${m ? ` · ${m[1].trim()}` : ""}`
+        : `Night${m ? ` · ${m[1].trim()}` : ""}`,
+      cls: "bg-blue-100 text-blue-800 border-blue-200",
+    };
+  }
+  if (/daily/.test(v)) {
+    const m = value.match(/\(([^)]*\d[^)]*)\)/);
+    return {
+      label: `Daily${m ? ` · ${m[1].trim()}` : ""}`,
+      cls: "bg-amber-100 text-amber-800 border-amber-200",
+    };
+  }
+  if (/daytime|day\s*time/.test(v)) {
+    const m = value.match(/\(([^)]*\d[^)]*)\)/);
+    return {
+      label: m ? m[1].trim() : "Daytime",
+      cls: "bg-amber-100 text-amber-800 border-amber-200",
+    };
+  }
+  return { label: value, cls: "bg-slate-100 text-slate-700 border-slate-200" };
+}
+
 // Status sections mirror the Dispatch board grouping.
 type SectionKey = "submitted" | "approved" | "field" | "cancelled";
 const STATUS_SECTIONS: {
@@ -629,6 +671,22 @@ export default function Scheduler() {
             <div className="text-[11px] text-muted-foreground/90 truncate mt-0.5 flex items-center gap-1">
               <Construction className="size-3 shrink-0" />
               <span className="truncate">{job.closureType}</span>
+            </div>
+          )}
+          {job.setupDuration && (
+            <div className="mt-1">
+              <span
+                className={cn(
+                  "inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium border",
+                  setupDurationBadge(job.setupDuration).cls,
+                )}
+                title={job.setupDuration}
+              >
+                <Clock className="size-3 shrink-0" />
+                <span className="truncate">
+                  {setupDurationBadge(job.setupDuration).label}
+                </span>
+              </span>
             </div>
           )}
         </div>
@@ -1575,7 +1633,14 @@ function JobDetailInline({ job }: { job: Job }) {
           </DetailRow>
           {job.setupDuration && (
             <DetailRow icon={<Clock className="size-4" />} label="Setup Duration">
-              {job.setupDuration}
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border",
+                  setupDurationBadge(job.setupDuration).cls,
+                )}
+              >
+                {job.setupDuration}
+              </span>
             </DetailRow>
           )}
           {job.requestorName && (

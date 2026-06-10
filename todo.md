@@ -222,3 +222,10 @@
 - [x] Show emoji + closureType + impact in JobDetailInline accordion
 - [x] Show emoji + impact badge (color by difficulty word) + closure type on Scheduler job rows
 - [x] TypeScript clean + 50 tests passing (added airtable.mapping.test.ts)
+
+## Feature 27: Day-cell alignment + Setup Duration category badge
+- [x] Move duration bar into a fixed-height top band so it stays aligned when chips are added
+- [x] Add setupDurationBadge() mapping Airtable colors (24h->purple, daily/daytime->amber, night->blue)
+- [x] Show Setup Duration as a color-coded badge on Scheduler job rows
+- [x] Show Setup Duration badge in JobDetailInline accordion
+- [x] TypeScript clean + 50 tests passing
