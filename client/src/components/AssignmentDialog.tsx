@@ -74,6 +74,7 @@ export default function AssignmentDialog({
       toast.success(`${phase} assignment saved`);
       setPendingConflicts(null);
       utils.coordinator.dispatchJobs.invalidate();
+      utils.coordinator.boardJobs.invalidate();
       utils.coordinator.jobDetail.invalidate();
     },
     onError: (e) => toast.error(e.message),

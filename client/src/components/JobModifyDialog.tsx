@@ -71,6 +71,8 @@ export default function JobModifyDialog({
     onSuccess: () => {
       toast.success("Job updated");
       utils.coordinator.dispatchJobs.invalidate();
+      utils.coordinator.boardJobs.invalidate();
+      utils.coordinator.jobDetail.invalidate();
       utils.coordinator.changeHistory.invalidate();
       historyQuery.refetch();
     },

@@ -46,7 +46,7 @@ export default function Login() {
           <p className="text-sidebar-foreground/70 text-lg leading-relaxed">
             Dispatch confirmed jobs, assign technicians by phase, track hours
             against the Alberta 44-hour threshold, and gate every check-in
-            behind a hazard assessment — all synced with Airtable.
+            behind a hazard assessment — with job data sourced live from Airtable.
           </p>
         </div>
 

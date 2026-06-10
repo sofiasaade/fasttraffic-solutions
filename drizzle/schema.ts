@@ -143,3 +143,98 @@ export const appSettings = mysqlTable("app_settings", {
 
 export type AppSetting = typeof appSettings.$inferSelect;
 export type InsertAppSetting = typeof appSettings.$inferInsert;
+
+/**
+ * Scheduler assignments: a technician scheduled to a job on a specific day
+ * and time window, for a given phase. This powers the Assignar-style timeline.
+ * Airtable phase fields stay the source of truth for "who is on the job";
+ * this table adds the day + time detail the coordinator drops on the grid.
+ */
+export const schedulerAssignments = mysqlTable("scheduler_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  phase: varchar("phase", { length: 32 }).notNull(),
+  /** Local date of the scheduled shift, stored as YYYY-MM-DD. */
+  scheduledDate: varchar("scheduledDate", { length: 10 }).notNull(),
+  /** Start/end clock time as HH:MM (24h), optional. */
+  startTime: varchar("startTime", { length: 5 }),
+  endTime: varchar("endTime", { length: 5 }),
+  createdByUserId: int("createdByUserId"),
+  createdByName: varchar("createdByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SchedulerAssignment = typeof schedulerAssignments.$inferSelect;
+export type InsertSchedulerAssignment =
+  typeof schedulerAssignments.$inferInsert;
+
+
+/**
+ * Local job assignments: the authoritative record of which technicians are on a
+ * job for a given phase. Airtable is read-only, so this table (not the Airtable
+ * phase fields) is the source of truth for "who is assigned". One row per
+ * (job, phase, technician).
+ */
+export const jobAssignments = mysqlTable("job_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  phase: varchar("phase", { length: 32 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  createdByUserId: int("createdByUserId"),
+  createdByName: varchar("createdByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JobAssignment = typeof jobAssignments.$inferSelect;
+export type InsertJobAssignment = typeof jobAssignments.$inferInsert;
+
+/**
+ * Local field photos. Bytes live in S3; this row stores the storage key + url
+ * and metadata. Replaces writing attachments back to Airtable.
+ */
+export const jobPhotos = mysqlTable("job_photos", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  category: varchar("category", { length: 16 }).notNull(),
+  storageKey: varchar("storageKey", { length: 512 }).notNull(),
+  storageUrl: varchar("storageUrl", { length: 1024 }).notNull(),
+  filename: varchar("filename", { length: 256 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JobPhoto = typeof jobPhotos.$inferSelect;
+export type InsertJobPhoto = typeof jobPhotos.$inferInsert;
+
+/**
+ * Local field notes (timestamped). Replaces appending to the Airtable text field.
+ */
+export const jobNotes = mysqlTable("job_notes", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  authorName: varchar("authorName", { length: 128 }).notNull(),
+  authorRole: varchar("authorRole", { length: 32 }).notNull(),
+  note: text("note").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JobNote = typeof jobNotes.$inferSelect;
+export type InsertJobNote = typeof jobNotes.$inferInsert;
+
+/**
+ * Local job overrides: coordinator-applied changes (end date / sub-status) that
+ * would otherwise be written to Airtable. One row per job; latest values win.
+ */
+export const jobOverrides = mysqlTable("job_overrides", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull().unique(),
+  endDate: varchar("endDate", { length: 32 }),
+  subStatus: varchar("subStatus", { length: 128 }),
+  updatedByUserId: int("updatedByUserId"),
+  updatedByName: varchar("updatedByName", { length: 128 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type JobOverride = typeof jobOverrides.$inferSelect;
+export type InsertJobOverride = typeof jobOverrides.$inferInsert;

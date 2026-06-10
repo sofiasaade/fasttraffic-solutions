@@ -185,44 +185,50 @@ export async function fetchJobsForTechnician(
   return records.map(mapRecordToJob);
 }
 
+/**
+ * READ-ONLY MODE.
+ *
+ * Per the operator's explicit instruction, this application must NOT write
+ * anything back to Airtable until told otherwise. Airtable is the read-only
+ * source of base job data; all operations data (assignments, time logs,
+ * hazard assessments, notes, photos, change history) lives in the local DB.
+ *
+ * These write helpers are intentionally disabled. If any code path calls
+ * them, it throws loudly so the read-only guarantee can never be violated
+ * silently. To re-enable writes later, restore the PATCH implementations.
+ */
+export const AIRTABLE_READ_ONLY = true;
+
 export async function updateJobFields(
-  recordId: string,
-  fields: Record<string, unknown>,
+  _recordId: string,
+  _fields: Record<string, unknown>,
 ): Promise<JobRecord> {
-  const data = await airtableFetch(`${baseUrl()}/${recordId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ fields, typecast: true }),
-  });
-  return mapRecordToJob(data);
+  throw new AirtableError(
+    403,
+    "Airtable is in READ-ONLY mode: writes are disabled. Operations data is stored locally.",
+  );
 }
 
-// Append a string to a multiline text field, preserving existing content.
 export async function appendToTextField(
-  recordId: string,
-  fieldName: string,
-  textToAppend: string,
+  _recordId: string,
+  _fieldName: string,
+  _textToAppend: string,
 ): Promise<JobRecord> {
-  const current = await airtableFetch(`${baseUrl()}/${recordId}`);
-  const existing = asString(current.fields?.[fieldName]) ?? "";
-  const combined = existing ? `${existing}\n${textToAppend}` : textToAppend;
-  return updateJobFields(recordId, { [fieldName]: combined });
+  throw new AirtableError(
+    403,
+    "Airtable is in READ-ONLY mode: writes are disabled. Operations data is stored locally.",
+  );
 }
 
-// Append attachments to a multipleAttachments field (e.g. Field Photos), keeping existing ones.
 export async function appendAttachments(
-  recordId: string,
-  fieldName: string,
-  newAttachments: { url: string; filename?: string }[],
+  _recordId: string,
+  _fieldName: string,
+  _newAttachments: { url: string; filename?: string }[],
 ): Promise<JobRecord> {
-  const current = await airtableFetch(`${baseUrl()}/${recordId}`);
-  const existing = Array.isArray(current.fields?.[fieldName])
-    ? current.fields[fieldName].map((a: any) => ({
-        url: a.url,
-        filename: a.filename,
-      }))
-    : [];
-  const combined = [...existing, ...newAttachments];
-  return updateJobFields(recordId, { [fieldName]: combined });
+  throw new AirtableError(
+    403,
+    "Airtable is in READ-ONLY mode: writes are disabled. Operations data is stored locally.",
+  );
 }
 
 export async function pingAirtable(): Promise<{ ok: boolean; count: number }> {

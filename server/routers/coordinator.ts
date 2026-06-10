@@ -1,18 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
-import {
-  appendToTextField,
-  fetchDispatchJobs,
-  fetchMapJobs,
-  fetchJobById,
-  updateJobFields,
-} from "../airtable";
-import {
-  AF,
-  JobPhase,
-  PHASE_TO_FIELD,
-} from "../../shared/airtableFields";
+import { fetchMapJobs, fetchJobById } from "../airtable";
+import { AF, JobRecord } from "../../shared/airtableFields";
 import {
   detectConflicts,
   deriveZone,
@@ -23,43 +13,79 @@ import {
 import {
   appendChangeHistory,
   createNotification,
-  getOvertimeThreshold,
+  getAssignmentsMap,
+  getJobOverride,
+  getJobOverridesMap,
+  listAllAssignmentsForTechnician,
   listAllChangeHistory,
+  listAssignmentsForJob,
   listChangeHistory,
+  listJobNotes,
+  listJobPhotos,
+  listOpenTimeLogs,
   listTechnicians,
+  getOvertimeThreshold,
   seedTechnicians,
+  setPhaseAssignments,
   setSetting,
   sumHoursInPeriod,
-  listOpenTimeLogs,
+  upsertJobOverride,
 } from "../opsDb";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
 
-// Enrich a JobRecord with a derived zone for the client.
-function withZone<T extends { municipality: string | null; jobAddress: string | null }>(
-  job: T,
+/**
+ * Merge a base Airtable JobRecord with local operations data so the existing
+ * UI contract (techPrep/techSetup/techPickup, endDate, subStatus) is preserved
+ * while the local DB remains the source of truth. Airtable stays read-only.
+ */
+function mergeJob(
+  job: JobRecord,
+  assigns?: { Preparation: string[]; Setup: string[]; Pickup: string[] },
+  override?: { endDate: string | null; subStatus: string | null },
 ) {
-  return { ...job, zone: deriveZone(job as any) };
+  const merged: JobRecord = {
+    ...job,
+    techPrep: assigns ? assigns.Preparation : [],
+    techSetup: assigns ? assigns.Setup : [],
+    techPickup: assigns ? assigns.Pickup : [],
+    endDate: override?.endDate ?? job.endDate,
+    subStatus: override?.subStatus ?? job.subStatus,
+  };
+  return { ...merged, zone: deriveZone(merged as any) };
 }
 
 export const coordinatorRouter = router({
-  // Dispatch board: all jobs with Status Field / Permit Approved.
+  // Dispatch board: Field + Permit Approved + Permit Request Submitted, merged
+  // with local assignments and overrides.
   dispatchJobs: adminProcedure.query(async () => {
-    const jobs = await fetchDispatchJobs();
-    return jobs.map(withZone);
+    const jobs = await fetchMapJobs();
+    const ids = jobs.map((j) => j.id);
+    const [assignMap, overrideMap] = await Promise.all([
+      getAssignmentsMap(ids),
+      getJobOverridesMap(ids),
+    ]);
+    return jobs.map((j) => mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)));
   }),
 
-  // Board table: full job shape for all three statuses (Field, Permit Approved, Permit Request Submitted).
+  // Board table: same merged shape for all three statuses.
   boardJobs: adminProcedure.query(async () => {
     const jobs = await fetchMapJobs();
-    return jobs.map(withZone);
+    const ids = jobs.map((j) => j.id);
+    const [assignMap, overrideMap] = await Promise.all([
+      getAssignmentsMap(ids),
+      getJobOverridesMap(ids),
+    ]);
+    return jobs.map((j) => mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)));
   }),
 
-  // Jobs for the coordinator map view: Field, Permit Approved, Permit Request Submitted.
+  // Jobs for the coordinator map view, with local overrides applied.
   mapJobs: adminProcedure.query(async () => {
     const jobs = await fetchMapJobs();
+    const ids = jobs.map((j) => j.id);
+    const overrideMap = await getJobOverridesMap(ids);
     return jobs.map((j) => {
-      const z = withZone(j);
+      const z = mergeJob(j, undefined, overrideMap.get(j.id));
       return {
         id: z.id,
         company: z.company,
@@ -81,8 +107,23 @@ export const coordinatorRouter = router({
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
       const job = await fetchJobById(input.jobId);
-      const history = await listChangeHistory(input.jobId);
-      return { job: withZone(job), history };
+      const [assigns, override, history, photos, notes] = await Promise.all([
+        listAssignmentsForJob(input.jobId),
+        getJobOverride(input.jobId),
+        listChangeHistory(input.jobId),
+        listJobPhotos(input.jobId),
+        listJobNotes(input.jobId),
+      ]);
+      const grouped = { Preparation: [] as string[], Setup: [] as string[], Pickup: [] as string[] };
+      for (const a of assigns) {
+        if (a.phase in grouped) grouped[a.phase as keyof typeof grouped].push(a.technicianName);
+      }
+      const merged = mergeJob(
+        job,
+        grouped,
+        override ? { endDate: override.endDate, subStatus: override.subStatus } : undefined,
+      );
+      return { job: merged, history, photos, notes };
     }),
 
   technicians: adminProcedure.query(async () => {
@@ -90,7 +131,7 @@ export const coordinatorRouter = router({
     return listTechnicians();
   }),
 
-  // Assign or unassign technicians for a phase. Returns conflict info.
+  // Assign or unassign technicians for a phase — writes LOCALLY (Airtable read-only).
   assignTechnicians: adminProcedure
     .input(
       z.object({
@@ -101,12 +142,17 @@ export const coordinatorRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const fieldName = PHASE_TO_FIELD[input.phase as JobPhase];
       const job = await fetchJobById(input.jobId);
       const targetInterval = jobToInterval(job);
 
-      // Conflict detection: for each newly added technician, check overlap
-      // with other dispatch jobs they're already on.
+      // Current local assignments for this phase (the "before" set).
+      const existingForJob = await listAssignmentsForJob(input.jobId);
+      const oldValue = existingForJob
+        .filter((a) => a.phase === input.phase)
+        .map((a) => a.technicianName);
+
+      // Conflict detection against other jobs this technician is already on
+      // (local assignments), using Airtable date intervals.
       const conflicts: {
         technician: string;
         otherJobId: string;
@@ -114,43 +160,46 @@ export const coordinatorRouter = router({
       }[] = [];
 
       if (targetInterval) {
-        const allJobs = await fetchDispatchJobs();
-        const previous = new Set(
-          (input.phase === "Preparation"
-            ? job.techPrep
-            : input.phase === "Setup"
-            ? job.techSetup
-            : job.techPickup) ?? [],
-        );
+        const previous = new Set(oldValue);
         const newlyAdded = input.technicians.filter((t) => !previous.has(t));
 
         for (const tech of newlyAdded) {
-          const otherIntervals = allJobs
-            .filter((j) => j.id !== job.id)
-            .filter(
-              (j) =>
-                j.techPrep.includes(tech) ||
-                j.techSetup.includes(tech) ||
-                j.techPickup.includes(tech),
-            )
-            .map((j) => ({ job: j, iv: jobToInterval(j) }))
-            .filter((x) => x.iv !== null);
+          const techAssigns = await listAllAssignmentsForTechnician(tech);
+          const otherJobIds = Array.from(
+            new Set(
+              techAssigns
+                .map((a) => a.airtableJobId)
+                .filter((id) => id !== input.jobId),
+            ),
+          );
+
+          const otherIntervals: { jobId: string; iv: NonNullable<ReturnType<typeof jobToInterval>>; label: string }[] = [];
+          for (const oid of otherJobIds) {
+            try {
+              const oj = await fetchJobById(oid);
+              const iv = jobToInterval(oj);
+              if (iv)
+                otherIntervals.push({
+                  jobId: oid,
+                  iv,
+                  label: `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`,
+                });
+            } catch {
+              // ignore jobs we can't fetch
+            }
+          }
 
           const res = detectConflicts(
             targetInterval,
-            otherIntervals.map((x) => x.iv!),
+            otherIntervals.map((x) => x.iv),
           );
           if (res.hasConflict) {
             for (const c of res.conflicts) {
-              const other = otherIntervals.find(
-                (x) => x.iv!.jobId === c.otherJobId,
-              );
+              const other = otherIntervals.find((x) => x.iv.jobId === c.otherJobId);
               conflicts.push({
                 technician: tech,
                 otherJobId: c.otherJobId,
-                otherJobLabel: other
-                  ? `${other.job.company ?? "Job"} — ${other.job.jobAddress ?? ""}`
-                  : c.otherJobId,
+                otherJobLabel: other ? other.label : c.otherJobId,
               });
             }
           }
@@ -161,16 +210,10 @@ export const coordinatorRouter = router({
         return { ok: false as const, conflicts };
       }
 
-      const oldValue =
-        input.phase === "Preparation"
-          ? job.techPrep
-          : input.phase === "Setup"
-          ? job.techSetup
-          : job.techPickup;
-
-      // Write to Airtable (authoritative).
-      const updated = await updateJobFields(input.jobId, {
-        [fieldName]: input.technicians,
+      // Persist locally (replace full phase set).
+      await setPhaseAssignments(input.jobId, input.phase, input.technicians, {
+        userId: ctx.user.id,
+        name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
       });
 
       // Immutable change history.
@@ -179,13 +222,13 @@ export const coordinatorRouter = router({
         actorUserId: ctx.user.id,
         actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
         action: "assign_technician",
-        fieldName,
+        fieldName: input.phase,
         oldValue: JSON.stringify(oldValue),
         newValue: JSON.stringify(input.technicians),
         details: `Phase: ${input.phase}${conflicts.length ? " (forced over conflict)" : ""}`,
       });
 
-      // Notifications: newly assigned techs.
+      // Notifications: newly assigned / removed.
       const before = new Set(oldValue);
       const after = new Set(input.technicians);
       const jobLabel = `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`;
@@ -200,7 +243,7 @@ export const coordinatorRouter = router({
           });
         }
       }
-      for (const t of Array.from(oldValue)) {
+      for (const t of oldValue) {
         if (!after.has(t)) {
           await createNotification({
             technicianName: t,
@@ -212,57 +255,75 @@ export const coordinatorRouter = router({
         }
       }
 
-      return { ok: true as const, job: withZone(updated), conflicts };
+      // Return merged job so UI sees updated assignments.
+      const assigns = await listAssignmentsForJob(input.jobId);
+      const grouped = { Preparation: [] as string[], Setup: [] as string[], Pickup: [] as string[] };
+      for (const a of assigns) {
+        if (a.phase in grouped) grouped[a.phase as keyof typeof grouped].push(a.technicianName);
+      }
+      const override = await getJobOverride(input.jobId);
+      const merged = mergeJob(
+        job,
+        grouped,
+        override ? { endDate: override.endDate, subStatus: override.subStatus } : undefined,
+      );
+      return { ok: true as const, job: merged, conflicts };
     }),
 
-  // Modify a job: extend/shorten end date and/or change sub-status.
+  // Modify a job: end date and/or sub-status — stored LOCALLY as overrides.
   modifyJob: adminProcedure
     .input(
       z.object({
         jobId: z.string(),
-        endDate: z.string().optional(), // ISO
+        endDate: z.string().optional(),
         subStatus: z.string().optional(),
         reason: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const job = await fetchJobById(input.jobId);
-      const fields: Record<string, unknown> = {};
-      const changes: { field: string; old: string; new: string }[] = [];
+      const override = await getJobOverride(input.jobId);
+
+      const currentEnd = override?.endDate ?? job.endDate ?? "";
+      const currentSub = override?.subStatus ?? job.subStatus ?? "";
+
+      const changes: { field: string; old: string; new: string; action: string }[] = [];
+      const patch: { endDate?: string; subStatus?: string } = {};
 
       if (input.endDate !== undefined) {
-        fields[AF.endDate] = input.endDate;
+        patch.endDate = input.endDate;
         changes.push({
           field: AF.endDate,
-          old: job.endDate ?? "",
+          old: currentEnd,
           new: input.endDate,
+          action: "extend_end_date",
         });
       }
       if (input.subStatus !== undefined) {
-        fields[AF.subStatus] = input.subStatus;
+        patch.subStatus = input.subStatus;
         changes.push({
           field: AF.subStatus,
-          old: job.subStatus ?? "",
+          old: currentSub,
           new: input.subStatus,
+          action: "change_sub_status",
         });
       }
 
-      if (Object.keys(fields).length === 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "No changes provided",
-        });
+      if (changes.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No changes provided" });
       }
 
-      const updated = await updateJobFields(input.jobId, fields);
+      await upsertJobOverride(input.jobId, patch, {
+        userId: ctx.user.id,
+        name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+      });
 
       for (const c of changes) {
         await appendChangeHistory({
           airtableJobId: input.jobId,
           actorUserId: ctx.user.id,
           actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
-          action:
-            c.field === AF.endDate ? "extend_end_date" : "change_sub_status",
+          action: c.action,
           fieldName: c.field,
           oldValue: c.old,
           newValue: c.new,
@@ -270,14 +331,11 @@ export const coordinatorRouter = router({
         });
       }
 
-      // Notify all assigned techs of the modification.
-      const assigned = new Set([
-        ...job.techPrep,
-        ...job.techSetup,
-        ...job.techPickup,
-      ]);
+      // Notify all locally-assigned techs of the modification.
+      const assigns = await listAssignmentsForJob(input.jobId);
+      const assignedTechs = new Set(assigns.map((a) => a.technicianName));
       const jobLabel = `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`;
-      for (const t of Array.from(assigned)) {
+      for (const t of Array.from(assignedTechs)) {
         await createNotification({
           technicianName: t,
           airtableJobId: input.jobId,
@@ -287,10 +345,18 @@ export const coordinatorRouter = router({
         });
       }
 
-      return { ok: true as const, job: withZone(updated) };
+      const grouped = { Preparation: [] as string[], Setup: [] as string[], Pickup: [] as string[] };
+      for (const a of assigns) {
+        if (a.phase in grouped) grouped[a.phase as keyof typeof grouped].push(a.technicianName);
+      }
+      const merged = mergeJob(job, grouped, {
+        endDate: patch.endDate ?? override?.endDate ?? null,
+        subStatus: patch.subStatus ?? override?.subStatus ?? null,
+      });
+      return { ok: true as const, job: merged };
     }),
 
-  // Coordinator internal note (kept in change history, not the Airtable field).
+  // Coordinator internal note (change history only).
   addInternalNote: adminProcedure
     .input(z.object({ jobId: z.string(), note: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -323,7 +389,6 @@ export const coordinatorRouter = router({
       const threshold = await getOvertimeThreshold();
       const sums = await sumHoursInPeriod(period.start, period.end);
 
-      // Add live in-progress hours for currently checked-in techs.
       const open = await listOpenTimeLogs();
       const liveByTech = new Map<string, number>();
       const now = Date.now();

@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   appSettings,
@@ -12,6 +12,8 @@ import {
   notifications,
   technicians,
   timeLogs,
+  schedulerAssignments,
+  InsertSchedulerAssignment,
 } from "../drizzle/schema";
 import {
   ALBERTA_OT_THRESHOLD_DEFAULT,
@@ -293,4 +295,257 @@ export async function getOvertimeThreshold(): Promise<number> {
   if (v === null) return ALBERTA_OT_THRESHOLD_DEFAULT;
   const n = Number(v);
   return isNaN(n) ? ALBERTA_OT_THRESHOLD_DEFAULT : n;
+}
+
+/* -------------------------- Scheduler Assignments -------------------------- */
+
+export async function createSchedulerAssignment(
+  data: InsertSchedulerAssignment,
+) {
+  const d = await db();
+  await d.insert(schedulerAssignments).values(data);
+}
+
+export async function listSchedulerAssignmentsInRange(
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(schedulerAssignments)
+    .where(
+      and(
+        gte(schedulerAssignments.scheduledDate, startDate),
+        lte(schedulerAssignments.scheduledDate, endDate),
+      ),
+    )
+    .orderBy(schedulerAssignments.scheduledDate);
+}
+
+export async function listSchedulerAssignmentsForJob(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(schedulerAssignments)
+    .where(eq(schedulerAssignments.airtableJobId, airtableJobId));
+}
+
+export async function deleteSchedulerAssignment(id: number) {
+  const d = await db();
+  await d
+    .delete(schedulerAssignments)
+    .where(eq(schedulerAssignments.id, id));
+}
+
+/** Existing scheduler assignments for a technician on a given date (for availability). */
+export async function listTechAssignmentsOnDate(
+  technicianName: string,
+  scheduledDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(schedulerAssignments)
+    .where(
+      and(
+        eq(schedulerAssignments.technicianName, technicianName),
+        eq(schedulerAssignments.scheduledDate, scheduledDate),
+      ),
+    );
+}
+
+
+/* ----------------------- Local Job Assignments ----------------------- */
+// Authoritative "who is on the job" record (Airtable is read-only).
+
+import {
+  jobAssignments,
+  InsertJobAssignment,
+  jobPhotos,
+  InsertJobPhoto,
+  jobNotes,
+  InsertJobNote,
+  jobOverrides,
+} from "../drizzle/schema";
+
+const PHASES = ["Preparation", "Setup", "Pickup"] as const;
+type Phase = (typeof PHASES)[number];
+
+/** All assignment rows for a job (all phases). */
+export async function listAssignmentsForJob(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.airtableJobId, airtableJobId));
+}
+
+/** Assignment rows for many jobs at once, grouped into a Map keyed by jobId. */
+export async function getAssignmentsMap(jobIds: string[]) {
+  const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(inArray(jobAssignments.airtableJobId, jobIds));
+  for (const r of rows) {
+    if (!map.has(r.airtableJobId)) {
+      map.set(r.airtableJobId, { Preparation: [], Setup: [], Pickup: [] });
+    }
+    const entry = map.get(r.airtableJobId)!;
+    if ((PHASES as readonly string[]).includes(r.phase)) {
+      entry[r.phase as Phase].push(r.technicianName);
+    }
+  }
+  return map;
+}
+
+/** Replace the full technician set for a (job, phase). Returns old technicians. */
+export async function setPhaseAssignments(
+  airtableJobId: string,
+  phase: string,
+  technicianNames: string[],
+  actor: { userId?: number; name?: string },
+): Promise<string[]> {
+  const d = await db();
+  const existing = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, airtableJobId),
+        eq(jobAssignments.phase, phase),
+      ),
+    );
+  const old = existing.map((r) => r.technicianName);
+
+  await d
+    .delete(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, airtableJobId),
+        eq(jobAssignments.phase, phase),
+      ),
+    );
+
+  if (technicianNames.length > 0) {
+    const values: InsertJobAssignment[] = technicianNames.map((t) => ({
+      airtableJobId,
+      phase,
+      technicianName: t,
+      createdByUserId: actor.userId ?? null,
+      createdByName: actor.name ?? null,
+    }));
+    await d.insert(jobAssignments).values(values);
+  }
+  return old;
+}
+
+/** Jobs (ids) a technician is assigned to, across all phases, with phases. */
+export async function listJobIdsForTechnician(technicianName: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.technicianName, technicianName));
+  const byJob = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!byJob.has(r.airtableJobId)) byJob.set(r.airtableJobId, []);
+    byJob.get(r.airtableJobId)!.push(r.phase);
+  }
+  return byJob;
+}
+
+/** All assignment rows where a technician appears (for conflict detection). */
+export async function listAllAssignmentsForTechnician(technicianName: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.technicianName, technicianName));
+}
+
+/* ----------------------------- Job Photos ----------------------------- */
+
+export async function createJobPhoto(data: InsertJobPhoto) {
+  const d = await db();
+  await d.insert(jobPhotos).values(data);
+}
+
+export async function listJobPhotos(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobPhotos)
+    .where(eq(jobPhotos.airtableJobId, airtableJobId))
+    .orderBy(desc(jobPhotos.createdAt));
+}
+
+/* ----------------------------- Job Notes ------------------------------ */
+
+export async function createJobNote(data: InsertJobNote) {
+  const d = await db();
+  await d.insert(jobNotes).values(data);
+}
+
+export async function listJobNotes(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobNotes)
+    .where(eq(jobNotes.airtableJobId, airtableJobId))
+    .orderBy(desc(jobNotes.createdAt));
+}
+
+/* ---------------------------- Job Overrides --------------------------- */
+
+export async function upsertJobOverride(
+  airtableJobId: string,
+  patch: { endDate?: string | null; subStatus?: string | null },
+  actor: { userId?: number; name?: string },
+) {
+  const d = await db();
+  const set: Record<string, unknown> = {
+    updatedByUserId: actor.userId ?? null,
+    updatedByName: actor.name ?? null,
+  };
+  if (patch.endDate !== undefined) set.endDate = patch.endDate;
+  if (patch.subStatus !== undefined) set.subStatus = patch.subStatus;
+
+  await d
+    .insert(jobOverrides)
+    .values({
+      airtableJobId,
+      endDate: patch.endDate ?? null,
+      subStatus: patch.subStatus ?? null,
+      updatedByUserId: actor.userId ?? null,
+      updatedByName: actor.name ?? null,
+    })
+    .onDuplicateKeyUpdate({ set });
+}
+
+export async function getJobOverride(airtableJobId: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobOverrides)
+    .where(eq(jobOverrides.airtableJobId, airtableJobId))
+    .limit(1);
+  return rows[0];
+}
+
+export async function getJobOverridesMap(jobIds: string[]) {
+  const map = new Map<string, { endDate: string | null; subStatus: string | null }>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobOverrides)
+    .where(inArray(jobOverrides.airtableJobId, jobIds));
+  for (const r of rows) {
+    map.set(r.airtableJobId, { endDate: r.endDate, subStatus: r.subStatus });
+  }
+  return map;
 }

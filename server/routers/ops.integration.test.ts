@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Integration tests for the core safety/operations rules.
- * Airtable and the opsDb layer are mocked so these run without network/DB.
+ *
+ * Airtable is READ-ONLY: assignments, photos, notes, and job overrides live in
+ * the local DB. These tests mock the Airtable read layer and the opsDb layer
+ * (with an in-memory store) and assert that no Airtable WRITE ever happens.
  */
 
 // ---- Mock state ----
@@ -15,7 +18,13 @@ const state = {
   dispatchJobs: [] as any[],
   mapJobs: null as any[] | null,
   technicians: [] as any[],
-  updateCalls: [] as { id: string; fields: Record<string, unknown> }[],
+  // Local store
+  assignments: [] as { airtableJobId: string; phase: string; technicianName: string }[],
+  overrides: {} as Record<string, { endDate: string | null; subStatus: string | null }>,
+  photos: [] as any[],
+  notes: [] as any[],
+  // Any of these being > 0 means a read-only violation occurred.
+  airtableWriteCalls: [] as { fn: string; id: string }[],
 };
 
 function makeJob(over: Partial<any> = {}) {
@@ -45,30 +54,27 @@ function makeJob(over: Partial<any> = {}) {
   };
 }
 
-// ---- Mock Airtable ----
+// ---- Mock Airtable (reads work; writes record a violation) ----
 vi.mock("../airtable", () => ({
   fetchJobById: vi.fn(async (id: string) => state.jobs[id] ?? makeJob({ id })),
   fetchDispatchJobs: vi.fn(async () => state.dispatchJobs),
   fetchMapJobs: vi.fn(async () => state.mapJobs ?? state.dispatchJobs),
-  updateJobFields: vi.fn(async (id: string, fields: Record<string, unknown>) => {
-    state.updateCalls.push({ id, fields });
-    state.jobs[id] = { ...(state.jobs[id] ?? makeJob({ id })), ...mapFields(fields) };
-    return state.jobs[id];
-  }),
-  appendToTextField: vi.fn(async () => makeJob()),
-  appendAttachments: vi.fn(async () => makeJob()),
   fetchJobsForTechnician: vi.fn(async () => state.dispatchJobs),
+  updateJobFields: vi.fn(async (id: string) => {
+    state.airtableWriteCalls.push({ fn: "updateJobFields", id });
+    throw new Error("READ-ONLY violation: updateJobFields called");
+  }),
+  appendToTextField: vi.fn(async (id: string) => {
+    state.airtableWriteCalls.push({ fn: "appendToTextField", id });
+    throw new Error("READ-ONLY violation: appendToTextField called");
+  }),
+  appendAttachments: vi.fn(async (id: string) => {
+    state.airtableWriteCalls.push({ fn: "appendAttachments", id });
+    throw new Error("READ-ONLY violation: appendAttachments called");
+  }),
 }));
 
-function mapFields(fields: Record<string, unknown>) {
-  const out: any = {};
-  if ("Traffic Technician Setup" in fields)
-    out.techSetup = fields["Traffic Technician Setup"];
-  if ("End Date" in fields) out.endDate = fields["End Date"];
-  return out;
-}
-
-// ---- Mock opsDb ----
+// ---- Mock opsDb (in-memory local store) ----
 vi.mock("../opsDb", () => ({
   getHazardAssessment: vi.fn(async () => state.hazard),
   getOpenTimeLog: vi.fn(async () => state.openTimeLog),
@@ -79,8 +85,11 @@ vi.mock("../opsDb", () => ({
     return 1;
   }),
   appendChangeHistory: vi.fn(async (entry: any) => {
-    // append-only: never mutate or remove existing entries
-    state.changeHistory.push({ id: state.changeHistory.length + 1, createdAt: new Date(), ...entry });
+    state.changeHistory.push({
+      id: state.changeHistory.length + 1,
+      createdAt: new Date(),
+      ...entry,
+    });
     return state.changeHistory.length;
   }),
   listChangeHistory: vi.fn(async () => state.changeHistory),
@@ -100,10 +109,85 @@ vi.mock("../opsDb", () => ({
     zones: null,
     active: true,
   })),
+  getTechnicianByName: vi.fn(async () => ({
+    id: 1,
+    airtableName: "Hector",
+    displayName: "Hector",
+  })),
+  linkTechnicianToUser: vi.fn(async () => {}),
   getOvertimeThreshold: vi.fn(async () => 44),
   sumHoursInPeriod: vi.fn(async () => []),
   listOpenTimeLogs: vi.fn(async () => []),
   setSetting: vi.fn(async () => {}),
+
+  // Local assignments
+  listAssignmentsForJob: vi.fn(async (jobId: string) =>
+    state.assignments.filter((a) => a.airtableJobId === jobId),
+  ),
+  getAssignmentsMap: vi.fn(async (ids: string[]) => {
+    const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();
+    for (const a of state.assignments) {
+      if (!ids.includes(a.airtableJobId)) continue;
+      if (!map.has(a.airtableJobId))
+        map.set(a.airtableJobId, { Preparation: [], Setup: [], Pickup: [] });
+      (map.get(a.airtableJobId) as any)[a.phase].push(a.technicianName);
+    }
+    return map;
+  }),
+  setPhaseAssignments: vi.fn(
+    async (jobId: string, phase: string, techs: string[]) => {
+      const old = state.assignments
+        .filter((a) => a.airtableJobId === jobId && a.phase === phase)
+        .map((a) => a.technicianName);
+      state.assignments = state.assignments.filter(
+        (a) => !(a.airtableJobId === jobId && a.phase === phase),
+      );
+      for (const t of techs)
+        state.assignments.push({ airtableJobId: jobId, phase, technicianName: t });
+      return old;
+    },
+  ),
+  listAllAssignmentsForTechnician: vi.fn(async (name: string) =>
+    state.assignments.filter((a) => a.technicianName === name),
+  ),
+  listJobIdsForTechnician: vi.fn(async (name: string) => {
+    const byJob = new Map<string, string[]>();
+    for (const a of state.assignments) {
+      if (a.technicianName !== name) continue;
+      if (!byJob.has(a.airtableJobId)) byJob.set(a.airtableJobId, []);
+      byJob.get(a.airtableJobId)!.push(a.phase);
+    }
+    return byJob;
+  }),
+
+  // Local overrides
+  upsertJobOverride: vi.fn(async (jobId: string, patch: any) => {
+    const prev = state.overrides[jobId] ?? { endDate: null, subStatus: null };
+    state.overrides[jobId] = {
+      endDate: patch.endDate !== undefined ? patch.endDate : prev.endDate,
+      subStatus: patch.subStatus !== undefined ? patch.subStatus : prev.subStatus,
+    };
+  }),
+  getJobOverride: vi.fn(async (jobId: string) => state.overrides[jobId] ?? undefined),
+  getJobOverridesMap: vi.fn(async (ids: string[]) => {
+    const map = new Map<string, any>();
+    for (const id of ids) if (state.overrides[id]) map.set(id, state.overrides[id]);
+    return map;
+  }),
+
+  // Local photos / notes
+  createJobPhoto: vi.fn(async (p: any) => {
+    state.photos.push(p);
+  }),
+  listJobPhotos: vi.fn(async (jobId: string) =>
+    state.photos.filter((p) => p.airtableJobId === jobId),
+  ),
+  createJobNote: vi.fn(async (n: any) => {
+    state.notes.push({ ...n, createdAt: new Date() });
+  }),
+  listJobNotes: vi.fn(async (jobId: string) =>
+    state.notes.filter((n) => n.airtableJobId === jobId),
+  ),
 }));
 
 import { appRouter } from "../routers";
@@ -140,10 +224,15 @@ beforeEach(() => {
   state.notifications = [];
   state.jobs = { recJOB1: makeJob() };
   state.dispatchJobs = [makeJob()];
+  state.mapJobs = null;
   state.technicians = [
     { id: 1, airtableName: "Hector", displayName: "Hector", userId: 7, phone: null, zones: null, active: true },
   ];
-  state.updateCalls = [];
+  state.assignments = [];
+  state.overrides = {};
+  state.photos = [];
+  state.notes = [];
+  state.airtableWriteCalls = [];
 });
 
 describe("Hazard Assessment hard gate", () => {
@@ -168,17 +257,20 @@ describe("Hazard Assessment hard gate", () => {
   });
 });
 
-describe("Assignment conflict detection", () => {
+describe("Assignment conflict detection (local store)", () => {
   it("blocks a double-booking unless forced", async () => {
-    // Another overlapping job already has Hector on Setup.
-    const other = makeJob({
+    // Hector is already assigned to an overlapping job locally.
+    state.jobs["recJOB2"] = makeJob({
       id: "recJOB2",
       company: "Other",
-      techSetup: ["Hector"],
       startDate: "2026-06-15",
       endDate: "2026-06-15",
     });
-    state.dispatchJobs = [makeJob(), other];
+    state.assignments.push({
+      airtableJobId: "recJOB2",
+      phase: "Setup",
+      technicianName: "Hector",
+    });
 
     const caller = appRouter.createCaller(adminCtx());
     const res = await caller.coordinator.assignTechnicians({
@@ -191,13 +283,20 @@ describe("Assignment conflict detection", () => {
       expect(res.conflicts.length).toBeGreaterThan(0);
       expect(res.conflicts[0].technician).toBe("Hector");
     }
-    // No Airtable write should have happened on a blocked assignment.
-    expect(state.updateCalls.length).toBe(0);
+    // Nothing should have been persisted to recJOB1 on a blocked assignment.
+    expect(
+      state.assignments.filter((a) => a.airtableJobId === "recJOB1").length,
+    ).toBe(0);
+    expect(state.airtableWriteCalls.length).toBe(0);
   });
 
-  it("writes the assignment to Airtable when forced over a conflict", async () => {
-    const other = makeJob({ id: "recJOB2", techSetup: ["Hector"] });
-    state.dispatchJobs = [makeJob(), other];
+  it("writes the assignment LOCALLY when forced over a conflict (no Airtable write)", async () => {
+    state.jobs["recJOB2"] = makeJob({ id: "recJOB2" });
+    state.assignments.push({
+      airtableJobId: "recJOB2",
+      phase: "Setup",
+      technicianName: "Hector",
+    });
 
     const caller = appRouter.createCaller(adminCtx());
     const res = await caller.coordinator.assignTechnicians({
@@ -207,10 +306,13 @@ describe("Assignment conflict detection", () => {
       force: true,
     });
     expect(res.ok).toBe(true);
-    expect(state.updateCalls.length).toBe(1);
-    expect(state.updateCalls[0].fields["Traffic Technician Setup"]).toEqual([
-      "Hector",
-    ]);
+    // Persisted locally.
+    const local = state.assignments.filter((a) => a.airtableJobId === "recJOB1");
+    expect(local.map((a) => a.technicianName)).toEqual(["Hector"]);
+    // The returned merged job reflects the local assignment.
+    if (res.ok) expect(res.job.techSetup).toEqual(["Hector"]);
+    // No Airtable write.
+    expect(state.airtableWriteCalls.length).toBe(0);
   });
 });
 
@@ -245,6 +347,42 @@ describe("Permit map view", () => {
   });
 });
 
+describe("Local job overrides via modifyJob", () => {
+  it("stores end-date change locally and reflects it on the board (no Airtable write)", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    await caller.coordinator.modifyJob({
+      jobId: "recJOB1",
+      endDate: "2026-06-20",
+      reason: "Client extended",
+    });
+    expect(state.overrides["recJOB1"].endDate).toBe("2026-06-20");
+    expect(state.airtableWriteCalls.length).toBe(0);
+
+    const board = await caller.coordinator.boardJobs();
+    const job = board.find((j) => j.id === "recJOB1");
+    expect(job?.endDate).toBe("2026-06-20");
+  });
+});
+
+describe("Technician field notes & photos are local", () => {
+  it("stores a field note locally and surfaces it via myJobs (no Airtable write)", async () => {
+    // Hector is assigned to recJOB1 so it appears in myJobs.
+    state.assignments.push({
+      airtableJobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Hector",
+    });
+    const caller = appRouter.createCaller(techCtx());
+    await caller.technician.addFieldNote({ jobId: "recJOB1", note: "Cones placed" });
+    expect(state.notes.length).toBe(1);
+    expect(state.airtableWriteCalls.length).toBe(0);
+
+    const jobs = await caller.technician.myJobs();
+    const job = jobs.find((j) => j.id === "recJOB1");
+    expect(job?.fieldComments).toContain("Cones placed");
+  });
+});
+
 describe("Change history is append-only and comprehensive", () => {
   it("records an entry for every assignment and never rewrites prior entries", async () => {
     const caller = appRouter.createCaller(adminCtx());
@@ -256,7 +394,6 @@ describe("Change history is append-only and comprehensive", () => {
     const afterFirst = [...state.changeHistory];
     expect(afterFirst.length).toBe(1);
 
-    // A modification adds a new entry, leaving the first untouched.
     await caller.coordinator.modifyJob({
       jobId: "recJOB1",
       endDate: "2026-06-20",

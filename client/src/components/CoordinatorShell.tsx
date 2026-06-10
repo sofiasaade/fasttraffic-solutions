@@ -8,6 +8,7 @@ import {
   LogOut,
   Smartphone,
   Map as MapIcon,
+  CalendarRange,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
+  { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
   { href: "/map", label: "Permit Map", icon: MapIcon },
   { href: "/overtime", label: "Overtime", icon: Clock },
   { href: "/history", label: "Change History", icon: History },

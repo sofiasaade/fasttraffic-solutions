@@ -1,13 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import {
-  appendAttachments,
-  appendToTextField,
-  fetchJobById,
-  fetchJobsForTechnician,
-} from "../airtable";
-import { AF } from "../../shared/airtableFields";
+import { fetchJobById } from "../airtable";
+import { JobRecord } from "../../shared/airtableFields";
 import { deriveZone } from "../../shared/opsLogic";
 import { storageGetSignedUrl, storagePut } from "../storage";
 import {
@@ -15,12 +10,18 @@ import {
   closeTimeLog,
   countUnreadNotifications,
   createHazardAssessment,
+  createJobNote,
+  createJobPhoto,
   createTimeLog,
   getHazardAssessment,
+  getJobOverride,
   getOpenTimeLog,
   getTechnicianByName,
   getTechnicianByUserId,
   linkTechnicianToUser,
+  listJobIdsForTechnician,
+  listJobNotes,
+  listJobPhotos,
   listNotificationsForTechnician,
   listTechnicians,
   markAllNotificationsRead,
@@ -30,29 +31,73 @@ import {
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
 
-// Resolve the technician identity for the logged-in user.
 async function resolveTechnician(userId: number) {
   return getTechnicianByUserId(userId);
 }
 
-function withZone(job: any) {
-  return { ...job, zone: deriveZone(job) };
+// Build the merged job shape the mobile UI expects: local assignments drive
+// phases, local override applies end date / sub-status, and local photos/notes
+// are surfaced as fieldPhotos / fieldComments. Airtable stays read-only.
+async function buildMyJob(job: JobRecord, _technicianName: string, phases: string[]) {
+  const [override, photos, notes] = await Promise.all([
+    getJobOverride(job.id),
+    listJobPhotos(job.id),
+    listJobNotes(job.id),
+  ]);
+
+  const fieldPhotos = await Promise.all(
+    photos.map(async (p) => {
+      let url = p.storageUrl;
+      try {
+        url = await storageGetSignedUrl(p.storageKey);
+      } catch {
+        // fall back to stored url
+      }
+      return {
+        id: String(p.id),
+        url,
+        filename: p.filename ?? `${p.category}.jpg`,
+        thumbnails: { large: { url }, small: { url } },
+      };
+    }),
+  );
+
+  const fieldComments =
+    notes.length > 0
+      ? notes
+          .slice()
+          .reverse()
+          .map((n) => {
+            const stamp = new Date(n.createdAt).toLocaleString("en-CA", {
+              timeZone: "America/Edmonton",
+            });
+            return `[${stamp}] ${n.authorName}: ${n.note}`;
+          })
+          .join("\n")
+      : null;
+
+  const merged: JobRecord = {
+    ...job,
+    endDate: override?.endDate ?? job.endDate,
+    subStatus: override?.subStatus ?? job.subStatus,
+    fieldPhotos,
+    fieldComments,
+  };
+
+  return { ...merged, zone: deriveZone(merged as any), myPhases: phases };
 }
 
 export const technicianRouter = router({
-  // Returns the technician profile linked to the current user (or null).
   me: protectedProcedure.query(async ({ ctx }) => {
     const tech = await resolveTechnician(ctx.user.id);
     return tech ?? null;
   }),
 
-  // List of all technician names so a user can self-identify on first login.
   roster: protectedProcedure.query(async () => {
     await seedTechnicians();
     return listTechnicians();
   }),
 
-  // Link the current user account to a technician identity.
   claimIdentity: protectedProcedure
     .input(z.object({ airtableName: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -63,22 +108,28 @@ export const technicianRouter = router({
       return { ok: true as const };
     }),
 
-  // Jobs assigned to me (any phase).
+  // Jobs assigned to me — sourced from LOCAL assignments, enriched from Airtable.
   myJobs: protectedProcedure.query(async ({ ctx }) => {
     const tech = await resolveTechnician(ctx.user.id);
     if (!tech) return [];
-    const jobs = await fetchJobsForTechnician(tech.airtableName);
 
-    return jobs.map((job) => {
-      const phases: string[] = [];
-      if (job.techPrep.includes(tech.airtableName)) phases.push("Preparation");
-      if (job.techSetup.includes(tech.airtableName)) phases.push("Setup");
-      if (job.techPickup.includes(tech.airtableName)) phases.push("Pickup");
-      return { ...withZone(job), myPhases: phases };
-    });
+    const byJob = await listJobIdsForTechnician(tech.airtableName);
+    const jobIds = Array.from(byJob.keys());
+    if (jobIds.length === 0) return [];
+
+    const results = [];
+    for (const jobId of jobIds) {
+      try {
+        const job = await fetchJobById(jobId);
+        const phases = byJob.get(jobId) ?? [];
+        results.push(await buildMyJob(job, tech.airtableName, phases));
+      } catch {
+        // Skip jobs that can't be fetched from Airtable.
+      }
+    }
+    return results;
   }),
 
-  // Status for a single job: hazard done? open time log?
   jobStatus: protectedProcedure
     .input(z.object({ jobId: z.string(), phase: phaseSchema }))
     .query(async ({ ctx, input }) => {
@@ -99,7 +150,6 @@ export const technicianRouter = router({
       };
     }),
 
-  // Submit hazard assessment (hard gate for check-in).
   submitHazard: protectedProcedure
     .input(
       z.object({
@@ -129,7 +179,6 @@ export const technicianRouter = router({
       return { ok: true as const };
     }),
 
-  // Check in — BLOCKED unless hazard assessment exists for (job, tech, phase).
   checkIn: protectedProcedure
     .input(
       z.object({
@@ -191,19 +240,17 @@ export const technicianRouter = router({
       }
       const checkOutAt = new Date();
       const checkInAt = open.checkInAt ? new Date(open.checkInAt) : checkOutAt;
-      const hours =
-        (checkOutAt.getTime() - checkInAt.getTime()) / (3600 * 1000);
+      const hours = (checkOutAt.getTime() - checkInAt.getTime()) / (3600 * 1000);
       await closeTimeLog(open.id, checkOutAt, Math.round(hours * 100) / 100);
       return { ok: true as const, hours: Math.round(hours * 100) / 100 };
     }),
 
-  // Upload a field photo (before/during/after) -> Airtable Field Photos.
+  // Upload a field photo -> LOCAL storage + job_photos (Airtable read-only).
   uploadPhoto: protectedProcedure
     .input(
       z.object({
         jobId: z.string(),
         category: z.enum(["before", "during", "after"]),
-        // base64 data URL or raw base64
         dataBase64: z.string(),
         mimeType: z.string().default("image/jpeg"),
       }),
@@ -222,46 +269,51 @@ export const technicianRouter = router({
       const key = `field-photos/${input.jobId}/${filename}`;
       const stored = await storagePut(key, buffer, input.mimeType);
 
-      // Airtable must fetch the file from a public URL. Use a presigned GET URL.
-      const absoluteUrl = await storageGetSignedUrl(stored.key);
-
-      await appendAttachments(input.jobId, AF.fieldPhotos, [
-        { url: absoluteUrl, filename: `${input.category}_${filename}` },
-      ]);
+      await createJobPhoto({
+        airtableJobId: input.jobId,
+        technicianName: tech.airtableName,
+        category: input.category,
+        storageKey: stored.key,
+        storageUrl: stored.url,
+        filename: `${input.category}_${filename}`,
+      });
 
       await appendChangeHistory({
         airtableJobId: input.jobId,
         actorUserId: ctx.user.id,
         actorName: tech.displayName,
         action: "field_photo",
-        fieldName: AF.fieldPhotos,
+        fieldName: "Field Photos",
         oldValue: null,
         newValue: filename,
         details: `Category: ${input.category}`,
       });
 
-      return { ok: true as const, url: absoluteUrl };
+      const url = await storageGetSignedUrl(stored.key).catch(() => stored.url);
+      return { ok: true as const, url };
     }),
 
-  // Add a field note -> Airtable Field Commnets, timestamped.
+  // Add a field note -> LOCAL job_notes (Airtable read-only).
   addFieldNote: protectedProcedure
     .input(z.object({ jobId: z.string(), note: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const tech = await resolveTechnician(ctx.user.id);
       if (!tech)
         throw new TRPCError({ code: "FORBIDDEN", message: "Not a technician" });
-      const stamp = new Date().toLocaleString("en-CA", {
-        timeZone: "America/Edmonton",
+
+      await createJobNote({
+        airtableJobId: input.jobId,
+        authorName: tech.displayName,
+        authorRole: "technician",
+        note: input.note,
       });
-      const line = `[${stamp}] ${tech.displayName}: ${input.note}`;
-      await appendToTextField(input.jobId, AF.fieldComments, line);
 
       await appendChangeHistory({
         airtableJobId: input.jobId,
         actorUserId: ctx.user.id,
         actorName: tech.displayName,
         action: "field_note",
-        fieldName: AF.fieldComments,
+        fieldName: "Field Commnets",
         oldValue: null,
         newValue: input.note,
         details: null,
@@ -269,7 +321,6 @@ export const technicianRouter = router({
       return { ok: true as const };
     }),
 
-  // Notifications
   notifications: protectedProcedure.query(async ({ ctx }) => {
     const tech = await resolveTechnician(ctx.user.id);
     if (!tech) return { items: [], unread: 0 };
