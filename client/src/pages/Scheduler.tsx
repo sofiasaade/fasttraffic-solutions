@@ -49,6 +49,7 @@ import {
   Download,
   ExternalLink,
   Map as MapIcon,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -177,6 +178,29 @@ export default function Scheduler() {
   const truckCatalogQuery = trpc.coordinator.truckCatalog.useQuery();
   const setTruck = trpc.coordinator.setTruck.useMutation();
   const removeTruck = trpc.coordinator.removeTruck.useMutation();
+
+  // Toggle a technician's experience level with optimistic UI.
+  const setLevelMutation = trpc.coordinator.setTechnicianLevel.useMutation({
+    onMutate: async (vars) => {
+      await utils.coordinator.technicians.cancel();
+      const prev = utils.coordinator.technicians.getData();
+      utils.coordinator.technicians.setData(undefined, (old) =>
+        old?.map((t) =>
+          t.airtableName === vars.airtableName
+            ? { ...t, experienceLevel: vars.level }
+            : t,
+        ),
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) utils.coordinator.technicians.setData(undefined, ctx.prev);
+      toast.error("Could not update level");
+    },
+    onSettled: () => {
+      utils.coordinator.technicians.invalidate();
+    },
+  });
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [search, setSearch] = useState("");
@@ -870,9 +894,21 @@ export default function Scheduler() {
                         className="px-3 py-2.5 flex items-start gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
                       >
                         <GripVertical className="size-4 text-muted-foreground mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">
-                            {w.displayName}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">
+                              {w.displayName}
+                            </span>
+                            <span
+                              className={cn(
+                                "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                w.experienceLevel === "senior"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-slate-100 text-slate-600",
+                              )}
+                            >
+                              {w.experienceLevel === "senior" ? "Senior" : "Junior"}
+                            </span>
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">
                             {w.zones ? w.zones : "No zones"}
@@ -883,6 +919,23 @@ export default function Scheduler() {
                             )}
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          title="Toggle Junior / Senior"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLevelMutation.mutate({
+                              airtableName: w.airtableName,
+                              level:
+                                w.experienceLevel === "senior"
+                                  ? "junior"
+                                  : "senior",
+                            });
+                          }}
+                          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        >
+                          <ChevronsUpDown className="size-3.5" />
+                        </button>
                       </li>
                     );
                   })}

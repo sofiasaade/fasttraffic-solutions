@@ -1,0 +1,1 @@
+ALTER TABLE `technicians` ADD `experienceLevel` enum('junior','senior') DEFAULT 'junior' NOT NULL;

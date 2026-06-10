@@ -26,6 +26,7 @@ import {
   listTechnicians,
   getOvertimeThreshold,
   seedTechnicians,
+  setTechnicianLevel,
   setPhaseAssignments,
   setScheduledAssignment,
   listScheduledAssignmentsForWeek,
@@ -144,6 +145,19 @@ export const coordinatorRouter = router({
     await seedTechnicians();
     return listTechnicians();
   }),
+
+  // Set a technician's experience level (junior | senior). LOCAL only.
+  setTechnicianLevel: adminProcedure
+    .input(
+      z.object({
+        airtableName: z.string(),
+        level: z.enum(["junior", "senior"]),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      await setTechnicianLevel(input.airtableName, input.level);
+      return { ok: true as const };
+    }),
 
   // Assign or unassign technicians for a phase — writes LOCALLY (Airtable read-only).
   assignTechnicians: adminProcedure

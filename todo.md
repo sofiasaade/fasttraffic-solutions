@@ -186,3 +186,11 @@
 - [x] Collapsible section header with count and red dot
 - [x] Permit Map: cancelled/declined bucket (red, hidden by default) so they are not mis-colored as approved
 - [x] Unit test for isCancelledJob (8 tests); full suite 43 passing
+
+
+## Feature 23: Technician experience level (Junior / Senior)
+- [x] Add experienceLevel column to technicians table (enum junior|senior, default junior)
+- [x] opsDb: setTechnicianLevel helper
+- [x] coordinator: setTechnicianLevel procedure; experienceLevel included in technicians query output
+- [x] Workers panel: Junior/Senior badge on each worker + toggle button to change level (optimistic)
+- [x] Integration test for setTechnicianLevel (no Airtable write) (44 tests passing)

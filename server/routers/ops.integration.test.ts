@@ -134,6 +134,10 @@ vi.mock("../opsDb", () => ({
   }),
   listTechnicians: vi.fn(async () => state.technicians),
   seedTechnicians: vi.fn(async () => {}),
+  setTechnicianLevel: vi.fn(async (airtableName: string, level: "junior" | "senior") => {
+    const t = state.technicians.find((x: any) => x.airtableName === airtableName);
+    if (t) t.experienceLevel = level;
+  }),
   getTechnicianByUserId: vi.fn(async () => ({
     id: 1,
     airtableName: "Hector",
@@ -363,7 +367,7 @@ beforeEach(() => {
   state.dispatchJobs = [makeJob()];
   state.mapJobs = null;
   state.technicians = [
-    { id: 1, airtableName: "Hector", displayName: "Hector", userId: 7, phone: null, zones: null, active: true },
+    { id: 1, airtableName: "Hector", displayName: "Hector", userId: 7, phone: null, zones: null, experienceLevel: "junior", active: true },
   ];
   state.assignments = [];
   state.overrides = {};
@@ -751,5 +755,26 @@ describe("Change history is append-only and comprehensive", () => {
     });
     expect(state.changeHistory.length).toBe(1);
     expect(state.changeHistory[0].action).toBe("internal_note");
+  });
+
+  it("sets a technician's experience level locally without touching Airtable", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    expect(state.technicians[0].experienceLevel).toBe("junior");
+
+    await caller.coordinator.setTechnicianLevel({
+      airtableName: "Hector",
+      level: "senior",
+    });
+    expect(state.technicians[0].experienceLevel).toBe("senior");
+
+    await caller.coordinator.setTechnicianLevel({
+      airtableName: "Hector",
+      level: "junior",
+    });
+    expect(state.technicians[0].experienceLevel).toBe("junior");
+
+    const list = await caller.coordinator.technicians();
+    expect(list[0].experienceLevel).toBe("junior");
+    expect(state.airtableWriteCalls.length).toBe(0);
   });
 });

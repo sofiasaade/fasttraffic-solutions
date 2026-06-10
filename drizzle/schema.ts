@@ -45,6 +45,9 @@ export const technicians = mysqlTable("technicians", {
   userId: int("userId"),
   phone: varchar("phone", { length: 32 }),
   zones: text("zones"),
+  experienceLevel: mysqlEnum("experienceLevel", ["junior", "senior"])
+    .default("junior")
+    .notNull(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

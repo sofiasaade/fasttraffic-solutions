@@ -83,6 +83,18 @@ export async function updateTechnician(
   await d.update(technicians).set(patch).where(eq(technicians.id, id));
 }
 
+/** Set a technician's experience level (junior | senior) by airtableName. */
+export async function setTechnicianLevel(
+  airtableName: string,
+  level: "junior" | "senior",
+) {
+  const d = await db();
+  await d
+    .update(technicians)
+    .set({ experienceLevel: level })
+    .where(eq(technicians.airtableName, airtableName));
+}
+
 /* --------------------------- Hazard Assessments --------------------------- */
 
 export async function createHazardAssessment(data: InsertHazardAssessment) {
