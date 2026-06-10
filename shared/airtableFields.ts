@@ -30,6 +30,15 @@ export const AF = {
 export const DISPATCH_STATUSES = ["Field", "Permit Approved"] as const;
 export type DispatchStatus = (typeof DISPATCH_STATUSES)[number];
 
+// Statuses shown on the Coordinator Permit Map (color-coded).
+// NOTE: exact Airtable Status names.
+export const MAP_STATUSES = [
+  "Field",
+  "Permit Approved",
+  "Permit Request Submitted",
+] as const;
+export type MapStatus = (typeof MAP_STATUSES)[number];
+
 // Sub-status options (from Airtable "Sub-Status Field Operations")
 export const SUB_STATUS_OPTIONS = [
   "TMP Creation",

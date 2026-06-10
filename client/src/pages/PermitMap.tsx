@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { MapView } from "@/components/Map";
 import { trpc } from "@/lib/trpc";
 import { fmtDate, fmtTimeRange } from "@/lib/format";
@@ -13,11 +13,54 @@ type MapJob = {
   startDate: string | null;
   endDate: string | null;
   setupDuration: string | null;
+  status: string | null;
   subStatus: string | null;
   zone: string;
   lat: number | null;
   lon: number | null;
 };
+
+// Status grouping + color theme. Any status not matched falls back to "other".
+type StatusKey = "field" | "approved" | "submitted";
+
+const STATUS_THEME: Record<
+  StatusKey,
+  { label: string; bg: string; border: string; chipBg: string; chipText: string; dot: string }
+> = {
+  field: {
+    label: "Field (ongoing)",
+    bg: "#16a34a",
+    border: "#166534",
+    chipBg: "#f0fdf4",
+    chipText: "#15803d",
+    dot: "#16a34a",
+  },
+  approved: {
+    label: "Permit Approved",
+    bg: "#ea580c",
+    border: "#9a3412",
+    chipBg: "#fff7ed",
+    chipText: "#c2410c",
+    dot: "#ea580c",
+  },
+  submitted: {
+    label: "Permit Request Submitted",
+    bg: "#2563eb",
+    border: "#1e40af",
+    chipBg: "#eff6ff",
+    chipText: "#1d4ed8",
+    dot: "#2563eb",
+  },
+};
+
+function statusKey(status: string | null): StatusKey {
+  const s = (status ?? "").toLowerCase();
+  if (s === "field") return "field";
+  if (s === "permit approved") return "approved";
+  if (s === "permit request submitted") return "submitted";
+  // Default bucket so unexpected statuses still render (as approved theme).
+  return "approved";
+}
 
 // Alberta-centered default view (Calgary).
 const DEFAULT_CENTER = { lat: 51.0447, lng: -114.0719 };
@@ -28,11 +71,32 @@ export default function PermitMap() {
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
   const [unlocated, setUnlocated] = useState<MapJob[]>([]);
-  const [placedCount, setPlacedCount] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const infoHtml = (j: MapJob) =>
-    `<div style="font-family:Inter,system-ui,sans-serif;max-width:240px">
+  // Visible status filters (toggles). All on by default.
+  const [visible, setVisible] = useState<Record<StatusKey, boolean>>({
+    field: true,
+    approved: true,
+    submitted: true,
+  });
+
+  const counts = useMemo(() => {
+    const c: Record<StatusKey, number> = { field: 0, approved: 0, submitted: 0 };
+    for (const j of (jobs as MapJob[] | undefined) ?? []) c[statusKey(j.status)]++;
+    return c;
+  }, [jobs]);
+
+  const filteredJobs = useMemo(
+    () =>
+      ((jobs as MapJob[] | undefined) ?? []).filter(
+        (j) => visible[statusKey(j.status)],
+      ),
+    [jobs, visible],
+  );
+
+  const infoHtml = (j: MapJob) => {
+    const t = STATUS_THEME[statusKey(j.status)];
+    return `<div style="font-family:Inter,system-ui,sans-serif;max-width:240px">
       <div style="font-weight:700;font-size:13px;margin-bottom:2px">${escapeHtml(
         j.company ?? "Job",
       )}</div>
@@ -49,10 +113,13 @@ export default function PermitMap() {
             )}</div>`
           : ""
       }
-      <div style="margin-top:6px;display:inline-block;font-size:10px;font-weight:600;background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:999px">Permit Approved${
-        j.subStatus ? ` · ${escapeHtml(j.subStatus)}` : ""
-      }</div>
+      <div style="margin-top:6px;display:inline-block;font-size:10px;font-weight:600;background:${
+        t.chipBg
+      };color:${t.chipText};padding:2px 8px;border-radius:999px">${escapeHtml(
+        j.status ?? t.label,
+      )}${j.subStatus ? ` · ${escapeHtml(j.subStatus)}` : ""}</div>
     </div>`;
+  };
 
   const placeMarkers = useCallback(
     async (map: google.maps.Map, list: MapJob[]) => {
@@ -65,7 +132,7 @@ export default function PermitMap() {
       )) as google.maps.MarkerLibrary;
       const { AdvancedMarkerElement, PinElement } = markerLib;
 
-      infoRef.current = new g.maps.InfoWindow();
+      if (!infoRef.current) infoRef.current = new g.maps.InfoWindow();
       const geocoder = new g.maps.Geocoder();
       const bounds = new g.maps.LatLngBounds();
       const missing: MapJob[] = [];
@@ -101,9 +168,10 @@ export default function PermitMap() {
           continue;
         }
 
+        const theme = STATUS_THEME[statusKey(j.status)];
         const pin = new PinElement({
-          background: "#ea580c",
-          borderColor: "#9a3412",
+          background: theme.bg,
+          borderColor: theme.border,
           glyphColor: "#ffffff",
           scale: 1.1,
         });
@@ -130,28 +198,26 @@ export default function PermitMap() {
         if (placed === 1) map.setZoom(14);
       }
       setUnlocated(missing);
-      setPlacedCount(placed);
     },
+    // infoHtml closes over nothing stateful; safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
   const onMapReady = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
-      if (jobs && jobs.length) {
-        placeMarkers(map, jobs as MapJob[]);
-      }
+      placeMarkers(map, filteredJobs);
     },
-    [jobs, placeMarkers],
+    [filteredJobs, placeMarkers],
   );
 
-  // If the jobs data arrives (or changes) after the map is already initialized,
-  // (re)place the markers. Guards against the data/map load race condition.
+  // (Re)place markers whenever the visible/filtered jobs change and the map is ready.
   useEffect(() => {
-    if (mapRef.current && jobs && jobs.length) {
-      placeMarkers(mapRef.current, jobs as MapJob[]);
+    if (mapRef.current) {
+      placeMarkers(mapRef.current, filteredJobs);
     }
-  }, [jobs, placeMarkers]);
+  }, [filteredJobs, placeMarkers]);
 
   // Focus a job from the side list.
   const focusJob = (j: MapJob) => {
@@ -167,19 +233,55 @@ export default function PermitMap() {
     }
   };
 
+  const toggle = (k: StatusKey) =>
+    setVisible((v) => ({ ...v, [k]: !v[k] }));
+
+  const placedCount = filteredJobs.length - unlocated.length;
+
   return (
     <div className="flex flex-col h-[calc(100vh-0px)] md:h-screen">
       <div className="px-6 pt-6 pb-3 border-b border-border">
         <h1 className="text-2xl font-extrabold tracking-tight">Permit Map</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Jobs with status <span className="font-medium text-foreground">Permit Approved</span>, plotted by location.
+          Jobs plotted by location, color-coded by status.
           {!isLoading && jobs ? (
             <span className="ml-1">
-              {placedCount} mapped
-              {unlocated.length > 0 ? `, ${unlocated.length} without coordinates` : ""}.
+              {Math.max(placedCount, 0)} mapped
+              {unlocated.length > 0
+                ? `, ${unlocated.length} without coordinates`
+                : ""}
+              .
             </span>
           ) : null}
         </p>
+
+        {/* Legend + toggle filters */}
+        <div className="flex flex-wrap gap-2 mt-3">
+          {(Object.keys(STATUS_THEME) as StatusKey[]).map((k) => {
+            const t = STATUS_THEME[k];
+            const on = visible[k];
+            return (
+              <button
+                key={k}
+                onClick={() => toggle(k)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-all active:scale-[0.97]",
+                  on
+                    ? "border-border bg-card text-foreground"
+                    : "border-dashed border-border bg-transparent text-muted-foreground opacity-60",
+                )}
+                aria-pressed={on}
+              >
+                <span
+                  className="size-2.5 rounded-full ring-2 ring-white shadow"
+                  style={{ background: t.dot }}
+                />
+                {t.label}
+                <span className="text-muted-foreground">({counts[k]})</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="flex-1 flex min-h-0 flex-col lg:flex-row">
@@ -187,16 +289,17 @@ export default function PermitMap() {
         <div className="lg:w-80 border-b lg:border-b-0 lg:border-r border-border overflow-y-auto bg-card/40 max-h-48 lg:max-h-none">
           {isLoading ? (
             <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
-              <Loader2 className="size-4 animate-spin" /> Loading permit jobs…
+              <Loader2 className="size-4 animate-spin" /> Loading jobs…
             </div>
-          ) : !jobs || jobs.length === 0 ? (
+          ) : filteredJobs.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              No jobs with status “Permit Approved”.
+              No jobs match the selected statuses.
             </div>
           ) : (
             <ul className="divide-y divide-border">
-              {(jobs as MapJob[]).map((j) => {
+              {filteredJobs.map((j) => {
                 const noCoords = unlocated.some((u) => u.id === j.id);
+                const t = STATUS_THEME[statusKey(j.status)];
                 return (
                   <li key={j.id}>
                     <button
@@ -205,14 +308,18 @@ export default function PermitMap() {
                       className={cn(
                         "w-full text-left px-4 py-3 hover:bg-accent/60 transition-colors",
                         selectedId === j.id && "bg-accent",
-                        noCoords && "opacity-60 cursor-not-allowed hover:bg-transparent",
+                        noCoords &&
+                          "opacity-60 cursor-not-allowed hover:bg-transparent",
                       )}
                     >
                       <div className="flex items-start gap-2">
                         {noCoords ? (
                           <AlertTriangle className="size-4 text-amber-500 mt-0.5 shrink-0" />
                         ) : (
-                          <MapPin className="size-4 text-primary mt-0.5 shrink-0" />
+                          <span
+                            className="size-3.5 rounded-full mt-1 shrink-0 ring-2 ring-white shadow"
+                            style={{ background: t.dot }}
+                          />
                         )}
                         <div className="min-w-0">
                           <div className="font-medium text-sm truncate flex items-center gap-1">
@@ -223,7 +330,7 @@ export default function PermitMap() {
                             {j.jobAddress ?? "No address"}
                           </div>
                           <div className="text-[11px] text-muted-foreground mt-0.5">
-                            {fmtDate(j.startDate)} · {j.zone}
+                            {j.status ?? "—"} · {fmtDate(j.startDate)} · {j.zone}
                             {noCoords ? " · not located" : ""}
                           </div>
                         </div>

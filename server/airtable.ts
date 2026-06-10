@@ -3,6 +3,7 @@ import {
   AF,
   AirtableAttachment,
   DISPATCH_STATUSES,
+  MAP_STATUSES,
   JobRecord,
 } from "../shared/airtableFields";
 
@@ -111,6 +112,30 @@ function escapeFormulaValue(v: string): string {
 // Fetch all dispatch-relevant jobs (Status = Field OR Permit Approved).
 export async function fetchDispatchJobs(): Promise<JobRecord[]> {
   const statusClauses = DISPATCH_STATUSES.map(
+    (s) => `{${AF.status}}='${escapeFormulaValue(s)}'`,
+  ).join(",");
+  const formula = `OR(${statusClauses})`;
+
+  const records: any[] = [];
+  let offset: string | undefined = undefined;
+
+  do {
+    const params = new URLSearchParams();
+    params.set("filterByFormula", formula);
+    params.set("pageSize", "100");
+    if (offset) params.set("offset", offset);
+
+    const data: any = await airtableFetch(`${baseUrl()}?${params.toString()}`);
+    records.push(...(data.records ?? []));
+    offset = data.offset;
+  } while (offset);
+
+  return records.map(mapRecordToJob);
+}
+
+// Fetch jobs for the Permit Map (Status = Field, Permit Approved, or Permit Request Submitted).
+export async function fetchMapJobs(): Promise<JobRecord[]> {
+  const statusClauses = MAP_STATUSES.map(
     (s) => `{${AF.status}}='${escapeFormulaValue(s)}'`,
   ).join(",");
   const formula = `OR(${statusClauses})`;

@@ -81,3 +81,9 @@
 - [x] Fix marker creation (use PinElement content; ensure markerLibrary loaded)
 - [x] Recolocate markers when data arrives after map init (race condition)
 - [ ] Verify markers appear and map fits bounds in authenticated UI (pending user/owner login)
+
+## Feature 12: Multi-status Permit Map (color-coded)
+- [x] Backend mapJobs returns jobs for Permit Approved, Field, Permit Request Submitted (exact Airtable status name)
+- [x] Color-code markers: Permit Approved (orange), Field (green), Permit Request Submitted (blue)
+- [x] Add legend + per-status toggle filters on the map page
+- [x] Update + pass integration test for three statuses (23 tests passing)

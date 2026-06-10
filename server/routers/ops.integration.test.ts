@@ -13,6 +13,7 @@ const state = {
   notifications: [] as any[],
   jobs: {} as Record<string, any>,
   dispatchJobs: [] as any[],
+  mapJobs: null as any[] | null,
   technicians: [] as any[],
   updateCalls: [] as { id: string; fields: Record<string, unknown> }[],
 };
@@ -48,6 +49,7 @@ function makeJob(over: Partial<any> = {}) {
 vi.mock("../airtable", () => ({
   fetchJobById: vi.fn(async (id: string) => state.jobs[id] ?? makeJob({ id })),
   fetchDispatchJobs: vi.fn(async () => state.dispatchJobs),
+  fetchMapJobs: vi.fn(async () => state.mapJobs ?? state.dispatchJobs),
   updateJobFields: vi.fn(async (id: string, fields: Record<string, unknown>) => {
     state.updateCalls.push({ id, fields });
     state.jobs[id] = { ...(state.jobs[id] ?? makeJob({ id })), ...mapFields(fields) };
@@ -213,9 +215,9 @@ describe("Assignment conflict detection", () => {
 });
 
 describe("Permit map view", () => {
-  it("returns only Permit Approved jobs with their coordinates", async () => {
-    state.dispatchJobs = [
-      makeJob({ id: "recFIELD", status: "Field" }),
+  it("returns Field, Permit Approved, and Permit Request Submitted jobs with coordinates and status", async () => {
+    state.mapJobs = [
+      makeJob({ id: "recFIELD", status: "Field", lat: 51.04, lon: -114.06 }),
       makeJob({
         id: "recPERMIT",
         company: "Permit Co",
@@ -223,14 +225,23 @@ describe("Permit map view", () => {
         lat: 51.05,
         lon: -114.07,
       }),
+      makeJob({
+        id: "recSUBMITTED",
+        company: "Submitted Co",
+        status: "Permit Request Submitted",
+        lat: 51.06,
+        lon: -114.08,
+      }),
     ];
     const caller = appRouter.createCaller(adminCtx());
     const res = await caller.coordinator.mapJobs();
-    expect(res.length).toBe(1);
-    expect(res[0].id).toBe("recPERMIT");
-    expect(res[0].lat).toBe(51.05);
-    expect(res[0].lon).toBe(-114.07);
-    expect(res[0].zone).toBeTruthy();
+    expect(res.length).toBe(3);
+    const byId = Object.fromEntries(res.map((r) => [r.id, r]));
+    expect(byId["recFIELD"].status).toBe("Field");
+    expect(byId["recPERMIT"].status).toBe("Permit Approved");
+    expect(byId["recSUBMITTED"].status).toBe("Permit Request Submitted");
+    expect(byId["recFIELD"].lat).toBe(51.04);
+    expect(byId["recFIELD"].zone).toBeTruthy();
   });
 });
 

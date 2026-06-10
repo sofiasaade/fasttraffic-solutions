@@ -4,6 +4,7 @@ import { adminProcedure, router } from "../_core/trpc";
 import {
   appendToTextField,
   fetchDispatchJobs,
+  fetchMapJobs,
   fetchJobById,
   updateJobFields,
 } from "../airtable";
@@ -48,27 +49,26 @@ export const coordinatorRouter = router({
     return jobs.map(withZone);
   }),
 
-  // Jobs with Status = Permit Approved, for the coordinator map view.
+  // Jobs for the coordinator map view: Field, Permit Approved, Permit Request Submitted.
   mapJobs: adminProcedure.query(async () => {
-    const jobs = await fetchDispatchJobs();
-    return jobs
-      .filter((j) => j.status === "Permit Approved")
-      .map((j) => {
-        const z = withZone(j);
-        return {
-          id: z.id,
-          company: z.company,
-          jobAddress: z.jobAddress,
-          municipality: z.municipality,
-          startDate: z.startDate,
-          endDate: z.endDate,
-          setupDuration: z.setupDuration,
-          subStatus: z.subStatus,
-          zone: z.zone,
-          lat: z.lat,
-          lon: z.lon,
-        };
-      });
+    const jobs = await fetchMapJobs();
+    return jobs.map((j) => {
+      const z = withZone(j);
+      return {
+        id: z.id,
+        company: z.company,
+        jobAddress: z.jobAddress,
+        municipality: z.municipality,
+        startDate: z.startDate,
+        endDate: z.endDate,
+        setupDuration: z.setupDuration,
+        status: z.status,
+        subStatus: z.subStatus,
+        zone: z.zone,
+        lat: z.lat,
+        lon: z.lon,
+      };
+    });
   }),
 
   jobDetail: adminProcedure
