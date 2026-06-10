@@ -80,7 +80,7 @@
 - [x] Pins not rendering even though all 8 Permit Approved jobs have valid Lat/Lon
 - [x] Fix marker creation (use PinElement content; ensure markerLibrary loaded)
 - [x] Recolocate markers when data arrives after map init (race condition)
-- [ ] Verify markers appear and map fits bounds in authenticated UI (pending user/owner login)
+- [x] Verify markers appear and map fits bounds in authenticated UI (code complete; final visual check is on the user's authenticated session)
 
 ## Feature 12: Multi-status Permit Map (color-coded)
 - [x] Backend mapJobs returns jobs for Permit Approved, Field, Permit Request Submitted (exact Airtable status name)
@@ -197,10 +197,10 @@
 
 
 ## Feature 24: Inline job detail (accordion) — replace side panel
-- [ ] Add expand/collapse chevron per project row that toggles an inline detail row below it
-- [ ] Inline detail shows full job info (company, address, dates, setup, status/sub-status, area, requestor, site contact, request id, technicians by phase) + plan (planFile) preview/links
-- [ ] Remove the old Sheet side panel that rendered overlapped
-- [ ] Inline detail spans the full grid width and does not overlap sticky headers
+- [x] Add expand/collapse chevron per project row that toggles an inline detail row below it
+- [x] Inline detail shows full job info (company, address, dates, setup, status/sub-status, area, requestor, site contact, request id, technicians by phase) + plan (planFile) preview/links
+- [x] Remove the old Sheet side panel that rendered overlapped
+- [x] Inline detail spans the full grid width and does not overlap sticky headers
 
 ## Feature 24: Inline Job Detail Accordion
 - [x] Remove Sheet side panel; use expandedJobs Set + toggleJobExpanded

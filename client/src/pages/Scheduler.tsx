@@ -625,7 +625,7 @@ export default function Scheduler() {
     const isExpanded = expandedJobs.has(job.id);
     return (
     <div key={job.id} className="border-b border-border">
-     <div className="grid grid-cols-[240px_repeat(7,1fr)] items-stretch hover:bg-accent/20">
+     <div className="grid grid-cols-[240px_repeat(7,minmax(180px,1fr))] items-stretch hover:bg-accent/20">
       {/* Job label — click to expand inline detail */}
       <button
         type="button"
@@ -744,12 +744,12 @@ export default function Scheduler() {
                     c.startTime ? ` • ${c.startTime}-${c.endTime ?? ""}` : ""
                   } — click to remove`}
                   className={cn(
-                    "group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate flex items-center justify-between gap-1",
+                    "group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start justify-between gap-1",
                     PHASE_COLOR[c.phase as Phase] ??
                       "bg-card text-foreground border-border",
                   )}
                 >
-                  <span className="truncate">{c.technicianName}</span>
+                  <span className="whitespace-normal break-words min-w-0">{c.technicianName}</span>
                   <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0" />
                 </button>
               ))}
@@ -763,15 +763,15 @@ export default function Scheduler() {
                     title={`${eq.quantity}× ${eq.equipmentName}${
                       eq.technicianName ? ` • install: ${eq.technicianName}` : ""
                     }${eq.notes ? ` • ${eq.notes}` : ""} — click to remove`}
-                    className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate flex items-center gap-1"
+                    className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start gap-1"
                     style={{
                       backgroundColor: `${color}1a`,
                       borderColor: `${color}55`,
                       color,
                     }}
                   >
-                    <Package className="size-3 shrink-0" />
-                    <span className="truncate">
+                    <Package className="size-3 shrink-0 mt-px" />
+                    <span className="whitespace-normal break-words min-w-0">
                       {eq.quantity > 1 ? `${eq.quantity}× ` : ""}
                       {eq.equipmentName}
                     </span>
@@ -789,15 +789,15 @@ export default function Scheduler() {
                     title={`${tk.truckName}${
                       tk.driverName ? ` • driver: ${tk.driverName}` : ""
                     }${tk.notes ? ` • ${tk.notes}` : ""} — click to remove`}
-                    className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate flex items-center gap-1 border-dashed"
+                    className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start gap-1 border-dashed"
                     style={{
                       backgroundColor: `${color}14`,
                       borderColor: `${color}66`,
                       color,
                     }}
                   >
-                    <Truck className="size-3 shrink-0" />
-                    <span className="truncate">
+                    <Truck className="size-3 shrink-0 mt-px" />
+                    <span className="whitespace-normal break-words min-w-0">
                       {tk.truckName}
                       {tk.driverName ? ` · ${tk.driverName}` : ""}
                     </span>
@@ -870,10 +870,10 @@ export default function Scheduler() {
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="min-w-[760px]">
+            <div className="min-w-[1500px]">
               {/* Day header */}
               <div className={cn(
-                "grid grid-cols-[240px_repeat(7,1fr)] sticky top-0 bg-card border-b border-border",
+                "grid grid-cols-[240px_repeat(7,minmax(180px,1fr))] sticky top-0 bg-card border-b border-border",
                 "z-10",
               )}>
                 <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
