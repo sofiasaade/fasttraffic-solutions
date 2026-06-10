@@ -304,8 +304,28 @@ vi.mock("../opsDb", () => ({
   // Truck catalog + assignments (local)
   seedTruckCatalog: vi.fn(async () => {
     state.truckCatalog = [
-      { id: 1, name: "Truck 1", plate: "FTS-001", color: "#2563eb", active: true },
-      { id: 2, name: "Crash Truck / TMA", plate: "FTS-TMA", color: "#ea580c", active: true },
+      {
+        id: 1,
+        name: "F 14",
+        code: "FTS-01-0004",
+        ref: "F 14",
+        description: "Ford TRUCK/VAN F350 White - Gas 2015",
+        vin: "1FDRF3G66FEC93606",
+        plate: "CJR9273",
+        color: "#2563eb",
+        active: true,
+      },
+      {
+        id: 2,
+        name: "FC",
+        code: "FTS-01-0011",
+        ref: "FC",
+        description: "2023 FORD F150 LARIAT SUPERCREW 4WD",
+        vin: "1FTEW1EP5PKF51474",
+        plate: "CSV3273",
+        color: "#65a30d",
+        active: true,
+      },
     ];
   }),
   listTruckCatalog: vi.fn(async () => state.truckCatalog),
@@ -668,7 +688,8 @@ describe("Truck scheduling (local, no Airtable write)", () => {
     const caller = appRouter.createCaller(adminCtx());
     const rows = await caller.coordinator.truckCatalog();
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.some((r: any) => r.name === "Truck 1")).toBe(true);
+    expect(rows.some((r: any) => r.name === "F 14")).toBe(true);
+    expect(rows.some((r: any) => r.code === "FTS-01-0004")).toBe(true);
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 
@@ -676,7 +697,7 @@ describe("Truck scheduling (local, no Airtable write)", () => {
     const caller = appRouter.createCaller(adminCtx());
     const res = await caller.coordinator.setTruck({
       jobId: "recJOB1",
-      truckName: "Truck 1",
+      truckName: "F 14",
       scheduledDate: "2026-06-12",
       driverName: "Hector",
       notes: "Bring trailer",
@@ -693,7 +714,7 @@ describe("Truck scheduling (local, no Airtable write)", () => {
       endDate: "2026-06-14",
     });
     expect(week.length).toBe(1);
-    expect(week[0].truckName).toBe("Truck 1");
+    expect(week[0].truckName).toBe("F 14");
     expect(week[0].driverName).toBe("Hector");
   });
 
@@ -702,7 +723,7 @@ describe("Truck scheduling (local, no Airtable write)", () => {
     const before = state.notifications.length;
     await caller.coordinator.setTruck({
       jobId: "recJOB1",
-      truckName: "Crash Truck / TMA",
+      truckName: "FC",
       scheduledDate: "2026-06-13",
     });
     expect(state.trucks.length).toBe(1);
@@ -714,7 +735,7 @@ describe("Truck scheduling (local, no Airtable write)", () => {
     const caller = appRouter.createCaller(adminCtx());
     const res = await caller.coordinator.setTruck({
       jobId: "recJOB1",
-      truckName: "Truck 1",
+      truckName: "F 14",
       scheduledDate: "2026-06-12",
     });
     const id = (res as any).id as number;

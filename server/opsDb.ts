@@ -783,14 +783,119 @@ export async function removeEquipmentAssignment(id: number) {
 
 const DEFAULT_TRUCKS: {
   name: string;
+  code: string;
+  ref: string;
+  description: string;
+  vin: string;
   plate?: string;
   color: string;
 }[] = [
-  { name: "Truck 1", color: "#2563eb" },
-  { name: "Truck 2", color: "#0ea5e9" },
-  { name: "Truck 3", color: "#7c3aed" },
-  { name: "Crash Truck / TMA", color: "#16a34a" },
-  { name: "Pickup", color: "#ea580c" },
+  {
+    name: "F 14",
+    code: "FTS-01-0004",
+    ref: "F 14",
+    description: "Ford TRUCK/VAN F350 White - Gas 2015",
+    plate: "CJR9273",
+    vin: "1FDRF3G66FEC93606",
+    color: "#2563eb",
+  },
+  {
+    name: "F 15",
+    code: "FTS-01-0005",
+    ref: "F 15",
+    description: "Ford F350XL White - Gas 2015",
+    plate: "CNR6768",
+    vin: "1FDRF3G67FEC93615",
+    color: "#0ea5e9",
+  },
+  {
+    name: "F 18",
+    code: "FTS-01-0006",
+    ref: "F 18",
+    description: "2018 Ford F-350 Super Duty DRW S/A Deck",
+    plate: "CVH2671",
+    vin: "1FDRF3G60JEC01768",
+    color: "#7c3aed",
+  },
+  {
+    name: "F 21",
+    code: "FTS-01-0007",
+    ref: "F 21",
+    description: "Ford TRUCK/VAN SUPER FF3H White - DIESEL 2021",
+    plate: "CJW0176",
+    vin: "1FDRF3HTOMEC94333",
+    color: "#16a34a",
+  },
+  {
+    name: "F 22",
+    code: "FTS-01-0008",
+    ref: "F 22",
+    description: "Ford F350 White - Gas",
+    plate: "CSC6259",
+    vin: "1FDRF3H69MEC63432",
+    color: "#ea580c",
+  },
+  {
+    name: "F 23",
+    code: "FTS-01-0009",
+    ref: "F 23",
+    description: "2023 Ford F450 SD XLT REG CAB 4WD GAS",
+    plate: "CTK6057",
+    vin: "1FD0X4HN6PED78934",
+    color: "#db2777",
+  },
+  {
+    name: "F 24",
+    code: "FTS-01-0010",
+    ref: "F 24",
+    description: "Ford F350 White - Gas 2024",
+    plate: "CS24833",
+    vin: "1FDRF3ENXREE08593",
+    color: "#0891b2",
+  },
+  {
+    name: "FC",
+    code: "FTS-01-0011",
+    ref: "FC",
+    description: "2023 FORD F150 LARIAT SUPERCREW 4WD",
+    plate: "CSV3273",
+    vin: "1FTEW1EP5PKF51474",
+    color: "#65a30d",
+  },
+  {
+    name: "F 25",
+    code: "FTS-01-0012",
+    ref: "F 25",
+    description: "Ford F350 White - Gas 2025",
+    plate: "CVV0501",
+    vin: "1FDRF3HN0SEC59080",
+    color: "#9333ea",
+  },
+  {
+    name: "F 26",
+    code: "FTS-01-0013",
+    ref: "F 26",
+    description: "Ford F350 White - Gas 2025",
+    plate: "CVV0300",
+    vin: "1FDRF3HN4SEC57865",
+    color: "#c2410c",
+  },
+  {
+    name: "F 27",
+    code: "FTS-01-0014",
+    ref: "F27",
+    description: "Ford F350 White - Gas 2026",
+    vin: "1FDRF3HN5TEE60037",
+    color: "#0d9488",
+  },
+  {
+    name: "F 28",
+    code: "FTS-01-0015",
+    ref: "F28",
+    description: "Ford F350 White - Gas 2026",
+    vin: "1FDRF3HN9TEE57660",
+    color: "#4f46e5",
+  },
 ];
 
 export async function seedTruckCatalog() {
@@ -801,11 +906,25 @@ export async function seedTruckCatalog() {
       .insert(truckCatalog)
       .values({
         name: item.name,
+        code: item.code,
+        ref: item.ref,
+        description: item.description,
+        vin: item.vin,
         plate: item.plate ?? null,
         color: item.color,
         sortOrder: order++,
       })
-      .onDuplicateKeyUpdate({ set: { color: item.color } });
+      .onDuplicateKeyUpdate({
+        set: {
+          code: item.code,
+          ref: item.ref,
+          description: item.description,
+          vin: item.vin,
+          plate: item.plate ?? null,
+          color: item.color,
+          sortOrder: order,
+        },
+      });
   }
 }
 

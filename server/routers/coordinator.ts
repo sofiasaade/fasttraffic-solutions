@@ -678,14 +678,12 @@ export const coordinatorRouter = router({
 
   /* ------------------------------- Trucks -------------------------------- */
 
-  // The fleet catalog (seeds defaults on first use).
+  // The fleet catalog. Re-seed on every read so the latest fleet details
+  // (code / ref / description / VIN / plate / color) stay in sync; seeding
+  // is idempotent via onDuplicateKeyUpdate.
   truckCatalog: adminProcedure.query(async () => {
-    const rows = await listTruckCatalog();
-    if (rows.length === 0) {
-      await seedTruckCatalog();
-      return listTruckCatalog();
-    }
-    return rows;
+    await seedTruckCatalog();
+    return listTruckCatalog();
   }),
 
   // All truck placements for a visible week (inclusive date range).

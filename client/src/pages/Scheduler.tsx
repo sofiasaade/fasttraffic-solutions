@@ -18,13 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import {
   ChevronLeft,
@@ -154,6 +147,10 @@ type TruckRow = {
 type TruckItem = {
   id: number;
   name: string;
+  code: string | null;
+  ref: string | null;
+  description: string | null;
+  vin: string | null;
   plate: string | null;
   color: string | null;
 };
@@ -284,8 +281,17 @@ export default function Scheduler() {
   const [truckDriver, setTruckDriver] = useState<string>("none");
   const [truckNotes, setTruckNotes] = useState("");
 
-  // Job detail side panel state
-  const [detailJob, setDetailJob] = useState<Job | null>(null);
+  // Inline expanded job rows (accordion) — set of job ids
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const toggleJobExpanded = (id: string) =>
+    setExpandedJobs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Jobs that overlap the visible week (start..end intersects the week).
   const weekJobs = useMemo(() => {
@@ -362,7 +368,10 @@ export default function Scheduler() {
     return truckCatalog.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
-        (t.plate ?? "").toLowerCase().includes(q),
+        (t.plate ?? "").toLowerCase().includes(q) ||
+        (t.code ?? "").toLowerCase().includes(q) ||
+        (t.vin ?? "").toLowerCase().includes(q) ||
+        (t.description ?? "").toLowerCase().includes(q),
     );
   }, [truckCatalog, search]);
 
@@ -539,19 +548,25 @@ export default function Scheduler() {
 
   const loading = jobsQuery.isLoading || techQuery.isLoading;
 
-  const renderJobRow = (job: Job) => (
-    <div
-      key={job.id}
-      className="grid grid-cols-[240px_repeat(7,1fr)] border-b border-border hover:bg-accent/20"
-    >
-      {/* Job label — click to open full detail */}
+  const renderJobRow = (job: Job) => {
+    const isExpanded = expandedJobs.has(job.id);
+    return (
+    <div key={job.id} className="border-b border-border">
+     <div className="grid grid-cols-[240px_repeat(7,1fr)] hover:bg-accent/20">
+      {/* Job label — click to expand inline detail */}
       <button
         type="button"
-        onClick={() => setDetailJob(job)}
-        title="View job details & plan"
+        onClick={() => toggleJobExpanded(job.id)}
+        title={isExpanded ? "Hide job details" : "Show job details & plan"}
+        aria-expanded={isExpanded}
         className="group/jobcell text-left px-4 py-3 border-r border-border flex items-start gap-1.5 hover:bg-accent/40 transition-colors"
       >
-        <ChevronRightIcon className="size-4 mt-0.5 text-muted-foreground shrink-0 transition-transform group-hover/jobcell:translate-x-0.5 group-hover/jobcell:text-primary" />
+        <ChevronRightIcon
+          className={cn(
+            "size-4 mt-0.5 text-muted-foreground shrink-0 transition-transform group-hover/jobcell:text-primary",
+            isExpanded && "rotate-90 text-primary",
+          )}
+        />
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
@@ -663,8 +678,17 @@ export default function Scheduler() {
           </div>
         );
       })}
+     </div>
+
+      {/* Inline expanded detail row (full width) */}
+      {isExpanded && (
+        <div className="bg-muted/30 border-t border-border">
+          <JobDetailInline job={job} />
+        </div>
+      )}
     </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col h-screen">
@@ -719,7 +743,7 @@ export default function Scheduler() {
               {/* Day header */}
               <div className={cn(
                 "grid grid-cols-[240px_repeat(7,1fr)] sticky top-0 bg-card border-b border-border",
-                detailJob ? "z-0" : "z-10",
+                "z-10",
               )}>
                 <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Job
@@ -772,7 +796,7 @@ export default function Scheduler() {
                         }
                         className={cn(
                           "w-full flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px]",
-                          detailJob ? "z-0" : "z-[5]",
+                          "z-[5]",
                         )}
                       >
                         <ChevronDown
@@ -996,15 +1020,28 @@ export default function Scheduler() {
                     >
                       <GripVertical className="size-4 text-muted-foreground shrink-0" />
                       <Truck className="size-4 shrink-0" style={{ color }} />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {tk.name}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-medium truncate">
+                            {tk.name}
+                          </span>
+                          {tk.code && (
+                            <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                              {tk.code}
+                            </span>
+                          )}
                         </div>
-                        {tk.plate && (
+                        {tk.description && (
                           <div className="text-[11px] text-muted-foreground truncate">
-                            {tk.plate}
+                            {tk.description}
                           </div>
                         )}
+                        <div className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground/80">
+                          {tk.plate && <span>Plate: {tk.plate}</span>}
+                          {tk.vin && (
+                            <span className="font-mono truncate">VIN: {tk.vin}</span>
+                          )}
+                        </div>
                       </div>
                     </li>
                   );
@@ -1303,133 +1340,6 @@ export default function Scheduler() {
         </DialogContent>
       </Dialog>
 
-      {/* Job detail side panel */}
-      <Sheet open={!!detailJob} onOpenChange={(v) => !v && setDetailJob(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 bg-background z-[60]">
-          {detailJob && (
-            <div className="flex flex-col">
-              <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {detailJob.status && (
-                    <Badge variant="secondary">{detailJob.status}</Badge>
-                  )}
-                  {detailJob.subStatus && (
-                    <Badge variant="outline">{detailJob.subStatus}</Badge>
-                  )}
-                </div>
-                <SheetTitle className="text-left text-xl">
-                  {detailJob.company ?? "Untitled job"}
-                </SheetTitle>
-                {detailJob.projectTitle && (
-                  <SheetDescription className="text-left">
-                    {detailJob.projectTitle}
-                  </SheetDescription>
-                )}
-              </SheetHeader>
-
-              <div className="px-5 py-4 space-y-5 text-sm">
-                {/* Key facts */}
-                <div className="space-y-2.5">
-                  <DetailRow icon={<MapPin className="size-4" />} label="Address">
-                    {detailJob.jobAddress ?? "—"}
-                  </DetailRow>
-                  <DetailRow icon={<Calendar className="size-4" />} label="Dates">
-                    {parseDayKey(detailJob.startDate) || "—"}
-                    {detailJob.endDate &&
-                    parseDayKey(detailJob.endDate) !== parseDayKey(detailJob.startDate)
-                      ? ` → ${parseDayKey(detailJob.endDate)}`
-                      : ""}
-                  </DetailRow>
-                  {detailJob.setupDuration && (
-                    <DetailRow icon={<Clock className="size-4" />} label="Setup">
-                      {detailJob.setupDuration}
-                    </DetailRow>
-                  )}
-                  {(detailJob.municipality || detailJob.zone) && (
-                    <DetailRow icon={<MapIcon className="size-4" />} label="Area">
-                      {[detailJob.municipality, detailJob.zone]
-                        .filter(Boolean)
-                        .join(" • ")}
-                    </DetailRow>
-                  )}
-                  {detailJob.requestorName && (
-                    <DetailRow icon={<UserIcon className="size-4" />} label="Requestor">
-                      {detailJob.requestorName}
-                    </DetailRow>
-                  )}
-                  {detailJob.siteContactPhone && (
-                    <DetailRow icon={<Phone className="size-4" />} label="Site contact">
-                      <a
-                        href={`tel:${detailJob.siteContactPhone}`}
-                        className="text-primary hover:underline"
-                      >
-                        {detailJob.siteContactPhone}
-                      </a>
-                    </DetailRow>
-                  )}
-                  {detailJob.requestId && (
-                    <DetailRow icon={<FileText className="size-4" />} label="Request ID">
-                      {detailJob.requestId}
-                    </DetailRow>
-                  )}
-                </div>
-
-                {/* Technicians by phase */}
-                <div>
-                  <h3 className="font-semibold mb-2 flex items-center gap-1.5">
-                    <Users className="size-4 text-muted-foreground" />
-                    Technicians
-                  </h3>
-                  <div className="space-y-1.5">
-                    {PHASES.map((p) => {
-                      const list =
-                        p === "Preparation"
-                          ? detailJob.techPrep
-                          : p === "Setup"
-                            ? detailJob.techSetup
-                            : detailJob.techPickup;
-                      return (
-                        <div key={p} className="flex items-start gap-2">
-                          <span
-                            className={cn(
-                              "text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 mt-0.5",
-                              PHASE_COLOR[p],
-                            )}
-                          >
-                            {p}
-                          </span>
-                          <span className="text-muted-foreground">
-                            {list && list.length > 0 ? list.join(", ") : "Unassigned"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Job plan */}
-                <div>
-                  <h3 className="font-semibold mb-2 flex items-center gap-1.5">
-                    <FileText className="size-4 text-muted-foreground" />
-                    Job plan
-                  </h3>
-                  {detailJob.planFile && detailJob.planFile.length > 0 ? (
-                    <div className="space-y-3">
-                      {detailJob.planFile.map((f, idx) => (
-                        <PlanPreview key={idx} url={f.url} filename={f.filename} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-muted-foreground text-xs">
-                      No plan attached to this job.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
@@ -1509,6 +1419,146 @@ function PlanPreview({ url, filename }: { url: string; filename?: string }) {
           <FileText className="size-4" />
           Open {name}
         </a>
+      )}
+    </div>
+  );
+}
+
+// Inline expandable job detail (replaces the old Sheet side panel).
+// Spans the full width of the scheduler row and reuses DetailRow / PlanPreview.
+function JobDetailInline({ job }: { job: Job }) {
+  const techByPhase: { phase: Phase; techs: string[] }[] = [
+    { phase: "Preparation", techs: job.techPrep ?? [] },
+    { phase: "Setup", techs: job.techSetup ?? [] },
+    { phase: "Pickup", techs: job.techPickup ?? [] },
+  ];
+  const hasTechs = techByPhase.some((p) => p.techs.length > 0);
+  const plans = job.planFile ?? [];
+
+  return (
+    <div className="px-4 md:px-6 py-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Column 1: identity + status */}
+        <div className="space-y-3">
+          <div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {job.status && (
+                <Badge variant="secondary" className="text-xs">
+                  {job.status}
+                </Badge>
+              )}
+              {job.subStatus && (
+                <Badge variant="outline" className="text-xs">
+                  {job.subStatus}
+                </Badge>
+              )}
+            </div>
+            <h3 className="mt-2 text-base font-semibold leading-snug break-words">
+              {job.projectTitle || job.company || "Untitled job"}
+            </h3>
+          </div>
+
+          {job.company && (
+            <DetailRow icon={<Building2 className="size-4" />} label="Company">
+              {job.company}
+            </DetailRow>
+          )}
+          {job.jobAddress && (
+            <DetailRow icon={<MapPin className="size-4" />} label="Address">
+              {job.jobAddress}
+            </DetailRow>
+          )}
+          {job.municipality && (
+            <DetailRow icon={<MapIcon className="size-4" />} label="Municipality / Zone">
+              {job.municipality}
+              {job.zone ? ` · ${job.zone}` : ""}
+            </DetailRow>
+          )}
+        </div>
+
+        {/* Column 2: schedule + contact */}
+        <div className="space-y-3">
+          <DetailRow icon={<Calendar className="size-4" />} label="Dates">
+            {parseDayKey(job.startDate) || "—"}
+            {job.endDate ? ` → ${parseDayKey(job.endDate)}` : ""}
+          </DetailRow>
+          {job.setupDuration && (
+            <DetailRow icon={<Clock className="size-4" />} label="Setup Duration">
+              {job.setupDuration}
+            </DetailRow>
+          )}
+          {job.requestorName && (
+            <DetailRow icon={<UserIcon className="size-4" />} label="Requestor">
+              {job.requestorName}
+            </DetailRow>
+          )}
+          {job.siteContactPhone && (
+            <DetailRow icon={<Phone className="size-4" />} label="Site Contact">
+              <a
+                href={`tel:${job.siteContactPhone}`}
+                className="text-primary hover:underline"
+              >
+                {job.siteContactPhone}
+              </a>
+            </DetailRow>
+          )}
+          {job.requestId && (
+            <DetailRow icon={<FileText className="size-4" />} label="Request ID">
+              <span className="font-mono text-xs">{job.requestId}</span>
+            </DetailRow>
+          )}
+        </div>
+
+        {/* Column 3: technicians by phase */}
+        <div className="space-y-3">
+          <DetailRow icon={<Users className="size-4" />} label="Technicians">
+            {hasTechs ? (
+              <div className="space-y-1.5 mt-0.5">
+                {techByPhase
+                  .filter((p) => p.techs.length > 0)
+                  .map((p) => (
+                    <div key={p.phase} className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "text-[10px] font-medium px-1.5 py-0.5 rounded border",
+                          PHASE_COLOR[p.phase],
+                        )}
+                      >
+                        {p.phase}
+                      </span>
+                      {p.techs.map((t) => (
+                        <span
+                          key={`${p.phase}-${t}`}
+                          className="text-xs px-1.5 py-0.5 rounded bg-muted"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-sm">
+                No technicians assigned
+              </span>
+            )}
+          </DetailRow>
+        </div>
+      </div>
+
+      {/* Job plan files */}
+      {plans.length > 0 && (
+        <div className="mt-4">
+          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+            <FileText className="size-3.5" />
+            Job Plan
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {plans.map((p, i) => (
+              <PlanPreview key={`${p.url}-${i}`} url={p.url} filename={p.filename} />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

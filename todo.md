@@ -194,3 +194,23 @@
 - [x] coordinator: setTechnicianLevel procedure; experienceLevel included in technicians query output
 - [x] Workers panel: Junior/Senior badge on each worker + toggle button to change level (optimistic)
 - [x] Integration test for setTechnicianLevel (no Airtable write) (44 tests passing)
+
+
+## Feature 24: Inline job detail (accordion) — replace side panel
+- [ ] Add expand/collapse chevron per project row that toggles an inline detail row below it
+- [ ] Inline detail shows full job info (company, address, dates, setup, status/sub-status, area, requestor, site contact, request id, technicians by phase) + plan (planFile) preview/links
+- [ ] Remove the old Sheet side panel that rendered overlapped
+- [ ] Inline detail spans the full grid width and does not overlap sticky headers
+
+## Feature 24: Inline Job Detail Accordion
+- [x] Remove Sheet side panel; use expandedJobs Set + toggleJobExpanded
+- [x] Create JobDetailInline component (status, company, address, dates, contact, technicians by phase, plan files)
+- [x] TypeScript clean
+
+## Feature 25: Real Truck Fleet Catalog
+- [x] Extend truck_catalog schema with code, ref, description, vin fields
+- [x] Push DB migration
+- [x] Replace DEFAULT_TRUCKS seed with the 12 real Fast Traffic vehicles
+- [x] Surface code/VIN/plate in Scheduler Trucks tab UI
+- [x] Update integration test mock + assertions
+- [x] All tests passing (44)

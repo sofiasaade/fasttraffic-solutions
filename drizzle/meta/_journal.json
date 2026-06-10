@@ -57,6 +57,13 @@
       "when": 1781119901581,
       "tag": "0007_spooky_screwball",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1781121068041,
+      "tag": "0008_needy_sandman",
+      "breakpoints": true
     }
   ]
 }

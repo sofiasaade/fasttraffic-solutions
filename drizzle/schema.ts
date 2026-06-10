@@ -299,6 +299,14 @@ export type InsertEquipmentAssignment =
 export const truckCatalog = mysqlTable("truck_catalog", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 128 }).notNull().unique(),
+  /** Internal fleet code (e.g. FTS-01-0004). */
+  code: varchar("code", { length: 32 }),
+  /** Short reference / unit number (e.g. F 14). */
+  ref: varchar("ref", { length: 32 }),
+  /** Full name/brand/model description. */
+  description: varchar("description", { length: 255 }),
+  /** Vehicle Identification Number. */
+  vin: varchar("vin", { length: 32 }),
   /** Optional license plate / unit number. */
   plate: varchar("plate", { length: 32 }),
   /** Hex color used for the chip in the timeline. */
