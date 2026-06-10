@@ -370,6 +370,9 @@ import {
   equipmentCatalog,
   InsertEquipmentCatalogItem,
   equipmentAssignments,
+  truckCatalog,
+  InsertTruckCatalogItem,
+  truckAssignments,
 } from "../drizzle/schema";
 
 const PHASES = ["Preparation", "Setup", "Pickup"] as const;
@@ -761,4 +764,97 @@ export async function removeEquipmentAssignment(id: number) {
   await d
     .delete(equipmentAssignments)
     .where(eq(equipmentAssignments.id, id));
+}
+
+
+/* ------------------------------ Truck Catalog ------------------------------ */
+
+const DEFAULT_TRUCKS: {
+  name: string;
+  plate?: string;
+  color: string;
+}[] = [
+  { name: "Truck 1", color: "#2563eb" },
+  { name: "Truck 2", color: "#0ea5e9" },
+  { name: "Truck 3", color: "#7c3aed" },
+  { name: "Crash Truck / TMA", color: "#16a34a" },
+  { name: "Pickup", color: "#ea580c" },
+];
+
+export async function seedTruckCatalog() {
+  const d = await db();
+  let order = 0;
+  for (const item of DEFAULT_TRUCKS) {
+    await d
+      .insert(truckCatalog)
+      .values({
+        name: item.name,
+        plate: item.plate ?? null,
+        color: item.color,
+        sortOrder: order++,
+      })
+      .onDuplicateKeyUpdate({ set: { color: item.color } });
+  }
+}
+
+export async function listTruckCatalog() {
+  const d = await db();
+  return d
+    .select()
+    .from(truckCatalog)
+    .where(eq(truckCatalog.active, true))
+    .orderBy(truckCatalog.sortOrder, truckCatalog.name);
+}
+
+export async function createTruckItem(data: InsertTruckCatalogItem) {
+  const d = await db();
+  await d
+    .insert(truckCatalog)
+    .values(data)
+    .onDuplicateKeyUpdate({ set: { active: true } });
+}
+
+/* ---------------------------- Truck Assignments ---------------------------- */
+
+export async function setTruckAssignment(input: {
+  airtableJobId: string;
+  truckName: string;
+  scheduledDate: string; // YYYY-MM-DD
+  driverName?: string | null;
+  notes?: string | null;
+  actor?: { userId?: number; name?: string };
+}): Promise<number> {
+  const d = await db();
+  const res = await d.insert(truckAssignments).values({
+    airtableJobId: input.airtableJobId,
+    truckName: input.truckName,
+    scheduledDate: input.scheduledDate,
+    driverName: input.driverName ?? null,
+    notes: input.notes ?? null,
+    createdByUserId: input.actor?.userId ?? null,
+    createdByName: input.actor?.name ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+export async function listTruckAssignmentsForWeek(
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(truckAssignments)
+    .where(
+      and(
+        gte(truckAssignments.scheduledDate, startDate),
+        lte(truckAssignments.scheduledDate, endDate),
+      ),
+    )
+    .orderBy(truckAssignments.scheduledDate);
+}
+
+export async function removeTruckAssignment(id: number) {
+  const d = await db();
+  await d.delete(truckAssignments).where(eq(truckAssignments.id, id));
 }

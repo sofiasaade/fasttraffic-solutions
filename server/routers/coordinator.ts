@@ -39,6 +39,11 @@ import {
   setEquipmentAssignment,
   listEquipmentAssignmentsForWeek,
   removeEquipmentAssignment,
+  listTruckCatalog,
+  seedTruckCatalog,
+  setTruckAssignment,
+  listTruckAssignmentsForWeek,
+  removeTruckAssignment,
 } from "../opsDb";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
@@ -654,6 +659,97 @@ export const coordinatorRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       await removeEquipmentAssignment(input.id);
+      return { ok: true as const };
+    }),
+
+  /* ------------------------------- Trucks -------------------------------- */
+
+  // The fleet catalog (seeds defaults on first use).
+  truckCatalog: adminProcedure.query(async () => {
+    const rows = await listTruckCatalog();
+    if (rows.length === 0) {
+      await seedTruckCatalog();
+      return listTruckCatalog();
+    }
+    return rows;
+  }),
+
+  // All truck placements for a visible week (inclusive date range).
+  truckAssignments: adminProcedure
+    .input(z.object({ startDate: z.string(), endDate: z.string() }))
+    .query(async ({ input }) => {
+      const rows = await listTruckAssignmentsForWeek(
+        input.startDate,
+        input.endDate,
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        jobId: r.airtableJobId,
+        truckName: r.truckName,
+        scheduledDate: r.scheduledDate,
+        driverName: r.driverName,
+        notes: r.notes,
+      }));
+    }),
+
+  // Assign a truck to a job for a specific day, optionally with the worker who
+  // will drive it that day.
+  setTruck: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        truckName: z.string().min(1),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        driverName: z.string().optional(),
+        notes: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const job = await fetchJobById(input.jobId);
+      const id = await setTruckAssignment({
+        airtableJobId: input.jobId,
+        truckName: input.truckName,
+        scheduledDate: input.scheduledDate,
+        driverName: input.driverName ?? null,
+        notes: input.notes ?? null,
+        actor: {
+          userId: ctx.user.id,
+          name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        },
+      });
+
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "schedule_truck",
+        fieldName: input.truckName,
+        oldValue: null,
+        newValue: `${input.truckName} @ ${input.scheduledDate}${
+          input.driverName ? ` (driver: ${input.driverName})` : ""
+        }`,
+        details: input.notes ?? "Truck scheduled",
+      });
+
+      // Notify the assigned driver, if any.
+      if (input.driverName) {
+        await createNotification({
+          technicianName: input.driverName,
+          airtableJobId: input.jobId,
+          type: "assigned",
+          title: `Drive ${input.truckName} on ${input.scheduledDate}`,
+          body: `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`,
+        });
+      }
+
+      return { ok: true as const, id };
+    }),
+
+  // Remove a single truck assignment (by row id).
+  removeTruck: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await removeTruckAssignment(input.id);
       return { ok: true as const };
     }),
 });

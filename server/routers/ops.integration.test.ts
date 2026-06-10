@@ -46,6 +46,17 @@ const state = {
     notes: string | null;
   }[],
   equipmentSeq: 0,
+  // Truck catalog + day-pinned truck assignments (local).
+  truckCatalog: [] as any[],
+  trucks: [] as {
+    id: number;
+    airtableJobId: string;
+    truckName: string;
+    scheduledDate: string;
+    driverName: string | null;
+    notes: string | null;
+  }[],
+  truckSeq: 0,
   // Any of these being > 0 means a read-only violation occurred.
   airtableWriteCalls: [] as { fn: string; id: string }[],
 };
@@ -286,6 +297,34 @@ vi.mock("../opsDb", () => ({
   removeEquipmentAssignment: vi.fn(async (id: number) => {
     state.equipment = state.equipment.filter((r) => r.id !== id);
   }),
+  // Truck catalog + assignments (local)
+  seedTruckCatalog: vi.fn(async () => {
+    state.truckCatalog = [
+      { id: 1, name: "Truck 1", plate: "FTS-001", color: "#2563eb", active: true },
+      { id: 2, name: "Crash Truck / TMA", plate: "FTS-TMA", color: "#ea580c", active: true },
+    ];
+  }),
+  listTruckCatalog: vi.fn(async () => state.truckCatalog),
+  setTruckAssignment: vi.fn(async (input: any) => {
+    const id = ++state.truckSeq;
+    state.trucks.push({
+      id,
+      airtableJobId: input.airtableJobId,
+      truckName: input.truckName,
+      scheduledDate: input.scheduledDate,
+      driverName: input.driverName ?? null,
+      notes: input.notes ?? null,
+    });
+    return id;
+  }),
+  listTruckAssignmentsForWeek: vi.fn(async (start: string, end: string) =>
+    state.trucks.filter(
+      (r) => r.scheduledDate >= start && r.scheduledDate <= end,
+    ),
+  ),
+  removeTruckAssignment: vi.fn(async (id: number) => {
+    state.trucks = state.trucks.filter((r) => r.id !== id);
+  }),
 }));
 
 import { appRouter } from "../routers";
@@ -335,6 +374,9 @@ beforeEach(() => {
   state.equipmentCatalog = [];
   state.equipment = [];
   state.equipmentSeq = 0;
+  state.truckCatalog = [];
+  state.trucks = [];
+  state.truckSeq = 0;
   state.airtableWriteCalls = [];
 });
 
@@ -613,6 +655,67 @@ describe("Equipment scheduling (local, no Airtable write)", () => {
     const id = res.id;
     await caller.coordinator.removeEquipment({ id });
     expect(state.equipment.length).toBe(0);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+});
+
+describe("Truck scheduling (local, no Airtable write)", () => {
+  it("seeds and returns the truck catalog", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const rows = await caller.coordinator.truckCatalog();
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r: any) => r.name === "Truck 1")).toBe(true);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("assigns a truck on a job/day, notifies the driver, logs history, and lists it for the week", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setTruck({
+      jobId: "recJOB1",
+      truckName: "Truck 1",
+      scheduledDate: "2026-06-12",
+      driverName: "Hector",
+      notes: "Bring trailer",
+    });
+    expect(res.ok).toBe(true);
+    expect(state.trucks.length).toBe(1);
+    expect(state.trucks[0].driverName).toBe("Hector");
+    expect(state.notifications.some((n) => n.technicianName === "Hector")).toBe(true);
+    expect(state.changeHistory.some((h) => h.action === "schedule_truck")).toBe(true);
+    expect(state.airtableWriteCalls.length).toBe(0);
+
+    const week = await caller.coordinator.truckAssignments({
+      startDate: "2026-06-08",
+      endDate: "2026-06-14",
+    });
+    expect(week.length).toBe(1);
+    expect(week[0].truckName).toBe("Truck 1");
+    expect(week[0].driverName).toBe("Hector");
+  });
+
+  it("assigns a truck without a driver and sends no notification", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const before = state.notifications.length;
+    await caller.coordinator.setTruck({
+      jobId: "recJOB1",
+      truckName: "Crash Truck / TMA",
+      scheduledDate: "2026-06-13",
+    });
+    expect(state.trucks.length).toBe(1);
+    expect(state.notifications.length).toBe(before);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("removes a truck assignment by id", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setTruck({
+      jobId: "recJOB1",
+      truckName: "Truck 1",
+      scheduledDate: "2026-06-12",
+    });
+    const id = (res as any).id as number;
+    await caller.coordinator.removeTruck({ id });
+    expect(state.trucks.length).toBe(0);
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 });

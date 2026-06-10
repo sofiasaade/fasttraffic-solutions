@@ -19,9 +19,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronRight as ChevronRightIcon,
   Loader2,
   GripVertical,
   Search,
@@ -30,6 +39,16 @@ import {
   X,
   Package,
   Users,
+  Truck,
+  MapPin,
+  Calendar,
+  Clock,
+  Phone,
+  User as UserIcon,
+  FileText,
+  Download,
+  ExternalLink,
+  Map as MapIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -120,12 +139,29 @@ type EquipmentItem = {
   color: string | null;
 };
 
-// Drag payload: either a worker or an equipment item.
+type TruckRow = {
+  id: number;
+  jobId: string;
+  truckName: string;
+  scheduledDate: string;
+  driverName: string | null;
+  notes: string | null;
+};
+
+type TruckItem = {
+  id: number;
+  name: string;
+  plate: string | null;
+  color: string | null;
+};
+
+// Drag payload: a worker, an equipment item, or a truck.
 type DragPayload =
   | { kind: "worker"; techName: string; techDisplay: string }
-  | { kind: "equipment"; equipmentName: string; color: string | null };
+  | { kind: "equipment"; equipmentName: string; color: string | null }
+  | { kind: "truck"; truckName: string; color: string | null };
 
-type PanelTab = "workers" | "equipment";
+type PanelTab = "workers" | "equipment" | "trucks";
 
 export default function Scheduler() {
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
@@ -136,6 +172,9 @@ export default function Scheduler() {
   const removeScheduled = trpc.coordinator.removeScheduled.useMutation();
   const setEquipment = trpc.coordinator.setEquipment.useMutation();
   const removeEquipment = trpc.coordinator.removeEquipment.useMutation();
+  const truckCatalogQuery = trpc.coordinator.truckCatalog.useQuery();
+  const setTruck = trpc.coordinator.setTruck.useMutation();
+  const removeTruck = trpc.coordinator.removeTruck.useMutation();
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [search, setSearch] = useState("");
@@ -172,6 +211,19 @@ export default function Scheduler() {
     return m;
   }, [catalog]);
 
+  // Truck placements for the visible week.
+  const truckQuery = trpc.coordinator.truckAssignments.useQuery({
+    startDate: dayKeys[0],
+    endDate: dayKeys[6],
+  });
+  const trucks = (truckQuery.data ?? []) as TruckRow[];
+  const truckCatalog = (truckCatalogQuery.data ?? []) as TruckItem[];
+  const colorByTruck = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of truckCatalog) m.set(t.name, t.color ?? "#475569");
+    return m;
+  }, [truckCatalog]);
+
   // Worker drop dialog state
   const [drop, setDrop] = useState<{
     job: Job;
@@ -195,6 +247,18 @@ export default function Scheduler() {
   const [equipQty, setEquipQty] = useState(1);
   const [equipTech, setEquipTech] = useState<string>("none");
   const [equipNotes, setEquipNotes] = useState("");
+
+  // Truck drop dialog state
+  const [truckDrop, setTruckDrop] = useState<{
+    job: Job;
+    dayKey: string;
+    truckName: string;
+  } | null>(null);
+  const [truckDriver, setTruckDriver] = useState<string>("none");
+  const [truckNotes, setTruckNotes] = useState("");
+
+  // Job detail side panel state
+  const [detailJob, setDetailJob] = useState<Job | null>(null);
 
   // Jobs that overlap the visible week (start..end intersects the week).
   const weekJobs = useMemo(() => {
@@ -259,6 +323,16 @@ export default function Scheduler() {
     );
   }, [catalog, search]);
 
+  const filteredTrucks = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return truckCatalog;
+    return truckCatalog.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.plate ?? "").toLowerCase().includes(q),
+    );
+  }, [truckCatalog, search]);
+
   const jobCoversDay = useCallback((job: Job, dk: string) => {
     const s = parseDayKey(job.startDate);
     const e = parseDayKey(job.endDate) || s;
@@ -277,6 +351,13 @@ export default function Scheduler() {
     (jobId: string, dk: string) =>
       equipment.filter((r) => r.jobId === jobId && r.scheduledDate === dk),
     [equipment],
+  );
+
+  // Truck chips for a (job, day).
+  const trucksFor = useCallback(
+    (jobId: string, dk: string) =>
+      trucks.filter((r) => r.jobId === jobId && r.scheduledDate === dk),
+    [trucks],
   );
 
   // ---- drag handlers ----
@@ -300,6 +381,16 @@ export default function Scheduler() {
     e.dataTransfer.effectAllowed = "copy";
   };
 
+  const onDragStartTruck = (
+    e: React.DragEvent,
+    truckName: string,
+    color: string | null,
+  ) => {
+    const payload: DragPayload = { kind: "truck", truckName, color };
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
   const onDropCell = (e: React.DragEvent, job: Job, dk: string) => {
     e.preventDefault();
     const raw = e.dataTransfer.getData("application/json");
@@ -317,11 +408,15 @@ export default function Scheduler() {
           techName: payload.techName,
           techDisplay: payload.techDisplay,
         });
-      } else {
+      } else if (payload.kind === "equipment") {
         setEquipQty(1);
         setEquipTech("none");
         setEquipNotes("");
         setEquipDrop({ job, dayKey: dk, equipmentName: payload.equipmentName });
+      } else {
+        setTruckDriver("none");
+        setTruckNotes("");
+        setTruckDrop({ job, dayKey: dk, truckName: payload.truckName });
       }
     } catch {
       /* ignore */
@@ -378,6 +473,28 @@ export default function Scheduler() {
     utils.coordinator.equipmentAssignments.invalidate();
   };
 
+  const doScheduleTruck = async () => {
+    if (!truckDrop) return;
+    await setTruck.mutateAsync({
+      jobId: truckDrop.job.id,
+      truckName: truckDrop.truckName,
+      scheduledDate: truckDrop.dayKey,
+      driverName: truckDriver === "none" ? undefined : truckDriver,
+      notes: truckNotes.trim() || undefined,
+    });
+    toast.success(
+      `${truckDrop.truckName} scheduled on ${truckDrop.dayKey}.`,
+    );
+    setTruckDrop(null);
+    utils.coordinator.truckAssignments.invalidate();
+  };
+
+  const removeTruckChip = async (row: TruckRow) => {
+    await removeTruck.mutateAsync({ id: row.id });
+    toast.success(`Removed ${row.truckName} from ${row.scheduledDate}.`);
+    utils.coordinator.truckAssignments.invalidate();
+  };
+
   const weekLabel = `${days[0].toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -394,24 +511,33 @@ export default function Scheduler() {
       key={job.id}
       className="grid grid-cols-[240px_repeat(7,1fr)] border-b border-border hover:bg-accent/20"
     >
-      {/* Job label */}
-      <div className="px-4 py-3 border-r border-border">
-        <div className="flex items-center gap-1.5">
-          <Building2 className="size-3.5 text-muted-foreground shrink-0" />
-          <span className="font-medium text-sm truncate">
-            {job.company ?? "—"}
-          </span>
+      {/* Job label — click to open full detail */}
+      <button
+        type="button"
+        onClick={() => setDetailJob(job)}
+        title="View job details & plan"
+        className="group/jobcell text-left px-4 py-3 border-r border-border flex items-start gap-1.5 hover:bg-accent/40 transition-colors"
+      >
+        <ChevronRightIcon className="size-4 mt-0.5 text-muted-foreground shrink-0 transition-transform group-hover/jobcell:translate-x-0.5 group-hover/jobcell:text-primary" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+            <span className="font-medium text-sm truncate group-hover/jobcell:text-primary">
+              {job.company ?? "—"}
+            </span>
+          </div>
+          <div className="text-xs text-muted-foreground truncate mt-0.5">
+            {job.jobAddress ?? "No address"}
+          </div>
         </div>
-        <div className="text-xs text-muted-foreground truncate mt-0.5">
-          {job.jobAddress ?? "No address"}
-        </div>
-      </div>
+      </button>
 
       {/* Day cells */}
       {dayKeys.map((dk, i) => {
         const covers = jobCoversDay(job, dk);
         const chips = chipsFor(job.id, dk);
         const equips = equipFor(job.id, dk);
+        const truckChips = trucksFor(job.id, dk);
         return (
           <div
             key={i}
@@ -469,6 +595,32 @@ export default function Scheduler() {
                     <span className="truncate">
                       {eq.quantity > 1 ? `${eq.quantity}× ` : ""}
                       {eq.equipmentName}
+                    </span>
+                    <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0 ml-auto" />
+                  </button>
+                );
+              })}
+              {truckChips.map((tk) => {
+                const color = colorByTruck.get(tk.truckName) ?? "#475569";
+                return (
+                  <button
+                    key={`t-${tk.id}`}
+                    type="button"
+                    onClick={() => removeTruckChip(tk)}
+                    title={`${tk.truckName}${
+                      tk.driverName ? ` • driver: ${tk.driverName}` : ""
+                    }${tk.notes ? ` • ${tk.notes}` : ""} — click to remove`}
+                    className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border truncate flex items-center gap-1 border-dashed"
+                    style={{
+                      backgroundColor: `${color}14`,
+                      borderColor: `${color}66`,
+                      color,
+                    }}
+                  >
+                    <Truck className="size-3 shrink-0" />
+                    <span className="truncate">
+                      {tk.truckName}
+                      {tk.driverName ? ` · ${tk.driverName}` : ""}
                     </span>
                     <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0 ml-auto" />
                   </button>
@@ -615,12 +767,12 @@ export default function Scheduler() {
           <div className="p-3 border-b border-border">
             <h2 className="font-bold text-sm mb-2">Resources</h2>
             {/* Tabs */}
-            <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-lg mb-2">
+            <div className="grid grid-cols-3 gap-1 p-1 bg-muted rounded-lg mb-2">
               <button
                 type="button"
                 onClick={() => setTab("workers")}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 text-xs font-medium rounded-md py-1.5 transition-colors",
+                  "flex items-center justify-center gap-1 text-xs font-medium rounded-md py-1.5 transition-colors",
                   tab === "workers"
                     ? "bg-card shadow-sm text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -633,7 +785,7 @@ export default function Scheduler() {
                 type="button"
                 onClick={() => setTab("equipment")}
                 className={cn(
-                  "flex items-center justify-center gap-1.5 text-xs font-medium rounded-md py-1.5 transition-colors",
+                  "flex items-center justify-center gap-1 text-xs font-medium rounded-md py-1.5 transition-colors",
                   tab === "equipment"
                     ? "bg-card shadow-sm text-foreground"
                     : "text-muted-foreground hover:text-foreground",
@@ -642,11 +794,26 @@ export default function Scheduler() {
                 <Package className="size-3.5" />
                 Equipment
               </button>
+              <button
+                type="button"
+                onClick={() => setTab("trucks")}
+                className={cn(
+                  "flex items-center justify-center gap-1 text-xs font-medium rounded-md py-1.5 transition-colors",
+                  tab === "trucks"
+                    ? "bg-card shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Truck className="size-3.5" />
+                Trucks
+              </button>
             </div>
             <p className="text-[11px] text-muted-foreground mb-2">
               {tab === "workers"
                 ? "Drag a name onto a job/day cell."
-                : "Drag equipment onto a job/day cell (e.g. No Parking signs the day before)."}
+                : tab === "equipment"
+                  ? "Drag equipment onto a job/day cell (e.g. No Parking signs the day before)."
+                  : "Drag a truck onto a job/day cell and pick the driver for that day."}
             </p>
             <div className="relative">
               <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -654,7 +821,11 @@ export default function Scheduler() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={
-                  tab === "workers" ? "Search workers" : "Search equipment"
+                  tab === "workers"
+                    ? "Search workers"
+                    : tab === "equipment"
+                      ? "Search equipment"
+                      : "Search trucks"
                 }
                 className="pl-8 h-9"
               />
@@ -702,35 +873,68 @@ export default function Scheduler() {
                   })}
                 </ul>
               )
-            ) : filteredEquipment.length === 0 ? (
+            ) : tab === "equipment" ? (
+              filteredEquipment.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground">
+                  No equipment found.
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {filteredEquipment.map((eq) => {
+                    const color = eq.color ?? "#475569";
+                    return (
+                      <li
+                        key={eq.id}
+                        draggable
+                        onDragStart={(e) =>
+                          onDragStartEquipment(e, eq.name, eq.color)
+                        }
+                        className="px-3 py-2.5 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
+                      >
+                        <GripVertical className="size-4 text-muted-foreground shrink-0" />
+                        <span
+                          className="size-3 rounded-sm shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {eq.name}
+                          </div>
+                          {eq.category && (
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {eq.category}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )
+            ) : filteredTrucks.length === 0 ? (
               <div className="p-4 text-sm text-muted-foreground">
-                No equipment found.
+                No trucks found.
               </div>
             ) : (
               <ul className="divide-y divide-border">
-                {filteredEquipment.map((eq) => {
-                  const color = eq.color ?? "#475569";
+                {filteredTrucks.map((tk) => {
+                  const color = tk.color ?? "#475569";
                   return (
                     <li
-                      key={eq.id}
+                      key={tk.id}
                       draggable
-                      onDragStart={(e) =>
-                        onDragStartEquipment(e, eq.name, eq.color)
-                      }
+                      onDragStart={(e) => onDragStartTruck(e, tk.name, tk.color)}
                       className="px-3 py-2.5 flex items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-accent/60 transition-colors"
                     >
                       <GripVertical className="size-4 text-muted-foreground shrink-0" />
-                      <span
-                        className="size-3 rounded-sm shrink-0"
-                        style={{ backgroundColor: color }}
-                      />
+                      <Truck className="size-4 shrink-0" style={{ color }} />
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">
-                          {eq.name}
+                          {tk.name}
                         </div>
-                        {eq.category && (
+                        {tk.plate && (
                           <div className="text-[11px] text-muted-foreground truncate">
-                            {eq.category}
+                            {tk.plate}
                           </div>
                         )}
                       </div>
@@ -963,6 +1167,281 @@ export default function Scheduler() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Schedule-truck-on-drop dialog */}
+      <Dialog
+        open={!!truckDrop}
+        onOpenChange={(v) => {
+          if (!v) setTruckDrop(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign truck</DialogTitle>
+            <DialogDescription>
+              {truckDrop && (
+                <>
+                  Assign <strong>{truckDrop.truckName}</strong> to{" "}
+                  <strong>{truckDrop.job.company ?? "this job"}</strong> on{" "}
+                  <strong>{truckDrop.dayKey}</strong>.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Driver (optional)
+              </label>
+              <Select value={truckDriver} onValueChange={setTruckDriver}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No driver yet</SelectItem>
+                  {(techQuery.data ?? []).map((w) => (
+                    <SelectItem key={w.id} value={w.airtableName}>
+                      {w.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Notes (optional)
+              </label>
+              <Input
+                value={truckNotes}
+                onChange={(e) => setTruckNotes(e.target.value)}
+                placeholder="e.g. fuel, trailer, special instructions"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setTruckDrop(null)}>
+              <X className="size-4 mr-1" />
+              Cancel
+            </Button>
+            <Button onClick={doScheduleTruck} disabled={setTruck.isPending}>
+              {setTruck.isPending && (
+                <Loader2 className="size-4 mr-1 animate-spin" />
+              )}
+              Assign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Job detail side panel */}
+      <Sheet open={!!detailJob} onOpenChange={(v) => !v && setDetailJob(null)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0">
+          {detailJob && (
+            <div className="flex flex-col">
+              <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {detailJob.status && (
+                    <Badge variant="secondary">{detailJob.status}</Badge>
+                  )}
+                  {detailJob.subStatus && (
+                    <Badge variant="outline">{detailJob.subStatus}</Badge>
+                  )}
+                </div>
+                <SheetTitle className="text-left text-xl">
+                  {detailJob.company ?? "Untitled job"}
+                </SheetTitle>
+                {detailJob.projectTitle && (
+                  <SheetDescription className="text-left">
+                    {detailJob.projectTitle}
+                  </SheetDescription>
+                )}
+              </SheetHeader>
+
+              <div className="px-5 py-4 space-y-5 text-sm">
+                {/* Key facts */}
+                <div className="space-y-2.5">
+                  <DetailRow icon={<MapPin className="size-4" />} label="Address">
+                    {detailJob.jobAddress ?? "—"}
+                  </DetailRow>
+                  <DetailRow icon={<Calendar className="size-4" />} label="Dates">
+                    {parseDayKey(detailJob.startDate) || "—"}
+                    {detailJob.endDate &&
+                    parseDayKey(detailJob.endDate) !== parseDayKey(detailJob.startDate)
+                      ? ` → ${parseDayKey(detailJob.endDate)}`
+                      : ""}
+                  </DetailRow>
+                  {detailJob.setupDuration && (
+                    <DetailRow icon={<Clock className="size-4" />} label="Setup">
+                      {detailJob.setupDuration}
+                    </DetailRow>
+                  )}
+                  {(detailJob.municipality || detailJob.zone) && (
+                    <DetailRow icon={<MapIcon className="size-4" />} label="Area">
+                      {[detailJob.municipality, detailJob.zone]
+                        .filter(Boolean)
+                        .join(" • ")}
+                    </DetailRow>
+                  )}
+                  {detailJob.requestorName && (
+                    <DetailRow icon={<UserIcon className="size-4" />} label="Requestor">
+                      {detailJob.requestorName}
+                    </DetailRow>
+                  )}
+                  {detailJob.siteContactPhone && (
+                    <DetailRow icon={<Phone className="size-4" />} label="Site contact">
+                      <a
+                        href={`tel:${detailJob.siteContactPhone}`}
+                        className="text-primary hover:underline"
+                      >
+                        {detailJob.siteContactPhone}
+                      </a>
+                    </DetailRow>
+                  )}
+                  {detailJob.requestId && (
+                    <DetailRow icon={<FileText className="size-4" />} label="Request ID">
+                      {detailJob.requestId}
+                    </DetailRow>
+                  )}
+                </div>
+
+                {/* Technicians by phase */}
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-1.5">
+                    <Users className="size-4 text-muted-foreground" />
+                    Technicians
+                  </h3>
+                  <div className="space-y-1.5">
+                    {PHASES.map((p) => {
+                      const list =
+                        p === "Preparation"
+                          ? detailJob.techPrep
+                          : p === "Setup"
+                            ? detailJob.techSetup
+                            : detailJob.techPickup;
+                      return (
+                        <div key={p} className="flex items-start gap-2">
+                          <span
+                            className={cn(
+                              "text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 mt-0.5",
+                              PHASE_COLOR[p],
+                            )}
+                          >
+                            {p}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {list && list.length > 0 ? list.join(", ") : "Unassigned"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Job plan */}
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-1.5">
+                    <FileText className="size-4 text-muted-foreground" />
+                    Job plan
+                  </h3>
+                  {detailJob.planFile && detailJob.planFile.length > 0 ? (
+                    <div className="space-y-3">
+                      {detailJob.planFile.map((f, idx) => (
+                        <PlanPreview key={idx} url={f.url} filename={f.filename} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">
+                      No plan attached to this job.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+}
+
+function DetailRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="text-muted-foreground mt-0.5 shrink-0">{icon}</span>
+      <div className="min-w-0">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+        <div className="break-words">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function PlanPreview({ url, filename }: { url: string; filename?: string }) {
+  const lower = (filename ?? url).toLowerCase();
+  const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(lower);
+  const isPdf = /\.pdf(\?|$)/.test(lower);
+  const name = filename ?? "Plan file";
+  return (
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-muted/50">
+        <span className="text-xs font-medium truncate">{name}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="p-1.5 rounded hover:bg-accent"
+            title="Open in new tab"
+          >
+            <ExternalLink className="size-3.5" />
+          </a>
+          <a
+            href={url}
+            download={filename}
+            className="p-1.5 rounded hover:bg-accent"
+            title="Download"
+          >
+            <Download className="size-3.5" />
+          </a>
+        </div>
+      </div>
+      {isImage ? (
+        <a href={url} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={url}
+            alt={name}
+            className="w-full max-h-80 object-contain bg-background"
+          />
+        </a>
+      ) : isPdf ? (
+        <iframe
+          src={url}
+          title={name}
+          className="w-full h-80 bg-background"
+        />
+      ) : (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 px-3 py-4 text-sm text-primary hover:underline"
+        >
+          <FileText className="size-4" />
+          Open {name}
+        </a>
+      )}
     </div>
   );
 }

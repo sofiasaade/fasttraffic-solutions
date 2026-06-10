@@ -161,3 +161,19 @@
 - [x] Apply orange/blue brand palette across theme tokens (orange primary, navy sidebar)
 - [x] Show FTS logo next to Fast Traffic name (coordinator sidebar, tech header, login)
 - [x] Show company logo next to "Fast Traffic OS" in login and dashboard sidebar
+
+
+## Feature 20: Scheduler job detail panel
+- [x] Add expand chevron + clickable job label in each Scheduler row
+- [x] Open a detail side panel (Sheet) with full job info (company, title, address, dates, setup, status/sub-status, municipality/zone, contact, techs by phase)
+- [x] Show the job plan (planFile) with inline preview (image/PDF) and open/download links
+- [x] Empty/loading states; close button
+
+## Feature 21: Trucks resource tab
+- [x] truck_catalog table (id, name, plate, color, active) seeded with default trucks
+- [x] truck_assignments table (jobId, truckName, scheduledDate, driverName?, notes, createdBy)
+- [x] opsDb helpers: listTruckCatalog, seedTruckCatalog, setTruckAssignment, listTruckAssignmentsForWeek, removeTruckAssignment
+- [x] coordinator procedures: truckCatalog, truckAssignments(week), setTruck, removeTruck
+- [x] Scheduler: third tab Trucks in Resources panel; drag truck to job/day cell -> dialog (date, optional driver, notes)
+- [x] Truck chips render per day cell (distinct dashed style), click to remove
+- [x] Integration test for truck assignment persistence + removal (no Airtable write) (35 tests passing)

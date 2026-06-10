@@ -287,3 +287,44 @@ export const equipmentAssignments = mysqlTable("equipment_assignments", {
 export type EquipmentAssignment = typeof equipmentAssignments.$inferSelect;
 export type InsertEquipmentAssignment =
   typeof equipmentAssignments.$inferInsert;
+
+
+/**
+ * Truck catalog: the fleet of trucks/vehicles a worker can be assigned to drive
+ * on a given day. Local-only; Airtable is read-only.
+ */
+export const truckCatalog = mysqlTable("truck_catalog", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull().unique(),
+  /** Optional license plate / unit number. */
+  plate: varchar("plate", { length: 32 }),
+  /** Hex color used for the chip in the timeline. */
+  color: varchar("color", { length: 16 }),
+  active: boolean("active").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TruckCatalogItem = typeof truckCatalog.$inferSelect;
+export type InsertTruckCatalogItem = typeof truckCatalog.$inferInsert;
+
+/**
+ * Truck assignments: a truck scheduled to a job on a specific day, optionally
+ * with the worker (driver) who will drive it that day. Local-only.
+ */
+export const truckAssignments = mysqlTable("truck_assignments", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  truckName: varchar("truckName", { length: 128 }).notNull(),
+  /** Local date of the truck assignment, stored as YYYY-MM-DD. */
+  scheduledDate: varchar("scheduledDate", { length: 10 }).notNull(),
+  /** Optional driver (worker) for the truck that day. */
+  driverName: varchar("driverName", { length: 128 }),
+  notes: text("notes"),
+  createdByUserId: int("createdByUserId"),
+  createdByName: varchar("createdByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TruckAssignment = typeof truckAssignments.$inferSelect;
+export type InsertTruckAssignment = typeof truckAssignments.$inferInsert;
