@@ -12,47 +12,56 @@ import {
 } from "@/components/ui/select";
 import {
   Users,
-  MapPin,
-  Calendar,
   Loader2,
   Settings2,
   AlertCircle,
-  Building2,
+  ChevronDown,
 } from "lucide-react";
-import { fmtDate, fmtTimeRange, dayKey } from "@/lib/format";
+import { fmtDate, dayKey } from "@/lib/format";
 import AssignmentDialog from "@/components/AssignmentDialog";
 import JobModifyDialog from "@/components/JobModifyDialog";
 import { cn } from "@/lib/utils";
 
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 
-function PhaseChips({ job }: { job: Job }) {
-  const groups: { label: string; techs: string[] }[] = [
-    { label: "Prep", techs: job.techPrep },
-    { label: "Setup", techs: job.techSetup },
-    { label: "Pickup", techs: job.techPickup },
-  ];
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {groups.map((g) => (
-        <div
-          key={g.label}
-          className={cn(
-            "text-xs px-2 py-1 rounded-md border",
-            g.techs.length
-              ? "border-primary/30 bg-primary/5 text-foreground"
-              : "border-dashed border-muted-foreground/30 text-muted-foreground",
-          )}
-        >
-          <span className="font-semibold">{g.label}:</span>{" "}
-          {g.techs.length ? g.techs.join(", ") : "—"}
-        </div>
-      ))}
-    </div>
-  );
+// Section definitions in display order. Status values match exact Airtable names.
+type SectionKey = "submitted" | "approved" | "field";
+
+const SECTIONS: {
+  key: SectionKey;
+  status: string;
+  title: string;
+  caption: string;
+  dot: string;
+}[] = [
+  {
+    key: "submitted",
+    status: "Permit Request Submitted",
+    title: "Permit Request Submitted",
+    caption: "Submitted — prepare for upcoming days",
+    dot: "#2563eb",
+  },
+  {
+    key: "approved",
+    status: "Permit Approved",
+    title: "Permit Approved",
+    caption: "Approved — ready to schedule",
+    dot: "#ea580c",
+  },
+  {
+    key: "field",
+    status: "Field",
+    title: "Field",
+    caption: "Ongoing — equipment deployed until pickup is ordered",
+    dot: "#16a34a",
+  },
+];
+
+function isAssigned(j: Job): boolean {
+  return Boolean(j.techPrep.length || j.techSetup.length || j.techPickup.length);
 }
 
-function JobCard({
+function JobRow({
   job,
   onAssign,
   onModify,
@@ -61,65 +70,127 @@ function JobCard({
   onAssign: (j: Job) => void;
   onModify: (j: Job) => void;
 }) {
+  const assigned = isAssigned(job);
   return (
-    <div className="bg-card border rounded-xl p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Building2 className="size-4 text-muted-foreground shrink-0" />
-            <h3 className="font-semibold truncate">{job.company ?? "—"}</h3>
-          </div>
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1">
-            <MapPin className="size-3.5 shrink-0" />
-            <span className="truncate">{job.jobAddress ?? "No address"}</span>
-          </div>
-        </div>
-        <Badge variant={job.status === "Field" ? "default" : "secondary"}>
-          {job.status}
-        </Badge>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground mt-3">
-        <span className="flex items-center gap-1.5">
-          <Calendar className="size-3.5" />
-          {fmtDate(job.startDate)} → {fmtDate(job.endDate)}
-        </span>
+    <tr className="border-t border-border hover:bg-accent/40 transition-colors">
+      <td className="px-4 py-3 align-top">
+        <div className="font-medium text-sm">{job.company ?? "—"}</div>
         {job.zone && (
-          <span className="flex items-center gap-1.5">
-            <MapPin className="size-3.5" />
-            {job.zone}
-          </span>
+          <div className="text-xs text-muted-foreground mt-0.5">{job.zone}</div>
         )}
-      </div>
+      </td>
+      <td className="px-4 py-3 align-top text-sm text-muted-foreground max-w-[280px]">
+        {job.jobAddress ?? "No address"}
+      </td>
+      <td className="px-4 py-3 align-top text-sm whitespace-nowrap">
+        {fmtDate(job.startDate)}
+      </td>
+      <td className="px-4 py-3 align-top">
+        {assigned ? (
+          <Badge variant="secondary" className="font-normal">
+            Assigned
+          </Badge>
+        ) : (
+          <Badge variant="destructive" className="font-normal">
+            Unassigned
+          </Badge>
+        )}
+      </td>
+      <td className="px-4 py-3 align-top">
+        <div className="flex gap-2 justify-end">
+          <Button size="sm" onClick={() => onAssign(job)}>
+            <Users className="size-4 mr-1" />
+            Assign
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onModify(job)}>
+            <Settings2 className="size-4 mr-1" />
+            Modify
+          </Button>
+        </div>
+      </td>
+    </tr>
+  );
+}
 
-      {job.setupDuration && (
-        <div className="text-xs text-muted-foreground mt-1">
-          {job.setupDuration}
+function SectionTable({
+  title,
+  caption,
+  dot,
+  jobs,
+  onAssign,
+  onModify,
+}: {
+  title: string;
+  caption: string;
+  dot: string;
+  jobs: Job[];
+  onAssign: (j: Job) => void;
+  onModify: (j: Job) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section className="bg-card border rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-accent/40 transition-colors"
+      >
+        <span
+          className="size-3 rounded-full ring-2 ring-white shadow shrink-0"
+          style={{ background: dot }}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold">{title}</h2>
+            <Badge variant="outline">{jobs.length}</Badge>
+          </div>
+          <p className="text-xs text-muted-foreground">{caption}</p>
+        </div>
+        <ChevronDown
+          className={cn(
+            "size-5 text-muted-foreground transition-transform",
+            !open && "-rotate-90",
+          )}
+        />
+      </button>
+
+      {open && (
+        <div className="overflow-x-auto">
+          {jobs.length === 0 ? (
+            <div className="text-sm text-muted-foreground px-4 py-6 border-t border-border">
+              No jobs in this section match the filters.
+            </div>
+          ) : (
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Company</th>
+                  <th className="px-4 py-2 font-medium">Address</th>
+                  <th className="px-4 py-2 font-medium">Start date</th>
+                  <th className="px-4 py-2 font-medium">Assignment</th>
+                  <th className="px-4 py-2 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((j) => (
+                  <JobRow
+                    key={j.id}
+                    job={j}
+                    onAssign={onAssign}
+                    onModify={onModify}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
-
-      <div className="mt-3">
-        <PhaseChips job={job} />
-      </div>
-
-      <div className="flex gap-2 mt-4">
-        <Button size="sm" onClick={() => onAssign(job)}>
-          <Users className="size-4 mr-1" />
-          Assign
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => onModify(job)}>
-          <Settings2 className="size-4 mr-1" />
-          Modify
-        </Button>
-      </div>
-    </div>
+    </section>
   );
 }
 
 export default function DispatchBoard() {
-  const jobsQuery = trpc.coordinator.dispatchJobs.useQuery();
+  const jobsQuery = trpc.coordinator.boardJobs.useQuery();
   const [zone, setZone] = useState("all");
-  const [status, setStatus] = useState("all");
   const [date, setDate] = useState("");
   const [assignJob, setAssignJob] = useState<Job | null>(null);
   const [modifyJob, setModifyJob] = useState<Job | null>(null);
@@ -131,23 +202,33 @@ export default function DispatchBoard() {
   }, [jobsQuery.data]);
 
   const filtered = useMemo(() => {
-    let jobs = jobsQuery.data ?? [];
+    let jobs = (jobsQuery.data ?? []) as Job[];
     if (zone !== "all") jobs = jobs.filter((j) => j.zone === zone);
-    if (status !== "all") jobs = jobs.filter((j) => j.status === status);
-    if (date) jobs = jobs.filter((j) => {
-      const s = dayKey(j.startDate);
-      const e = dayKey(j.endDate) || s;
-      return date >= s && date <= e;
-    });
+    if (date)
+      jobs = jobs.filter((j) => {
+        const s = dayKey(j.startDate);
+        const e = dayKey(j.endDate) || s;
+        return date >= s && date <= e;
+      });
     return jobs;
-  }, [jobsQuery.data, zone, status, date]);
+  }, [jobsQuery.data, zone, date]);
 
-  const unassigned = filtered.filter(
-    (j) => !j.techPrep.length && !j.techSetup.length && !j.techPickup.length,
-  );
-  const active = filtered.filter(
-    (j) => j.techPrep.length || j.techSetup.length || j.techPickup.length,
-  );
+  // Group jobs by section status. Sort each section by start date ascending.
+  const grouped = useMemo(() => {
+    const map: Record<SectionKey, Job[]> = {
+      submitted: [],
+      approved: [],
+      field: [],
+    };
+    for (const j of filtered) {
+      const section = SECTIONS.find((s) => s.status === j.status);
+      if (section) map[section.key].push(j);
+    }
+    (Object.keys(map) as SectionKey[]).forEach((k) =>
+      map[k].sort((a, b) => dayKey(a.startDate).localeCompare(dayKey(b.startDate))),
+    );
+    return map;
+  }, [filtered]);
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
@@ -157,7 +238,7 @@ export default function DispatchBoard() {
             Dispatch Board
           </h1>
           <p className="text-sm text-muted-foreground">
-            Jobs in Field / Permit Approved status
+            Jobs grouped by status — Submitted, Approved, and Field
           </p>
         </div>
         <Button
@@ -175,18 +256,6 @@ export default function DispatchBoard() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <div className="w-40">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger>
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="Field">Field</SelectItem>
-              <SelectItem value="Permit Approved">Permit Approved</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
         <div className="w-44">
           <Select value={zone} onValueChange={setZone}>
             <SelectTrigger>
@@ -209,13 +278,12 @@ export default function DispatchBoard() {
             onChange={(e) => setDate(e.target.value)}
           />
         </div>
-        {(zone !== "all" || status !== "all" || date) && (
+        {(zone !== "all" || date) && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setZone("all");
-              setStatus("all");
               setDate("");
             }}
           >
@@ -238,52 +306,18 @@ export default function DispatchBoard() {
       )}
 
       {jobsQuery.data && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {/* Unassigned */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <h2 className="font-bold text-lg">Unassigned</h2>
-              <Badge variant="destructive">{unassigned.length}</Badge>
-            </div>
-            <div className="space-y-3">
-              {unassigned.length === 0 && (
-                <div className="text-sm text-muted-foreground border border-dashed rounded-xl p-6 text-center">
-                  All filtered jobs have technicians assigned.
-                </div>
-              )}
-              {unassigned.map((j) => (
-                <JobCard
-                  key={j.id}
-                  job={j}
-                  onAssign={setAssignJob}
-                  onModify={setModifyJob}
-                />
-              ))}
-            </div>
-          </section>
-
-          {/* Active */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <h2 className="font-bold text-lg">Active / Assigned</h2>
-              <Badge>{active.length}</Badge>
-            </div>
-            <div className="space-y-3">
-              {active.length === 0 && (
-                <div className="text-sm text-muted-foreground border border-dashed rounded-xl p-6 text-center">
-                  No assigned jobs match the filters.
-                </div>
-              )}
-              {active.map((j) => (
-                <JobCard
-                  key={j.id}
-                  job={j}
-                  onAssign={setAssignJob}
-                  onModify={setModifyJob}
-                />
-              ))}
-            </div>
-          </section>
+        <div className="space-y-5">
+          {SECTIONS.map((s) => (
+            <SectionTable
+              key={s.key}
+              title={s.title}
+              caption={s.caption}
+              dot={s.dot}
+              jobs={grouped[s.key]}
+              onAssign={setAssignJob}
+              onModify={setModifyJob}
+            />
+          ))}
         </div>
       )}
 

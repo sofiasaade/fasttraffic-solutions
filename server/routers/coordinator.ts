@@ -49,6 +49,12 @@ export const coordinatorRouter = router({
     return jobs.map(withZone);
   }),
 
+  // Board table: full job shape for all three statuses (Field, Permit Approved, Permit Request Submitted).
+  boardJobs: adminProcedure.query(async () => {
+    const jobs = await fetchMapJobs();
+    return jobs.map(withZone);
+  }),
+
   // Jobs for the coordinator map view: Field, Permit Approved, Permit Request Submitted.
   mapJobs: adminProcedure.query(async () => {
     const jobs = await fetchMapJobs();

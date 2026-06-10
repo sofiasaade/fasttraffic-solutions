@@ -87,3 +87,10 @@
 - [x] Color-code markers: Permit Approved (orange), Field (green), Permit Request Submitted (blue)
 - [x] Add legend + per-status toggle filters on the map page
 - [x] Update + pass integration test for three statuses (23 tests passing)
+
+## Feature 13: Dispatch Board as grouped tables
+- [x] boardJobs endpoint returns all three statuses with full job shape
+- [x] Table layout grouped into Permit Request Submitted / Permit Approved / Field
+- [x] Columns: Company, Address, Start date (+ assignment status + actions)
+- [x] Collapsible sections, sorted by start date; zone/date filters retained
+- [x] Type-check + 23 tests passing
