@@ -659,21 +659,24 @@ export default function Scheduler() {
             )}
           >
             <div className="flex flex-col gap-1 h-full min-w-0">
-              {/* Continuous duration bar: spans the full cell on covered days,
-                  rounded only at the start/end edges. */}
-              {covers && (
-                <div
-                  className={cn(
-                    "h-1.5 bg-primary/40",
-                    isStart && "rounded-l-full",
-                    isEnd && "rounded-r-full",
-                    // Bleed into the cell borders so the bar reads as one
-                    // continuous block across multiple days.
-                    !isStart && "-ml-1.5",
-                    !isEnd && "-mr-1.5",
-                  )}
-                />
-              )}
+              {/* Fixed-height top band for the duration bar so it stays aligned
+                  across every day cell in the row, no matter how many chips a
+                  given cell holds. */}
+              <div className="h-1.5 shrink-0">
+                {covers && (
+                  <div
+                    className={cn(
+                      "h-1.5 bg-primary/40",
+                      isStart && "rounded-l-full",
+                      isEnd && "rounded-r-full",
+                      // Bleed into the cell borders so the bar reads as one
+                      // continuous block across multiple days.
+                      !isStart && "-ml-1.5",
+                      !isEnd && "-mr-1.5",
+                    )}
+                  />
+                )}
+              </div>
               {chips.map((c) => (
                 <button
                   key={`w-${c.id}`}
