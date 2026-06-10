@@ -684,7 +684,10 @@ export default function Scheduler() {
           ) : (
             <div className="min-w-[760px]">
               {/* Day header */}
-              <div className="grid grid-cols-[240px_repeat(7,1fr)] sticky top-0 z-10 bg-card border-b border-border">
+              <div className={cn(
+                "grid grid-cols-[240px_repeat(7,1fr)] sticky top-0 bg-card border-b border-border",
+                detailJob ? "z-0" : "z-10",
+              )}>
                 <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Job
                 </div>
@@ -734,7 +737,10 @@ export default function Scheduler() {
                             [section.key]: !c[section.key],
                           }))
                         }
-                        className="w-full flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px] z-[5]"
+                        className={cn(
+                          "w-full flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px]",
+                          detailJob ? "z-0" : "z-[5]",
+                        )}
                       >
                         <ChevronDown
                           className={cn(
@@ -1237,7 +1243,7 @@ export default function Scheduler() {
 
       {/* Job detail side panel */}
       <Sheet open={!!detailJob} onOpenChange={(v) => !v && setDetailJob(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0">
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto p-0 bg-background z-[60]">
           {detailJob && (
             <div className="flex flex-col">
               <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
