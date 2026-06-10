@@ -552,7 +552,7 @@ export default function Scheduler() {
     const isExpanded = expandedJobs.has(job.id);
     return (
     <div key={job.id} className="border-b border-border">
-     <div className="grid grid-cols-[240px_repeat(7,1fr)] hover:bg-accent/20">
+     <div className="grid grid-cols-[240px_repeat(7,1fr)] items-stretch hover:bg-accent/20">
       {/* Job label — click to expand inline detail */}
       <button
         type="button"
@@ -586,6 +586,10 @@ export default function Scheduler() {
         const chips = chipsFor(job.id, dk);
         const equips = equipFor(job.id, dk);
         const truckChips = trucksFor(job.id, dk);
+        const jobStart = parseDayKey(job.startDate);
+        const jobEnd = parseDayKey(job.endDate) || jobStart;
+        const isStart = covers && dk === jobStart;
+        const isEnd = covers && dk === jobEnd;
         return (
           <div
             key={i}
@@ -595,14 +599,26 @@ export default function Scheduler() {
             }}
             onDrop={(e) => onDropCell(e, job, dk)}
             className={cn(
-              "border-l border-border min-h-[64px] p-1.5 transition-colors",
+              "border-l border-border min-h-[64px] h-full p-1.5 transition-colors",
               covers ? "bg-primary/5" : "bg-transparent",
               "hover:bg-primary/10",
             )}
           >
-            <div className="space-y-1">
-              {covers && dk === parseDayKey(job.startDate) && (
-                <div className="h-1.5 rounded-full bg-primary/40" />
+            <div className="flex flex-col gap-1 h-full min-w-0">
+              {/* Continuous duration bar: spans the full cell on covered days,
+                  rounded only at the start/end edges. */}
+              {covers && (
+                <div
+                  className={cn(
+                    "h-1.5 bg-primary/40",
+                    isStart && "rounded-l-full",
+                    isEnd && "rounded-r-full",
+                    // Bleed into the cell borders so the bar reads as one
+                    // continuous block across multiple days.
+                    !isStart && "-ml-1.5",
+                    !isEnd && "-mr-1.5",
+                  )}
+                />
               )}
               {chips.map((c) => (
                 <button
