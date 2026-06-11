@@ -396,22 +396,22 @@
 - [x] TypeScript clean + 127 tests passing + verified in browser (end-to-end via tRPC + DOM)
 
 ## Feature 47: Pending jobs (no technician assigned) + coordinator alert
-- [ ] Backend: derive jobs in the active window with NO technician (scheduler_assignment) for their scheduled date(s)
-- [ ] Expose a `pendingJobs` tRPC query returning the unassigned jobs (emoji, dates, impact)
-- [ ] Scheduler: show a "Pending" badge on job rows with no technician assigned
-- [ ] Coordinator alert: badge/banner with count of pending jobs + a panel listing them
-- [ ] Dashboard: show pending jobs count
-- [ ] Tests passing + TypeScript clean
+- [x] Backend: derive jobs in the active window with NO technician (scheduler_assignment) for their scheduled date(s)
+- [x] Expose a `pendingJobs` tRPC query returning the unassigned jobs (emoji, dates, impact)
+- [x] Scheduler: show a "Pending" badge on job rows with no technician assigned
+- [x] Coordinator alert: badge/banner with count of pending jobs + a panel listing them
+- [x] Dashboard: show pending jobs count
+- [x] Tests passing + TypeScript clean
 
 ## Feature 48: Tentative vs Confirmed assignments (suppress technician alerts until confirmed)
-- [ ] Schema: add `status` (tentative|confirmed) + confirmedAt/confirmedBy to job_assignments; push migration
-- [ ] assignTechnicians/setScheduled create rows as TENTATIVE and send NO technician notifications
-- [ ] Add confirmAssignment / unconfirmAssignment (and confirmJob = confirm all of a job) procedures
-- [ ] Notification to the technician fires ONLY on confirm (one alert), not on assign/move
-- [ ] Scheduler/Workers: tentative chips one color (amber/dashed), confirmed chips another (green/solid)
-- [ ] Confirm button on chip + "Confirm all" per job; allow revert to tentative
-- [ ] Job status: no techs = Pending, has techs = Tentative, all confirmed = Confirmed
-- [ ] Tests passing + TypeScript clean
+- [x] Schema: add `status` (tentative|confirmed) + confirmedAt/confirmedBy to job_assignments; push migration
+- [x] assignTechnicians/setScheduled create rows as TENTATIVE and send NO technician notifications
+- [x] Add confirmAssignment / unconfirmAssignment (and confirmJob = confirm all of a job) procedures
+- [x] Notification to the technician fires ONLY on confirm (one alert), not on assign/move
+- [x] Scheduler/Workers: tentative chips one color (amber/dashed), confirmed chips another (green/solid)
+- [x] Confirm button on chip + "Confirm all" per job; allow revert to tentative
+- [x] Job status: no techs = Pending, has techs = Tentative, all confirmed = Confirmed
+- [x] Tests passing + TypeScript clean
 
 ## Feature 47 — Completed
 - [x] Schema: status/confirmedAt/confirmedByName on job_assignments (pushed)

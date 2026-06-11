@@ -1,9 +1,17 @@
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { useSession } from "@/contexts/SessionContext";
+import { useLocation } from "wouter";
+import { cn } from "@/lib/utils";
 import WeatherCard from "@/components/WeatherCard";
 import ActiveWorks from "@/components/ActiveWorks";
-import { Cone, ClipboardCheck, BellRing, Activity } from "lucide-react";
+import {
+  Cone,
+  ClipboardCheck,
+  BellRing,
+  Activity,
+  AlertTriangle,
+} from "lucide-react";
 
 type MapJob = { status: string | null };
 
@@ -17,14 +25,34 @@ function Stat({
   label,
   value,
   accent,
+  onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string | number;
   accent: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-4">
+    <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        "rounded-2xl border border-border bg-card p-5 flex items-center gap-4",
+        onClick && "cursor-pointer hover:border-rose-300 hover:shadow-sm transition-all",
+      )}
+    >
       <div
         className="flex items-center justify-center size-11 rounded-xl shrink-0"
         style={{ background: `${accent}1a`, color: accent }}
@@ -41,10 +69,15 @@ function Stat({
 
 export default function Dashboard() {
   const { user } = useSession();
+  const [, navigate] = useLocation();
   const { data: jobs } = trpc.coordinator.mapJobs.useQuery();
   const badges = trpc.coordinator.changeBadges.useQuery(undefined, {
     refetchInterval: 60_000,
   });
+  const pending = trpc.coordinator.pendingJobs.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
+  const pendingCount = pending.data?.count ?? 0;
 
   const stats = useMemo(() => {
     const list = (jobs as MapJob[] | undefined) ?? [];
@@ -85,6 +118,13 @@ export default function Dashboard() {
             label="In the field"
             value={stats.field}
             accent="#16a34a"
+          />
+          <Stat
+            icon={AlertTriangle}
+            label="Pending jobs (no technician)"
+            value={pendingCount}
+            accent="#e11d48"
+            onClick={() => navigate("/pending")}
           />
           <Stat
             icon={BellRing}
