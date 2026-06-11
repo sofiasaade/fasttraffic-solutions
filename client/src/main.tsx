@@ -9,7 +9,20 @@ import { SessionProvider } from "./contexts/SessionContext";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+// Keep data fresh against the live Airtable source: re-fetch when the user
+// returns to the app (window focus), when the network reconnects, and on mount.
+// A short staleTime avoids hammering Airtable on rapid re-renders while still
+// reflecting recent changes almost immediately.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      refetchOnMount: true,
+      staleTime: 15 * 1000,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

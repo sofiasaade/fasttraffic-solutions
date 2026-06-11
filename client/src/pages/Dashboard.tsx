@@ -11,7 +11,11 @@ import {
   BellRing,
   Activity,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { toast } from "sonner";
 
 type MapJob = { status: string | null };
 
@@ -79,6 +83,25 @@ export default function Dashboard() {
   });
   const pendingCount = pending.data?.count ?? 0;
 
+  const utils = trpc.useUtils();
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshAll = async () => {
+    setRefreshing(true);
+    try {
+      // Re-pull everything that is backed by the live Airtable source.
+      await Promise.all([
+        utils.coordinator.mapJobs.invalidate(),
+        utils.coordinator.pendingJobs.invalidate(),
+        utils.coordinator.changeBadges.invalidate(),
+      ]);
+      toast.success("Refreshed from Airtable");
+    } catch {
+      toast.error("Could not refresh. Check your connection.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const stats = useMemo(() => {
     const list = (jobs as MapJob[] | undefined) ?? [];
     const active = list.filter((j) => isActive(j.status));
@@ -92,13 +115,25 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">
-          Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Operations overview for today.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">
+            Welcome back{user?.name ? `, ${user.name.split(" ")[0]}` : ""}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Operations overview for today.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={refreshAll}
+          disabled={refreshing}
+          className="shrink-0 gap-2"
+        >
+          <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </Button>
       </div>
 
       {/* Top row: weather + key stats */}
