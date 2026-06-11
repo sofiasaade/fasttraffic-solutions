@@ -19,7 +19,6 @@ import {
 import {
   durationCategory,
   categoryHeaderClasses,
-  categoryColumnTint,
 } from "@/lib/jobDuration";
 import { isCancelledJob } from "@shared/jobStatus";
 
@@ -46,6 +45,23 @@ function statusKeyOf(p: { status: string | null; subStatus: string | null }): St
 }
 function statusMeta(key: StatusKey) {
   return STATUS_FILTERS.find((s) => s.key === key)!;
+}
+
+/* ---------------------- per-project column shading ----------------------- */
+// A soft, distinct background tint per project column so adjacent projects are
+// easy to tell apart. Cycled by the project's position in the day view.
+const COLUMN_SHADES: { header: string; cell: string }[] = [
+  { header: "bg-sky-50", cell: "bg-sky-50/40" },
+  { header: "bg-violet-50", cell: "bg-violet-50/40" },
+  { header: "bg-amber-50", cell: "bg-amber-50/40" },
+  { header: "bg-emerald-50", cell: "bg-emerald-50/40" },
+  { header: "bg-rose-50", cell: "bg-rose-50/40" },
+  { header: "bg-cyan-50", cell: "bg-cyan-50/40" },
+  { header: "bg-fuchsia-50", cell: "bg-fuchsia-50/40" },
+  { header: "bg-lime-50", cell: "bg-lime-50/40" },
+];
+function columnShade(index: number) {
+  return COLUMN_SHADES[index % COLUMN_SHADES.length];
 }
 
 /* ----------------------------- date helpers ----------------------------- */
@@ -428,13 +444,14 @@ export default function DayTimeline() {
             >
               {/* Header row */}
               <div className="sticky top-0 z-20 border-b border-r border-border bg-card" />
-              {projects.map((p) => {
+              {projects.map((p, idx) => {
                 const cat = durationCategory(p.setupDuration);
                 const h = categoryHeaderClasses(cat);
+                const shade = columnShade(idx);
                 return (
                   <div
                     key={p.id}
-                    className="sticky top-0 z-20 border-b border-r border-border bg-card"
+                    className={`sticky top-0 z-20 border-b border-r border-border ${shade.header}`}
                   >
                     <div className={`h-1 w-full ${h.bar}`} />
                     <div className="px-2 py-2">
@@ -587,12 +604,12 @@ function HourRow({
       <div className="sticky left-0 z-10 flex h-14 items-start justify-end border-b border-r border-border bg-card pr-2 pt-1 text-[11px] text-muted-foreground">
         {label12(hour)}
       </div>
-      {projects.map((p) => {
-        const cat = durationCategory(p.setupDuration);
+      {projects.map((p, idx) => {
         const blocks = p.blocks.filter((b) => {
           const start = b.startTime ? parseInt(b.startTime.slice(0, 2), 10) : null;
           return start === hour;
         });
+        const shade = columnShade(idx);
         return (
           <div
             key={p.id}
@@ -601,9 +618,7 @@ function HourRow({
               e.dataTransfer.dropEffect = "move";
             }}
             onDrop={() => onDropCell(p.id, hour)}
-            className={`relative h-14 border-b border-r border-border p-1 ${categoryColumnTint(
-              cat,
-            )} transition-colors hover:bg-accent/40`}
+            className={`relative h-14 border-b border-r border-border p-1 ${shade.cell} transition-colors hover:bg-accent/40`}
           >
             <div className="flex flex-wrap gap-1">
               {blocks.map((b) => (
