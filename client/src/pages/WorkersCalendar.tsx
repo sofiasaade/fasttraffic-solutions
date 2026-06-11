@@ -242,7 +242,7 @@ export default function WorkersCalendar() {
         <div className="overflow-x-auto rounded-lg border border-border">
           <div className="min-w-[900px]">
             {/* Column header */}
-            <div className="grid grid-cols-[200px_repeat(7,1fr)] border-b border-border bg-muted/40 sticky top-0 z-10">
+            <div className="grid grid-cols-[200px_repeat(7,minmax(0,1fr))] border-b border-border bg-muted/40 sticky top-0 z-10">
               <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
                 Technician
               </div>
@@ -276,7 +276,7 @@ export default function WorkersCalendar() {
             {technicians.map((t) => (
               <div
                 key={t.airtableName}
-                className="grid grid-cols-[200px_repeat(7,1fr)] border-b border-border last:border-b-0 hover:bg-accent/30 transition-colors"
+                className="grid grid-cols-[200px_repeat(7,minmax(0,1fr))] border-b border-border last:border-b-0 hover:bg-accent/30 transition-colors"
               >
                 {/* Name cell */}
                 <div className="px-3 py-2 flex items-start gap-2 border-r border-border">
@@ -319,7 +319,7 @@ export default function WorkersCalendar() {
                     <div
                       key={dateStr}
                       className={cn(
-                        "min-h-[60px] border-l border-border p-1 space-y-1",
+                        "min-w-0 min-h-[60px] border-l border-border p-1 space-y-1 overflow-hidden",
                         isToday && "bg-primary/5",
                         unavailable &&
                           "bg-[repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb_4px,#f3f4f6_4px,#f3f4f6_8px)]",
@@ -328,18 +328,20 @@ export default function WorkersCalendar() {
                       {assigns.map((a) => (
                         <div
                           key={a.id}
-                          title={`${a.company ?? "Job"}${
+                          title={`${PHASE_LABEL[a.phase] ?? a.phase} · ${a.company ?? a.municipality ?? "Job"}${
                             a.jobAddress ? " — " + a.jobAddress : ""
                           }${a.startTime ? ` (${a.startTime}${a.endTime ? "–" + a.endTime : ""})` : ""}`}
                           className={cn(
-                            "rounded border px-1.5 py-1 text-[10px] leading-tight truncate",
+                            "min-w-0 max-w-full rounded border px-1.5 py-1 text-[10px] leading-tight",
                             colorForJob(a.airtableJobId),
                           )}
                         >
-                          <span className="font-semibold">
+                          <div className="font-semibold truncate">
                             {PHASE_LABEL[a.phase] ?? a.phase}
-                          </span>{" "}
-                          {a.company ?? a.municipality ?? "Job"}
+                          </div>
+                          <div className="truncate opacity-90">
+                            {a.company ?? a.municipality ?? "Job"}
+                          </div>
                         </div>
                       ))}
                       {unavailable && assigns.length === 0 && (

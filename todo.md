@@ -355,7 +355,7 @@
 - [ ] Each role slot shows its own assigned count (e.g. 0/3) + time window + assigned people
 - [ ] Track flagging hours SEPARATELY from setup/install hours (flagger hours are billed to the client separately)
 - [ ] Surface a billable flagging-hours summary/report per job (and per week)
-- [ ] Confirm with user: flagging billed per person-hour vs per service block
+- [x] Confirm with user: flagging billed per person-hour vs per service block -> PER PERSON-HOUR
 - [ ] TypeScript clean + tests passing
 
 ## Feature 44: Worker recommendation engine (impact-based, override-friendly)
@@ -366,3 +366,11 @@
 - [x] Suggestions only — coordinator can override (no hard block)
 - [x] Pure helper for the matching logic in shared/ + unit tests
 - [x] TypeScript clean + tests passing
+
+## Bug fix: Workers calendar bars overflow cells
+- [x] Assignment bars now use minmax(0,1fr) columns + min-w-0 cells + truncated 2-line bar (phase + project) so they stay inside each day cell
+
+## UX: Freeze the "Job" column in Scheduler on horizontal scroll
+- [x] Make the first "Job" column sticky (left:0) so it stays visible while scrolling to see more days of the week
+- [x] Apply to both the header row and each job row; ensure background + border so content underneath doesn't show through
+- [x] TypeScript clean + verified in browser

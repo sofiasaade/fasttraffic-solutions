@@ -908,7 +908,7 @@ export default function Scheduler() {
         onClick={() => toggleJobExpanded(job.id)}
         title={isExpanded ? "Hide job details" : "Show job details & plan"}
         aria-expanded={isExpanded}
-        className="group/jobcell text-left px-4 py-3 border-r border-border flex items-start gap-1.5 hover:bg-accent/40 transition-colors"
+        className="group/jobcell sticky left-0 z-10 bg-card text-left px-4 py-3 border-r border-border flex items-start gap-1.5 hover:bg-accent/40 transition-colors"
       >
         <ChevronRightIcon
           className={cn(
@@ -1118,7 +1118,9 @@ export default function Scheduler() {
       {/* Inline expanded detail row (full width) */}
       {isExpanded && (
         <div className="bg-muted/30 border-t border-border">
-          <JobDetailInline job={job} />
+          <div className="sticky left-0 w-[calc(100vw-22rem)] max-w-[1500px]">
+            <JobDetailInline job={job} />
+          </div>
         </div>
       )}
     </div>
@@ -1294,9 +1296,9 @@ export default function Scheduler() {
               {/* Day header */}
               <div className={cn(
                 "grid grid-cols-[240px_repeat(7,minmax(180px,1fr))] sticky top-0 bg-card border-b border-border",
-                "z-10",
+                "z-20",
               )}>
-                <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <div className="sticky left-0 z-10 bg-card px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-r border-border">
                   Job
                 </div>
                 {days.map((d, i) => {
@@ -1355,8 +1357,8 @@ export default function Scheduler() {
                           }))
                         }
                         className={cn(
-                          "w-full flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px]",
-                          "z-[5]",
+                          "flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px] left-0 w-[calc(100vw-22rem)] max-w-[1500px]",
+                          "z-[15]",
                         )}
                       >
                         <ChevronDown
