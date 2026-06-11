@@ -10,6 +10,7 @@ import {
   Map as MapIcon,
   CalendarRange,
   BellRing,
+  Gauge,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -17,6 +18,7 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 const NAV = [
+  { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
   { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
   { href: "/map", label: "Permit Map", icon: MapIcon },

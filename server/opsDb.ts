@@ -378,6 +378,8 @@ import {
   InsertJobPhoto,
   jobNotes,
   InsertJobNote,
+  jobBillingNotes,
+  InsertJobBillingNote,
   jobOverrides,
   equipmentCatalog,
   InsertEquipmentCatalogItem,
@@ -622,6 +624,55 @@ export async function listJobNotes(airtableJobId: string) {
     .from(jobNotes)
     .where(eq(jobNotes.airtableJobId, airtableJobId))
     .orderBy(desc(jobNotes.createdAt));
+}
+
+/* -------------------------- Billing Notes ----------------------------- */
+// Coordinator "Novedades" for invoicing. Local-only.
+
+export async function createBillingNote(data: InsertJobBillingNote) {
+  const d = await db();
+  const [res] = await d.insert(jobBillingNotes).values(data).$returningId();
+  return res?.id;
+}
+
+export async function listBillingNotes(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobBillingNotes)
+    .where(eq(jobBillingNotes.airtableJobId, airtableJobId))
+    .orderBy(desc(jobBillingNotes.createdAt));
+}
+
+/** Counts of billing notes grouped by job id (for row badges). */
+export async function getBillingNoteCounts(airtableJobIds: string[]) {
+  const map: Record<string, number> = {};
+  if (airtableJobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobBillingNotes)
+    .where(inArray(jobBillingNotes.airtableJobId, airtableJobIds));
+  for (const r of rows) {
+    map[r.airtableJobId] = (map[r.airtableJobId] ?? 0) + 1;
+  }
+  return map;
+}
+
+export async function deleteBillingNote(id: number, authorUserId?: number) {
+  const d = await db();
+  if (authorUserId != null) {
+    await d
+      .delete(jobBillingNotes)
+      .where(
+        and(
+          eq(jobBillingNotes.id, id),
+          eq(jobBillingNotes.authorUserId, authorUserId),
+        ),
+      );
+  } else {
+    await d.delete(jobBillingNotes).where(eq(jobBillingNotes.id, id));
+  }
 }
 
 /* ---------------------------- Job Overrides --------------------------- */

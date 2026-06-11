@@ -4,6 +4,7 @@ import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
 import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
+import { describeWeatherCode, DEFAULT_WEATHER_LOCATION } from "../../shared/weather";
 import { invokeLLM } from "../_core/llm";
 import {
   acknowledgeChanges,
@@ -53,9 +54,81 @@ import {
   setTruckAssignment,
   listTruckAssignmentsForWeek,
   removeTruckAssignment,
+  createBillingNote,
+  listBillingNotes,
+  getBillingNoteCounts,
+  deleteBillingNote,
 } from "../opsDb";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
+
+// --- Current weather (Open-Meteo, no API key) with a small in-process cache ---
+type WeatherResult = {
+  locationName: string;
+  lat: number;
+  lon: number;
+  temperatureC: number | null;
+  windKph: number | null;
+  code: number | null;
+  label: string;
+  group: string;
+  observedAt: string | null;
+  ok: boolean;
+};
+
+const WEATHER_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const weatherCache = new Map<string, { at: number; value: WeatherResult }>();
+
+async function getCachedWeather(
+  lat: number,
+  lon: number,
+  name: string,
+): Promise<WeatherResult> {
+  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const hit = weatherCache.get(key);
+  if (hit && Date.now() - hit.at < WEATHER_TTL_MS) return hit.value;
+  try {
+    const url =
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=kmh&timezone=auto`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`open-meteo ${resp.status}`);
+    const data: any = await resp.json();
+    const cur = data?.current ?? {};
+    const code = typeof cur.weather_code === "number" ? cur.weather_code : null;
+    const desc = describeWeatherCode(code ?? -1);
+    const value: WeatherResult = {
+      locationName: name,
+      lat,
+      lon,
+      temperatureC: typeof cur.temperature_2m === "number" ? cur.temperature_2m : null,
+      windKph: typeof cur.wind_speed_10m === "number" ? cur.wind_speed_10m : null,
+      code,
+      label: desc.label,
+      group: desc.group,
+      observedAt: typeof cur.time === "string" ? cur.time : null,
+      ok: true,
+    };
+    weatherCache.set(key, { at: Date.now(), value });
+    return value;
+  } catch {
+    const value: WeatherResult = {
+      locationName: name,
+      lat,
+      lon,
+      temperatureC: null,
+      windKph: null,
+      code: null,
+      label: "Unavailable",
+      group: "clouds",
+      observedAt: null,
+      ok: false,
+    };
+    // Cache the failure briefly too, so we don't retry on every render.
+    weatherCache.set(key, { at: Date.now(), value });
+    return value;
+  }
+}
 
 /**
  * Merge a base Airtable JobRecord with local operations data so the existing
@@ -799,6 +872,22 @@ export const coordinatorRouter = router({
     return result;
   }),
 
+  // Current weather for the operation location (Open-Meteo, no API key).
+  // Cached in-process for 10 minutes to avoid hammering the upstream API.
+  currentWeather: adminProcedure
+    .input(
+      z
+        .object({ lat: z.number().optional(), lon: z.number().optional() })
+        .optional(),
+    )
+    .query(async ({ input }) => {
+      const lat = input?.lat ?? DEFAULT_WEATHER_LOCATION.lat;
+      const lon = input?.lon ?? DEFAULT_WEATHER_LOCATION.lon;
+      const name =
+        input?.lat != null ? `${lat.toFixed(2)}, ${lon.toFixed(2)}` : DEFAULT_WEATHER_LOCATION.name;
+      return getCachedWeather(lat, lon, name);
+    }),
+
   /**
    * Interpret a free-text "Client message" into non-working days.
    * First tries the deterministic "NO WORK:" parser; if no directive is found
@@ -866,5 +955,54 @@ export const coordinatorRouter = router({
         // On any LLM/parse failure, fail safe to "no non-working days".
         return { weekdays: [], dates: [], reason: null, source: "none" as const };
       }
+    }),
+
+  /* ----------------------- Billing notes (Novedades) ---------------------- */
+
+  // List billing notes for one job (newest first).
+  listBillingNotes: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      return listBillingNotes(input.jobId);
+    }),
+
+  // Counts of billing notes per job id, for row badges in the Scheduler.
+  billingNoteCounts: adminProcedure
+    .input(z.object({ jobIds: z.array(z.string()) }))
+    .query(async ({ input }) => {
+      return getBillingNoteCounts(input.jobIds);
+    }),
+
+  // Add a billing note to a job.
+  addBillingNote: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        note: z.string().trim().min(1).max(2000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const id = await createBillingNote({
+        airtableJobId: input.jobId,
+        note: input.note,
+        authorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        authorUserId: ctx.user.id,
+      });
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "billing_note",
+        details: input.note.slice(0, 200),
+      });
+      return { ok: true as const, id };
+    }),
+
+  // Delete a billing note (only the author can delete their own).
+  deleteBillingNote: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await deleteBillingNote(input.id, ctx.user.id);
+      return { ok: true as const };
     }),
 });

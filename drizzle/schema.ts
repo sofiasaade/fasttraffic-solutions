@@ -231,6 +231,23 @@ export type JobNote = typeof jobNotes.$inferSelect;
 export type InsertJobNote = typeof jobNotes.$inferInsert;
 
 /**
+ * Billing notes ("Novedades"): coordinator-authored notes captured per job for
+ * invoicing/accounting (e.g. extra signage, plan stamped, surcharges, scope
+ * changes). Kept separate from field jobNotes. Airtable stays read-only.
+ */
+export const jobBillingNotes = mysqlTable("job_billing_notes", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  note: text("note").notNull(),
+  authorName: varchar("authorName", { length: 128 }).notNull(),
+  authorUserId: int("authorUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JobBillingNote = typeof jobBillingNotes.$inferSelect;
+export type InsertJobBillingNote = typeof jobBillingNotes.$inferInsert;
+
+/**
  * Local job overrides: coordinator-applied changes (end date / sub-status) that
  * would otherwise be written to Airtable. One row per job; latest values win.
  */

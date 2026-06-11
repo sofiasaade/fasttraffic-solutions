@@ -274,3 +274,28 @@
 - [x] Interpret non-working days: deterministic "NO WORK:" parser (weekdays/dates/ranges, EN+ES) + LLM fallback endpoint (interpretNonWorkingDays)
 - [x] Grey out those day cells in the job row (diagonal hatch + "No work" tag + tooltip reason) and show Client message + detected no-work days in inline detail
 - [x] TypeScript clean + 87 tests passing (16 parser + clientMessage mapping test)
+
+## Feature 34: Active works Map / List toggle on Dashboard
+- [x] Build an "Active works" panel with a Map view (pins for active jobs) and a List view, toggled by buttons (like Assignar "Active Projects")
+- [x] Map: plot active jobs by lat/lon (fallback geocode by address/municipality if missing), click pin -> popup with company/address/dates/status
+- [x] List: compact table of active jobs (company, address, dates, status, zone) with click-through that focuses the pin on the map
+- [x] Wire into Dashboard layout (new /dashboard page, set as coordinator home); preserve selected view in component state
+- [x] TypeScript clean + tests passing
+
+## Feature 35: Weather card on Dashboard
+- [x] Server tRPC procedure to fetch current weather (Open-Meteo, no API key) for a default location (Calgary, AB) + optional lat/lon, cached 10 min
+- [x] "Today" style card showing temp + condition + icon (Clouds/Clear/etc.) + wind
+- [x] Handle loading/error states; cache briefly to avoid spamming the API
+- [x] TypeScript clean + 8 weather tests passing
+
+## Feature 36: Per-job "Novedades" (billing notes) in Scheduler
+- [x] Add job_billing_notes table (airtableJobId, note, author, createdAt) in local DB (Airtable stays read-only)
+- [x] tRPC: list notes per job + add note + delete note + counts per job
+- [x] Scheduler job row: "Novedades" action button in inline detail opening a dialog to view/add billing notes
+- [x] Badge/count indicator when a job has billing notes (on the job row)
+- [x] TypeScript clean + 96 tests passing; verified create/list/author+date/delete in browser
+
+## Feature 34b: Dashboard tweak — remove map, keep list + link to Permit Map
+- [x] Remove the Map/List toggle and embedded Google map from the Dashboard "Active works" panel
+- [x] Keep the active works as a List only; add a "View on map" link to the Permit Map page
+- [x] Keep the weather card and stats

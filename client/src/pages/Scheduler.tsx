@@ -45,10 +45,12 @@ import {
   ChevronsUpDown,
   Construction,
   Ban,
+  Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
+import { BillingNotesButton } from "@/components/BillingNotes";
 import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
@@ -279,6 +281,20 @@ export default function Scheduler() {
   const changeBadgesMap = (changeBadgesQuery.data ?? {}) as Record<
     string,
     JobChangeRow[]
+  >;
+
+  // Billing-note counts per job (for the Novedades badge on each row).
+  const allJobIds = useMemo(
+    () => ((jobsQuery.data ?? []) as Job[]).map((j) => j.id),
+    [jobsQuery.data],
+  );
+  const billingCountsQuery = trpc.coordinator.billingNoteCounts.useQuery(
+    { jobIds: allJobIds },
+    { enabled: allJobIds.length > 0 },
+  );
+  const billingCountsMap = (billingCountsQuery.data ?? {}) as Record<
+    string,
+    number
   >;
 
   // Toggle a technician's experience level with optimistic UI.
@@ -922,6 +938,15 @@ export default function Scheduler() {
               </span>
             )}
             <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
+            {(billingCountsMap[job.id] ?? 0) > 0 && (
+              <span
+                className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-amber-300 bg-amber-50 text-amber-700"
+                title={`${billingCountsMap[job.id]} billing note(s)`}
+              >
+                <Receipt className="size-2.5" />
+                {billingCountsMap[job.id]}
+              </span>
+            )}
           </div>
           <div className="text-xs text-muted-foreground truncate mt-0.5">
             {job.jobAddress ?? "No address"}
@@ -1989,6 +2014,12 @@ function JobDetailInline({ job }: { job: Job }) {
             <h3 className="mt-2 text-base font-semibold leading-snug break-words">
               {job.projectTitle || job.company || "Untitled job"}
             </h3>
+            <div className="mt-2">
+              <BillingNotesButton
+                jobId={job.id}
+                jobLabel={job.company ?? job.projectTitle ?? undefined}
+              />
+            </div>
           </div>
 
           {job.company && (

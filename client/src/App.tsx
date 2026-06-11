@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { useSession } from "./contexts/SessionContext";
 import CoordinatorShell from "./components/CoordinatorShell";
 import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 import DispatchBoard from "./pages/DispatchBoard";
 import OvertimeDashboard from "./pages/OvertimeDashboard";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
@@ -46,7 +47,12 @@ function Router() {
       {isCoordinator ? (
         <>
           <Route path="/">
-            <Redirect to="/dispatch" />
+            <Redirect to="/dashboard" />
+          </Route>
+          <Route path="/dashboard">
+            <CoordinatorShell>
+              <Dashboard />
+            </CoordinatorShell>
           </Route>
           <Route path="/dispatch">
             <CoordinatorShell>
