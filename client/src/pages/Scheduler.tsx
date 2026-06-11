@@ -597,6 +597,15 @@ export default function Scheduler() {
   // ---- Day view: jobs that cover the selected day, grouped by status ----
   const selectedDayKey = dayKeys[selectedDayIdx] ?? dayKeys[0];
   const selectedDayDate = days[selectedDayIdx] ?? days[0];
+  // Day-view category filter: which status sections are visible. Defaults to all.
+  const [dayStatusFilter, setDayStatusFilter] = useState<Record<SectionKey, boolean>>({
+    submitted: true,
+    approved: true,
+    field: true,
+    cancelled: true,
+  });
+  const toggleDayStatus = (key: SectionKey) =>
+    setDayStatusFilter((prev) => ({ ...prev, [key]: !prev[key] }));
   const groupedDay = useMemo(() => {
     const map: Record<SectionKey, Job[]> = {
       submitted: [],
@@ -624,6 +633,15 @@ export default function Scheduler() {
       groupedDay.field.length +
       groupedDay.cancelled.length,
     [groupedDay],
+  );
+  // Count after applying the category filter (drives the empty-state message).
+  const dayVisibleCount = useMemo(
+    () =>
+      (Object.keys(groupedDay) as SectionKey[]).reduce(
+        (n, k) => n + (dayStatusFilter[k] ? groupedDay[k].length : 0),
+        0,
+      ),
+    [groupedDay, dayStatusFilter],
   );
 
   // Technicians already booked (day-pinned) per day this week.
@@ -1539,13 +1557,50 @@ export default function Scheduler() {
                 })}
               </div>
 
+              {/* Category filter: toggle which job statuses are shown */}
+              <div className="flex flex-wrap items-center gap-1.5 mb-4">
+                <span className="text-xs font-medium text-muted-foreground mr-1">
+                  Filter:
+                </span>
+                {STATUS_SECTIONS.map((section) => {
+                  const on = dayStatusFilter[section.key];
+                  const count = groupedDay[section.key]?.length ?? 0;
+                  return (
+                    <button
+                      key={section.key}
+                      type="button"
+                      onClick={() => toggleDayStatus(section.key)}
+                      aria-pressed={on}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        on
+                          ? "bg-accent border-border text-foreground"
+                          : "bg-transparent border-dashed border-border text-muted-foreground opacity-60 hover:opacity-100",
+                      )}
+                    >
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: section.dot }}
+                      />
+                      {section.title}
+                      <span className="opacity-70">({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {dayJobCount === 0 ? (
                 <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
                   No jobs on {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}.
                 </div>
+              ) : dayVisibleCount === 0 ? (
+                <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                  No jobs match the selected categories. Adjust the filter above.
+                </div>
               ) : (
                 <div className="space-y-5">
                   {STATUS_SECTIONS.map((section) => {
+                    if (!dayStatusFilter[section.key]) return null;
                     const sectionJobs = groupedDay[section.key];
                     if (!sectionJobs || sectionJobs.length === 0) return null;
                     return (

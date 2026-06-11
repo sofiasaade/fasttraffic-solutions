@@ -427,3 +427,8 @@
 - [x] Coordinator sidebar: "Pending Jobs" nav with red count badge
 - [x] /pending page listing unassigned jobs with Assign action
 - [x] Tests: assignmentState + assignmentWorkflow (opsDb) + fixed ops.integration mock — 139 pass
+
+## Feature 49: Day-view category filter (Scheduler)
+- [x] Add filter toggles in Scheduler day view for job status: Field, Permit Approved, Permit Request Submitted (and Cancelled)
+- [x] Filtering hides non-matching status sections; multiple categories selectable; persists while switching days
+- [x] TypeScript clean + tests pass
