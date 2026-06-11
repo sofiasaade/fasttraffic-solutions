@@ -505,3 +505,31 @@ export const jobChanges = mysqlTable("job_changes", {
 
 export type JobChange = typeof jobChanges.$inferSelect;
 export type InsertJobChange = typeof jobChanges.$inferInsert;
+
+
+/**
+ * Flagging hours: billable two-way / manual traffic-control ("flagging") hours
+ * logged per person, per day, per job. Flagging is billed PER PERSON-HOUR, so
+ * each flagger on a job/day gets its own row (e.g. 3 flaggers x 5h = 3 rows of
+ * 5h = 15 billable hours). This is independent of setup/pickup labour and feeds
+ * the billing summary. Airtable stays read-only; this is the source of truth.
+ */
+export const flaggingHours = mysqlTable("flagging_hours", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  /** Local date of the flagging shift, stored as YYYY-MM-DD. */
+  workDate: varchar("workDate", { length: 10 }).notNull(),
+  /** Billable flagging hours for this person on this day (e.g. 5.5). */
+  hours: double("hours").notNull(),
+  /** Optional billing rate snapshot, in cents per hour (e.g. 8500 = $85.00/h). */
+  hourlyRateCents: int("hourlyRateCents"),
+  note: text("note"),
+  createdByUserId: int("createdByUserId"),
+  createdByName: varchar("createdByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FlaggingHours = typeof flaggingHours.$inferSelect;
+export type InsertFlaggingHours = typeof flaggingHours.$inferInsert;

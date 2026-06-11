@@ -76,6 +76,10 @@ import {
   setWeekdayAvailability,
   setDateAvailability,
   removeAvailabilityRule,
+  setFlaggingHours,
+  removeFlaggingHours,
+  listFlaggingHoursForJob,
+  listFlaggingHoursInWindow,
 } from "../opsDb";
 import { storageGetSignedUrl, storagePut } from "../storage";
 
@@ -1391,5 +1395,105 @@ export const coordinatorRouter = router({
         impact: job?.impact ?? null,
         recommendations,
       };
+    }),
+
+  /* --------------------------- Flagging hours ---------------------------- */
+
+  // All billable flagging-hour rows for a job (newest day first).
+  listFlaggingHours: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const rows = await listFlaggingHoursForJob(input.jobId);
+      const totalHours = rows.reduce((s, r) => s + Number(r.hours), 0);
+      return { rows, totalHours };
+    }),
+
+  // Upsert flagging hours for one person on one day of one job.
+  // Flagging is billed PER PERSON-HOUR: each flagger/day is its own row.
+  setFlaggingHours: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        technicianName: z.string().min(1),
+        workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        hours: z.number().min(0).max(24),
+        hourlyRateCents: z.number().int().min(0).nullable().optional(),
+        note: z.string().max(500).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const id = await setFlaggingHours({
+        airtableJobId: input.jobId,
+        technicianName: input.technicianName,
+        workDate: input.workDate,
+        hours: input.hours,
+        hourlyRateCents: input.hourlyRateCents ?? null,
+        note: input.note ?? null,
+        createdByUserId: ctx.user.id,
+        createdByName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+      });
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "flagging_hours",
+        fieldName: "Flagging",
+        oldValue: null,
+        newValue: `${input.technicianName}: ${input.hours}h @ ${input.workDate}`,
+        details: "Logged billable flagging hours",
+      });
+      return { ok: true as const, id };
+    }),
+
+  removeFlaggingHours: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await removeFlaggingHours(input.id);
+      return { ok: true as const };
+    }),
+
+  // Weekly billing summary of flagging hours, aggregated by job and technician.
+  flaggingSummary: adminProcedure
+    .input(
+      z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .query(async ({ input }) => {
+      const rows = await listFlaggingHoursInWindow(
+        input.startDate,
+        input.endDate,
+      );
+      const byJob = new Map<
+        string,
+        { jobId: string; hours: number; amountCents: number; people: Set<string> }
+      >();
+      let totalHours = 0;
+      let totalAmountCents = 0;
+      for (const r of rows) {
+        const h = Number(r.hours);
+        const amt = r.hourlyRateCents ? Math.round(h * r.hourlyRateCents) : 0;
+        totalHours += h;
+        totalAmountCents += amt;
+        const cur =
+          byJob.get(r.airtableJobId) ?? {
+            jobId: r.airtableJobId,
+            hours: 0,
+            amountCents: 0,
+            people: new Set<string>(),
+          };
+        cur.hours += h;
+        cur.amountCents += amt;
+        cur.people.add(r.technicianName);
+        byJob.set(r.airtableJobId, cur);
+      }
+      const jobs = Array.from(byJob.values()).map((j) => ({
+        jobId: j.jobId,
+        hours: j.hours,
+        amountCents: j.amountCents,
+        peopleCount: j.people.size,
+      }));
+      return { rows, jobs, totalHours, totalAmountCents };
     }),
 });

@@ -53,6 +53,7 @@ import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import { BillingNotesButton } from "@/components/BillingNotes";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
 import { RecommendedWorkers } from "@/components/RecommendedWorkers";
+import { FlaggingHoursPanel } from "@/components/FlaggingHoursPanel";
 import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
@@ -2136,6 +2137,7 @@ function JobDetailInline({ job }: { job: Job }) {
   ];
   const hasTechs = techByPhase.some((p) => p.techs.length > 0);
   const plans = job.planFile ?? [];
+  const detailTechs = trpc.coordinator.technicians.useQuery();
 
   return (
     <div className="px-4 md:px-6 py-4">
@@ -2302,6 +2304,17 @@ function JobDetailInline({ job }: { job: Job }) {
           <RecommendedWorkers
             jobId={job.id}
             date={job.startDate ? parseDayKey(job.startDate) || undefined : undefined}
+          />
+
+          <FlaggingHoursPanel
+            jobId={job.id}
+            technicians={(detailTechs.data ?? []).map((t) => ({
+              airtableName: t.airtableName,
+              displayName: t.displayName,
+            }))}
+            defaultDate={
+              job.startDate ? parseDayKey(job.startDate) || undefined : undefined
+            }
           />
         </div>
       </div>

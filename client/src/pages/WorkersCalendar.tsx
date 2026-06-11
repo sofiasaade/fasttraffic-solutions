@@ -10,6 +10,7 @@ import {
   Loader2,
   Search,
   GraduationCap,
+  Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
@@ -58,6 +59,47 @@ const PHASE_LABEL: Record<string, string> = {
   setup: "Setup",
   pickup: "Pickup",
 };
+
+function fmtMoney(cents: number) {
+  return (cents / 100).toLocaleString(undefined, {
+    style: "currency",
+    currency: "CAD",
+  });
+}
+
+/** Compact weekly billable flagging-hours summary, aggregated by job. */
+function FlaggingWeekSummary({
+  startDate,
+  endDate,
+}: {
+  startDate: string;
+  endDate: string;
+}) {
+  const { data } = trpc.coordinator.flaggingSummary.useQuery({
+    startDate,
+    endDate,
+  });
+  if (!data || data.totalHours === 0) return null;
+  return (
+    <div className="rounded-lg border border-orange-200 bg-orange-50/60 px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-orange-800">
+          <Flag className="size-4" />
+          Billable flagging this week
+        </span>
+        <span className="flex items-center gap-3 text-sm font-semibold text-orange-800">
+          <span>{data.totalHours}h</span>
+          {data.totalAmountCents > 0 && (
+            <span>{fmtMoney(data.totalAmountCents)}</span>
+          )}
+          <span className="text-xs font-normal text-orange-700">
+            {data.jobs.length} job{data.jobs.length === 1 ? "" : "s"}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function WorkersCalendar() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
@@ -229,6 +271,8 @@ export default function WorkersCalendar() {
           Assigned to a job
         </span>
       </div>
+
+      <FlaggingWeekSummary startDate={startDate} endDate={endDate} />
 
       {isLoading ? (
         <div className="py-16 flex justify-center">

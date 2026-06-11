@@ -20,6 +20,7 @@ import {
   InsertTechnicianCertificate,
   technicianAvailability,
   InsertTechnicianAvailability,
+  flaggingHours,
 } from "../drizzle/schema";
 import {
   ALBERTA_OT_THRESHOLD_DEFAULT,
@@ -1344,4 +1345,92 @@ export async function moveTruckAssignment(input: {
     .set({ scheduledDate: input.scheduledDate })
     .where(eq(truckAssignments.id, input.id));
   return input.id;
+}
+
+
+/* ----------------------------- Flagging Hours ----------------------------- */
+
+/**
+ * Upsert billable flagging hours for one person on one day of one job.
+ * Flagging is billed per person-hour, so the unique key is
+ * (job, technician, date). Re-logging the same person/day overwrites hours.
+ */
+export async function setFlaggingHours(input: {
+  airtableJobId: string;
+  technicianName: string;
+  workDate: string; // YYYY-MM-DD
+  hours: number;
+  hourlyRateCents?: number | null;
+  note?: string | null;
+  createdByUserId?: number | null;
+  createdByName?: string | null;
+}): Promise<number> {
+  const d = await db();
+  const existing = await d
+    .select()
+    .from(flaggingHours)
+    .where(
+      and(
+        eq(flaggingHours.airtableJobId, input.airtableJobId),
+        eq(flaggingHours.technicianName, input.technicianName),
+        eq(flaggingHours.workDate, input.workDate),
+      ),
+    );
+  if (existing.length > 0) {
+    await d
+      .update(flaggingHours)
+      .set({
+        hours: input.hours,
+        hourlyRateCents: input.hourlyRateCents ?? null,
+        note: input.note ?? null,
+        createdByUserId: input.createdByUserId ?? null,
+        createdByName: input.createdByName ?? null,
+      })
+      .where(eq(flaggingHours.id, existing[0].id));
+    return existing[0].id;
+  }
+  const res = await d.insert(flaggingHours).values({
+    airtableJobId: input.airtableJobId,
+    technicianName: input.technicianName,
+    workDate: input.workDate,
+    hours: input.hours,
+    hourlyRateCents: input.hourlyRateCents ?? null,
+    note: input.note ?? null,
+    createdByUserId: input.createdByUserId ?? null,
+    createdByName: input.createdByName ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+export async function removeFlaggingHours(id: number) {
+  const d = await db();
+  await d.delete(flaggingHours).where(eq(flaggingHours.id, id));
+}
+
+/** All flagging-hour rows for one job, newest day first. */
+export async function listFlaggingHoursForJob(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(flaggingHours)
+    .where(eq(flaggingHours.airtableJobId, airtableJobId))
+    .orderBy(desc(flaggingHours.workDate));
+}
+
+/** Flagging-hour rows across a date window (for the weekly billing summary). */
+export async function listFlaggingHoursInWindow(
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(flaggingHours)
+    .where(
+      and(
+        gte(flaggingHours.workDate, startDate),
+        lte(flaggingHours.workDate, endDate),
+      ),
+    )
+    .orderBy(flaggingHours.workDate);
 }

@@ -59,6 +59,17 @@ const state = {
     notes: string | null;
   }[],
   truckSeq: 0,
+  // Billable flagging hours (local).
+  flagging: [] as {
+    id: number;
+    airtableJobId: string;
+    technicianName: string;
+    workDate: string;
+    hours: number;
+    hourlyRateCents: number | null;
+    note: string | null;
+  }[],
+  flaggingSeq: 0,
   // Any of these being > 0 means a read-only violation occurred.
   airtableWriteCalls: [] as { fn: string; id: string }[],
 };
@@ -429,6 +440,44 @@ vi.mock("../opsDb", () => ({
       (n) => !(n.id === id && (authorUserId == null || n.authorUserId === authorUserId)),
     );
   }),
+  setFlaggingHours: vi.fn(async (input: any) => {
+    const existing = state.flagging.find(
+      (r) =>
+        r.airtableJobId === input.airtableJobId &&
+        r.technicianName === input.technicianName &&
+        r.workDate === input.workDate,
+    );
+    if (existing) {
+      existing.hours = input.hours;
+      existing.hourlyRateCents = input.hourlyRateCents ?? null;
+      existing.note = input.note ?? null;
+      return existing.id;
+    }
+    const id = ++state.flaggingSeq;
+    state.flagging.push({
+      id,
+      airtableJobId: input.airtableJobId,
+      technicianName: input.technicianName,
+      workDate: input.workDate,
+      hours: input.hours,
+      hourlyRateCents: input.hourlyRateCents ?? null,
+      note: input.note ?? null,
+    });
+    return id;
+  }),
+  removeFlaggingHours: vi.fn(async (id: number) => {
+    state.flagging = state.flagging.filter((r) => r.id !== id);
+  }),
+  listFlaggingHoursForJob: vi.fn(async (jobId: string) =>
+    state.flagging
+      .filter((r) => r.airtableJobId === jobId)
+      .sort((a, b) => b.workDate.localeCompare(a.workDate)),
+  ),
+  listFlaggingHoursInWindow: vi.fn(async (start: string, end: string) =>
+    state.flagging
+      .filter((r) => r.workDate >= start && r.workDate <= end)
+      .sort((a, b) => a.workDate.localeCompare(b.workDate)),
+  ),
 }));
 
 import { appRouter } from "../routers";
@@ -483,6 +532,8 @@ beforeEach(() => {
   state.truckCatalog = [];
   state.trucks = [];
   state.truckSeq = 0;
+  state.flagging = [];
+  state.flaggingSeq = 0;
   state.airtableWriteCalls = [];
 });
 
@@ -1030,5 +1081,108 @@ describe("Billing notes (Novedades) with structured invoicing fields", () => {
     });
     expect(after["recJOB1"]).toBe(1);
     expect(state.airtableWriteCalls.length).toBe(0);
+  });
+});
+
+
+describe("Flagging hours (per person-hour billing)", () => {
+  it("logs flagging hours and totals them per job", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    await caller.coordinator.setFlaggingHours({
+      jobId: "recJOB1",
+      technicianName: "Hector",
+      workDate: "2026-06-11",
+      hours: 5,
+    });
+    await caller.coordinator.setFlaggingHours({
+      jobId: "recJOB1",
+      technicianName: "Maria",
+      workDate: "2026-06-11",
+      hours: 4,
+    });
+    const list = await caller.coordinator.listFlaggingHours({ jobId: "recJOB1" });
+    expect(list.rows.length).toBe(2);
+    expect(list.totalHours).toBe(9);
+  });
+
+  it("upserts the same person/day instead of duplicating", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    await caller.coordinator.setFlaggingHours({
+      jobId: "recJOB1",
+      technicianName: "Hector",
+      workDate: "2026-06-11",
+      hours: 5,
+    });
+    await caller.coordinator.setFlaggingHours({
+      jobId: "recJOB1",
+      technicianName: "Hector",
+      workDate: "2026-06-11",
+      hours: 8,
+    });
+    const list = await caller.coordinator.listFlaggingHours({ jobId: "recJOB1" });
+    expect(list.rows.length).toBe(1);
+    expect(list.totalHours).toBe(8);
+  });
+
+  it("computes a weekly billing summary with dollar amounts per job", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    // 3 flaggers x 5h @ $30/h = 15h, $450
+    for (const name of ["A", "B", "C"]) {
+      await caller.coordinator.setFlaggingHours({
+        jobId: "recJOB1",
+        technicianName: name,
+        workDate: "2026-06-11",
+        hours: 5,
+        hourlyRateCents: 3000,
+      });
+    }
+    const sum = await caller.coordinator.flaggingSummary({
+      startDate: "2026-06-08",
+      endDate: "2026-06-14",
+    });
+    expect(sum.totalHours).toBe(15);
+    expect(sum.totalAmountCents).toBe(45000);
+    expect(sum.jobs.length).toBe(1);
+    expect(sum.jobs[0].peopleCount).toBe(3);
+  });
+
+  it("excludes rows outside the summary window", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    await caller.coordinator.setFlaggingHours({
+      jobId: "recJOB1",
+      technicianName: "Hector",
+      workDate: "2026-06-20",
+      hours: 6,
+    });
+    const sum = await caller.coordinator.flaggingSummary({
+      startDate: "2026-06-08",
+      endDate: "2026-06-14",
+    });
+    expect(sum.totalHours).toBe(0);
+  });
+
+  it("removes a flagging-hours row", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const { id } = await caller.coordinator.setFlaggingHours({
+      jobId: "recJOB1",
+      technicianName: "Hector",
+      workDate: "2026-06-11",
+      hours: 5,
+    });
+    await caller.coordinator.removeFlaggingHours({ id });
+    const list = await caller.coordinator.listFlaggingHours({ jobId: "recJOB1" });
+    expect(list.rows.length).toBe(0);
+  });
+
+  it("rejects flagging logging from a non-admin technician", async () => {
+    const caller = appRouter.createCaller(techCtx());
+    await expect(
+      caller.coordinator.setFlaggingHours({
+        jobId: "recJOB1",
+        technicianName: "Hector",
+        workDate: "2026-06-11",
+        hours: 5,
+      }),
+    ).rejects.toThrow();
   });
 });
