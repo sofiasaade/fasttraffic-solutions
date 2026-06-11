@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import DispatchBoard from "./pages/DispatchBoard";
 import OvertimeDashboard from "./pages/OvertimeDashboard";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
+import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Scheduler from "./pages/Scheduler";
 import TechnicianApp from "./pages/TechnicianApp";
@@ -65,6 +66,11 @@ function Router() {
           <Route path="/overtime">
             <CoordinatorShell>
               <OvertimeDashboard />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/alerts">
+            <CoordinatorShell>
+              <AlertsPage />
             </CoordinatorShell>
           </Route>
           <Route path="/history">

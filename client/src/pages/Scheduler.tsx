@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
 
@@ -269,6 +270,13 @@ export default function Scheduler() {
   const truckCatalogQuery = trpc.coordinator.truckCatalog.useQuery();
   const setTruck = trpc.coordinator.setTruck.useMutation();
   const removeTruck = trpc.coordinator.removeTruck.useMutation();
+  const changeBadgesQuery = trpc.coordinator.changeBadges.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
+  const changeBadgesMap = (changeBadgesQuery.data ?? {}) as Record<
+    string,
+    JobChangeRow[]
+  >;
 
   // Toggle a technician's experience level with optimistic UI.
   const setLevelMutation = trpc.coordinator.setTechnicianLevel.useMutation({
@@ -736,6 +744,7 @@ export default function Scheduler() {
                   {impactLabel(job.impact)}
                 </span>
               )}
+              <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
             </div>
             <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
               <MapPin className="size-3 shrink-0" />
@@ -900,6 +909,7 @@ export default function Scheduler() {
                 {impactLabel(job.impact)}
               </span>
             )}
+            <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
           </div>
           <div className="text-xs text-muted-foreground truncate mt-0.5">
             {job.jobAddress ?? "No address"}

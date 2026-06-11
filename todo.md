@@ -251,17 +251,17 @@
 - [x] Verified live: Marmot (24h) purple, ALSA (Daily) amber + 50 tests passing
 
 ## Feature 31: 5-day change detection (New/Cancelled/Postponed/Modified)
-- [ ] Read references/periodic-updates.md to choose scheduling approach
-- [ ] Add job_snapshots table (date, requestId, status, startDate, key fields hash + raw fields)
-- [ ] Add job_changes table (requestId, changeType, field, oldValue, newValue, detectedAt)
-- [ ] Server: snapshot today's 5-day-window jobs from Airtable + diff vs latest prior snapshot
-- [ ] Detect New / Cancelled(missing or status=Cancelled) / Postponed(startDate changed) / Modified(address, closureType, impact, setupDuration, technicians)
-- [ ] Schedule the snapshot+diff to run daily (Heartbeat)
-- [ ] tRPC: list recent changes (last 24h / 5-day window) + per-job latest change
-- [ ] Change badge (New/Cancelled/Postponed/Modified, color-coded) on Scheduler rows
-- [ ] Change badge on Dispatch Board rows
-- [ ] Changes/Alerts tray listing changes with before/after detail
-- [ ] TypeScript clean + tests passing
+- [x] Read references/periodic-updates.md to choose scheduling approach (project-level Heartbeat)
+- [x] Add job_snapshots table (date, requestId, status, startDate, key fields)
+- [x] Add job_changes table (requestId, changeType, field, oldValue, newValue; detectedDate + createdAt timestamp instead of single detectedAt)
+- [x] Server: snapshot today's 5-day-window jobs from Airtable + diff vs latest prior snapshot
+- [x] Detect New / Cancelled(missing or status=Cancelled) / Postponed(startDate changed) / Modified(address, closureType, impact, setupDuration, technicians)
+- [ ] Schedule the snapshot+diff to run daily (Heartbeat) — register after deploy via manus-heartbeat
+- [x] tRPC: recentChanges + changeBadges (per-job) + acknowledgeChanges + runChangeDetection
+- [x] Change badge (New/Cancelled/Postponed/Modified, color-coded) on Scheduler rows (week + day)
+- [x] Change badge on Dispatch Board rows
+- [x] Changes/Alerts tray listing changes with before/after detail + acknowledge + manual run
+- [x] TypeScript clean + 61 tests passing
 
 ## Feature 32: Highlight Alberta statutory holidays in Scheduler
 - [ ] Add Alberta statutory holidays list (computed per year)

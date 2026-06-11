@@ -9,15 +9,18 @@ import {
   Smartphone,
   Map as MapIcon,
   CalendarRange,
+  BellRing,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
   { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
   { href: "/map", label: "Permit Map", icon: MapIcon },
+  { href: "/alerts", label: "Change Alerts", icon: BellRing },
   { href: "/overtime", label: "Overtime", icon: Clock },
   { href: "/history", label: "Change History", icon: History },
 ];
@@ -26,6 +29,12 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
   const [location] = useLocation();
   const { user } = useSession();
   const { logout } = useAuth();
+  const badges = trpc.coordinator.changeBadges.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
+  const alertCount = badges.data
+    ? Object.values(badges.data).reduce((n, arr) => n + (arr?.length ?? 0), 0)
+    : 0;
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -60,7 +69,12 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
                 )}
               >
                 <Icon className="size-4.5" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/alerts" && alertCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                    {alertCount > 99 ? "99+" : alertCount}
+                  </span>
+                )}
               </Link>
             );
           })}

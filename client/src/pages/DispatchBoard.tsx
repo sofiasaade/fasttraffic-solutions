@@ -21,6 +21,7 @@ import { fmtDate, dayKey } from "@/lib/format";
 import AssignmentDialog from "@/components/AssignmentDialog";
 import JobModifyDialog from "@/components/JobModifyDialog";
 import { cn } from "@/lib/utils";
+import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 
@@ -65,16 +66,21 @@ function JobRow({
   job,
   onAssign,
   onModify,
+  changes,
 }: {
   job: Job;
   onAssign: (j: Job) => void;
   onModify: (j: Job) => void;
+  changes: JobChangeRow[];
 }) {
   const assigned = isAssigned(job);
   return (
     <tr className="border-t border-border hover:bg-accent/40 transition-colors">
       <td className="px-4 py-3 align-top">
-        <div className="font-medium text-sm">{job.company ?? "—"}</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium text-sm">{job.company ?? "—"}</span>
+          <ChangeBadge changes={changes} />
+        </div>
         {job.zone && (
           <div className="text-xs text-muted-foreground mt-0.5">{job.zone}</div>
         )}
@@ -119,6 +125,7 @@ function SectionTable({
   jobs,
   onAssign,
   onModify,
+  badges,
 }: {
   title: string;
   caption: string;
@@ -126,6 +133,7 @@ function SectionTable({
   jobs: Job[];
   onAssign: (j: Job) => void;
   onModify: (j: Job) => void;
+  badges: Record<string, JobChangeRow[]>;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -177,6 +185,7 @@ function SectionTable({
                     job={j}
                     onAssign={onAssign}
                     onModify={onModify}
+                    changes={badges[j.id] ?? []}
                   />
                 ))}
               </tbody>
@@ -190,6 +199,13 @@ function SectionTable({
 
 export default function DispatchBoard() {
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
+  const changeBadgesQuery = trpc.coordinator.changeBadges.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
+  const badges = (changeBadgesQuery.data ?? {}) as Record<
+    string,
+    JobChangeRow[]
+  >;
   const [zone, setZone] = useState("all");
   const [date, setDate] = useState("");
   const [assignJob, setAssignJob] = useState<Job | null>(null);
@@ -316,6 +332,7 @@ export default function DispatchBoard() {
               jobs={grouped[s.key]}
               onAssign={setAssignJob}
               onModify={setModifyJob}
+              badges={badges}
             />
           ))}
         </div>
