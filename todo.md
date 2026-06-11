@@ -256,7 +256,8 @@
 - [x] Add job_changes table (requestId, changeType, field, oldValue, newValue; detectedDate + createdAt timestamp instead of single detectedAt)
 - [x] Server: snapshot today's 5-day-window jobs from Airtable + diff vs latest prior snapshot
 - [x] Detect New / Cancelled(missing or status=Cancelled) / Postponed(startDate changed) / Modified(address, closureType, impact, setupDuration, technicians)
-- [ ] Schedule the snapshot+diff to run daily (Heartbeat) — register after deploy via manus-heartbeat
+- [x] Endpoint /api/scheduled/detectJobChanges mounted (cron-auth, idempotent, JSON error) — ready for Heartbeat
+- [ ] Register the daily Heartbeat cron (manus-heartbeat create) — BLOCKED until site is deployed (platform POSTs the production URL)
 - [x] tRPC: recentChanges + changeBadges (per-job) + acknowledgeChanges + runChangeDetection
 - [x] Change badge (New/Cancelled/Postponed/Modified, color-coded) on Scheduler rows (week + day)
 - [x] Change badge on Dispatch Board rows
