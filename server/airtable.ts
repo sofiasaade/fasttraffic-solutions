@@ -133,6 +133,7 @@ export function mapRecordToJob(record: any): JobRecord {
     impact: asString(f[AF.impact]),
     calendarInfo: asString(f[AF.calendarInfo]),
     emoji: extractEmoji(f[AF.calendarInfo]),
+    clientMessage: asString(f[AF.clientMessage]),
   };
 }
 

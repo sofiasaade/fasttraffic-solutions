@@ -44,11 +44,13 @@ import {
   Map as MapIcon,
   ChevronsUpDown,
   Construction,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import { albertaHolidaysForYears } from "@shared/albertaHolidays";
+import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
 
@@ -878,6 +880,7 @@ export default function Scheduler() {
 
   const renderJobRow = (job: Job) => {
     const isExpanded = expandedJobs.has(job.id);
+    const nwRule = parseNonWorkingDays(job.clientMessage);
     return (
     <div key={job.id} className="border-b border-border">
      <div className="grid grid-cols-[240px_repeat(7,minmax(180px,1fr))] items-stretch hover:bg-accent/20">
@@ -960,10 +963,16 @@ export default function Scheduler() {
         const isEnd = covers && dk === jobEnd;
         const shade = setupDurationShade(job.setupDuration);
         const hol = holidays[dk] ?? null;
+        const nwReason = nonWorkingReason(nwRule, dk, days[i].getDay());
+        const cellTitle = hol
+          ? `${hol} — statutory holiday (costlier day)`
+          : nwReason
+            ? `Client: no work this day (${nwReason})`
+            : undefined;
         return (
           <div
             key={i}
-            title={hol ? `${hol} — statutory holiday (costlier day)` : undefined}
+            title={cellTitle}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "copy";
@@ -973,8 +982,16 @@ export default function Scheduler() {
               "border-l border-border min-h-[64px] h-full p-1.5 transition-colors",
               covers ? shade.cell : "bg-transparent hover:bg-primary/5",
               hol && "ring-1 ring-inset ring-rose-300 bg-rose-50/40",
+              nwReason && !hol &&
+                "bg-[repeating-linear-gradient(45deg,rgba(100,116,139,0.10)_0,rgba(100,116,139,0.10)_6px,transparent_6px,transparent_12px)] opacity-90",
             )}
           >
+            {nwReason && (
+              <div className="mb-1 flex items-center gap-1 text-[9px] font-medium uppercase tracking-wide text-slate-500">
+                <Ban className="size-3 shrink-0" />
+                <span className="truncate">No work</span>
+              </div>
+            )}
             <div className="flex flex-col gap-1 h-full min-w-0">
               {/* Fixed-height top band for the duration bar so it stays aligned
                   across every day cell in the row, no matter how many chips a
@@ -2006,6 +2023,28 @@ function JobDetailInline({ job }: { job: Job }) {
               >
                 {impactLabel(job.impact)}
               </span>
+            </DetailRow>
+          )}
+          {job.clientMessage && (
+            <DetailRow icon={<Ban className="size-4" />} label="Client message">
+              <div className="space-y-1">
+                <p className="whitespace-pre-wrap text-sm">{job.clientMessage}</p>
+                {(() => {
+                  const rule = parseNonWorkingDays(job.clientMessage);
+                  if (!rule.hasDirective) return null;
+                  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+                  const labels = [
+                    ...rule.weekdays.map((d) => dayNames[d]),
+                    ...rule.dates,
+                  ];
+                  return (
+                    <p className="text-[11px] text-slate-500">
+                      No-work days:{" "}
+                      <span className="font-medium">{labels.join(", ")}</span>
+                    </p>
+                  );
+                })()}
+              </div>
             </DetailRow>
           )}
         </div>

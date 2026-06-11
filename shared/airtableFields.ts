@@ -27,6 +27,7 @@ export const AF = {
   closureType: "Closure Type",
   impact: "Impact Category",
   calendarInfo: "Calendar info",
+  clientMessage: "Client message",
 } as const;
 
 // Statuses that appear on the Coordinator Dispatch Board
@@ -143,6 +144,8 @@ export interface JobRecord {
   calendarInfo: string | null;
   /** Leading emoji extracted from calendarInfo, if any. */
   emoji: string | null;
+  /** Free-text "Client message" (read-only). May contain non-working-day notes. */
+  clientMessage: string | null;
 }
 
 // Hazard Assessment checklist items (traffic control field work).

@@ -268,8 +268,8 @@
 - [x] Shade holiday day columns/cells with a distinct color (rose = costlier day) + tooltip with holiday name (week header, day cells, day-view selector + banner)
 - [x] TypeScript clean + 71 tests passing (added 10 holiday tests)
 
-## Feature 33: Grey out non-working days from Client message (pending examples)
-- [ ] Add clientMessage ("Client message") to AF map + JobRecord (read-only)
-- [ ] Interpret non-working days (LLM/parse) from Client message text
-- [ ] Grey out those day cells in the job row with tooltip showing the reason
-- [ ] TypeScript clean + tests passing
+## Feature 33: Grey out non-working days from Client message
+- [x] Add clientMessage ("Client message") to AF map + JobRecord (read-only)
+- [x] Interpret non-working days: deterministic "NO WORK:" parser (weekdays/dates/ranges, EN+ES) + LLM fallback endpoint (interpretNonWorkingDays)
+- [x] Grey out those day cells in the job row (diagonal hatch + "No work" tag + tooltip reason) and show Client message + detected no-work days in inline detail
+- [x] TypeScript clean + 87 tests passing (16 parser + clientMessage mapping test)

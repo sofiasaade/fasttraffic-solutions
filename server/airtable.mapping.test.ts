@@ -66,5 +66,14 @@ describe("mapRecordToJob — closure type, impact & emoji", () => {
     expect(job.impact).toBeNull();
     expect(job.calendarInfo).toBeNull();
     expect(job.emoji).toBeNull();
+    expect(job.clientMessage).toBeNull();
+  });
+
+  it("maps the Client message field", () => {
+    const job = mapRecordToJob({
+      id: "rec5",
+      fields: { [AF.clientMessage]: "NO WORK: Sat, Sun" },
+    });
+    expect(job.clientMessage).toBe("NO WORK: Sat, Sun");
   });
 });

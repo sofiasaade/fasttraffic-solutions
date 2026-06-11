@@ -3,6 +3,8 @@ import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
+import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
+import { invokeLLM } from "../_core/llm";
 import {
   acknowledgeChanges,
   getActiveChangeBadges,
@@ -796,4 +798,73 @@ export const coordinatorRouter = router({
     const result = await runChangeDetection();
     return result;
   }),
+
+  /**
+   * Interpret a free-text "Client message" into non-working days.
+   * First tries the deterministic "NO WORK:" parser; if no directive is found
+   * and the message is non-trivial, falls back to an LLM extraction.
+   * Returns recurring weekday indices (0=Sun..6=Sat) + explicit date keys.
+   */
+  interpretNonWorkingDays: adminProcedure
+    .input(z.object({ message: z.string().max(4000) }))
+    .mutation(async ({ input }) => {
+      const deterministic = parseNonWorkingDays(input.message);
+      if (deterministic.hasDirective) {
+        return { ...deterministic, source: "directive" as const };
+      }
+      const text = input.message.trim();
+      if (text.length < 4) {
+        return { weekdays: [], dates: [], reason: null, source: "none" as const };
+      }
+      try {
+        const resp = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You extract non-working days from a traffic-control client's message. " +
+                "Return JSON only. weekdays: array of integers 0-6 (0=Sunday..6=Saturday) " +
+                "for recurring closed days. dates: array of YYYY-MM-DD strings for specific " +
+                "closed dates. If nothing indicates a non-working day, return empty arrays. " +
+                "reason: a short human-readable summary or null.",
+            },
+            { role: "user", content: text },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "non_working_days",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  weekdays: { type: "array", items: { type: "integer" } },
+                  dates: { type: "array", items: { type: "string" } },
+                  reason: { type: ["string", "null"] },
+                },
+                required: ["weekdays", "dates", "reason"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const raw = resp.choices?.[0]?.message?.content ?? "{}";
+        const parsed = JSON.parse(typeof raw === "string" ? raw : "{}");
+        const weekdays: number[] = Array.isArray(parsed.weekdays)
+          ? parsed.weekdays.filter((n: unknown) => Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 6)
+          : [];
+        const dates: string[] = Array.isArray(parsed.dates)
+          ? parsed.dates.filter((d: unknown) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d))
+          : [];
+        return {
+          weekdays: Array.from(new Set(weekdays)).sort((a, b) => a - b),
+          dates: Array.from(new Set(dates)).sort(),
+          reason: typeof parsed.reason === "string" ? parsed.reason : null,
+          source: "llm" as const,
+        };
+      } catch {
+        // On any LLM/parse failure, fail safe to "no non-working days".
+        return { weekdays: [], dates: [], reason: null, source: "none" as const };
+      }
+    }),
 });

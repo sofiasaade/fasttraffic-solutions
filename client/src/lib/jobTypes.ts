@@ -24,6 +24,7 @@ export interface DispatchJob {
   impact: string | null;
   calendarInfo: string | null;
   emoji: string | null;
+  clientMessage: string | null;
   zone: string;
 }
 
