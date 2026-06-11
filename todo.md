@@ -299,3 +299,12 @@
 - [x] Remove the Map/List toggle and embedded Google map from the Dashboard "Active works" panel
 - [x] Keep the active works as a List only; add a "View on map" link to the Permit Map page
 - [x] Keep the weather card and stats
+
+## Feature 37: Structured billing fields in Novedades (invoicing alignment)
+- [x] Extend job_billing_notes with structured columns: extraSignage (text), weekendSurcharge (bool), holidaySurcharge (bool), planStamped (enum yes/no/unknown), chargeAmount (cents int, optional), chargeCategory (text, optional)
+- [x] Push DB migration
+- [x] Update opsDb createBillingNote + types to accept structured fields
+- [x] Update tRPC addBillingNote input + listBillingNotes output to carry structured fields
+- [x] Dialog: structured form (extra signage, weekend/holiday surcharge toggles, plan stamped, charge amount + category) alongside the free note; render badges on saved entries
+- [x] Show a compact summary (signage/surcharge/amount chips) in the saved note card
+- [x] TypeScript clean + tests passing (3 new integration tests, verified end-to-end in browser)

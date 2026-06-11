@@ -23,6 +23,8 @@ const state = {
   overrides: {} as Record<string, { endDate: string | null; subStatus: string | null }>,
   photos: [] as any[],
   notes: [] as any[],
+  billingNotes: [] as any[],
+  billingSeq: 0,
   // Day-pinned scheduler assignments (local).
   scheduled: [] as {
     id: number;
@@ -349,6 +351,29 @@ vi.mock("../opsDb", () => ({
   removeTruckAssignment: vi.fn(async (id: number) => {
     state.trucks = state.trucks.filter((r) => r.id !== id);
   }),
+  createBillingNote: vi.fn(async (n: any) => {
+    const id = ++state.billingSeq;
+    state.billingNotes.push({ id, ...n, createdAt: new Date() });
+    return id;
+  }),
+  listBillingNotes: vi.fn(async (jobId: string) =>
+    state.billingNotes
+      .filter((n) => n.airtableJobId === jobId)
+      .sort((a, b) => b.id - a.id),
+  ),
+  getBillingNoteCounts: vi.fn(async (ids: string[]) => {
+    const map: Record<string, number> = {};
+    for (const n of state.billingNotes) {
+      if (ids.includes(n.airtableJobId))
+        map[n.airtableJobId] = (map[n.airtableJobId] ?? 0) + 1;
+    }
+    return map;
+  }),
+  deleteBillingNote: vi.fn(async (id: number, authorUserId?: number) => {
+    state.billingNotes = state.billingNotes.filter(
+      (n) => !(n.id === id && (authorUserId == null || n.authorUserId === authorUserId)),
+    );
+  }),
 }));
 
 import { appRouter } from "../routers";
@@ -393,6 +418,8 @@ beforeEach(() => {
   state.overrides = {};
   state.photos = [];
   state.notes = [];
+  state.billingNotes = [];
+  state.billingSeq = 0;
   state.scheduled = [];
   state.scheduledSeq = 0;
   state.equipmentCatalog = [];
@@ -796,6 +823,77 @@ describe("Change history is append-only and comprehensive", () => {
 
     const list = await caller.coordinator.technicians();
     expect(list[0].experienceLevel).toBe("junior");
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+});
+
+describe("Billing notes (Novedades) with structured invoicing fields", () => {
+  it("stores the note plus structured fields locally and lists them (no Airtable write)", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.addBillingNote({
+      jobId: "recJOB1",
+      note: "Added 6 extra signs on day 2; plan stamped; Sunday work.",
+      extraSignage: "6 No-Parking signs",
+      weekendSurcharge: true,
+      holidaySurcharge: false,
+      planStamped: "yes",
+      chargeAmountCents: 12500,
+      chargeCategory: "Extra signage",
+    });
+    expect(res.ok).toBe(true);
+    expect(state.billingNotes.length).toBe(1);
+    expect(state.airtableWriteCalls.length).toBe(0);
+
+    const saved = state.billingNotes[0];
+    expect(saved.extraSignage).toBe("6 No-Parking signs");
+    expect(saved.weekendSurcharge).toBe(true);
+    expect(saved.holidaySurcharge).toBe(false);
+    expect(saved.planStamped).toBe("yes");
+    expect(saved.chargeAmountCents).toBe(12500);
+    expect(saved.chargeCategory).toBe("Extra signage");
+    expect(saved.authorName).toBe("Coordinator");
+
+    const list = await caller.coordinator.listBillingNotes({ jobId: "recJOB1" });
+    expect(list.length).toBe(1);
+    expect(list[0].note).toMatch(/extra signs/);
+
+    // A change-history entry is recorded for the billing note.
+    expect(state.changeHistory.some((h) => h.action === "billing_note")).toBe(true);
+  });
+
+  it("defaults structured fields when only a free note is provided", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    await caller.coordinator.addBillingNote({
+      jobId: "recJOB1",
+      note: "Just a quick note.",
+    });
+    const saved = state.billingNotes[0];
+    expect(saved.weekendSurcharge).toBe(false);
+    expect(saved.holidaySurcharge).toBe(false);
+    expect(saved.planStamped).toBe("unknown");
+    expect(saved.extraSignage).toBeNull();
+    expect(saved.chargeAmountCents).toBeNull();
+    expect(saved.chargeCategory).toBeNull();
+  });
+
+  it("counts notes per job and deletes a note by id", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    await caller.coordinator.addBillingNote({ jobId: "recJOB1", note: "One" });
+    const second = await caller.coordinator.addBillingNote({
+      jobId: "recJOB1",
+      note: "Two",
+    });
+
+    const counts = await caller.coordinator.billingNoteCounts({
+      jobIds: ["recJOB1"],
+    });
+    expect(counts["recJOB1"]).toBe(2);
+
+    await caller.coordinator.deleteBillingNote({ id: second.id! });
+    const after = await caller.coordinator.billingNoteCounts({
+      jobIds: ["recJOB1"],
+    });
+    expect(after["recJOB1"]).toBe(1);
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 });

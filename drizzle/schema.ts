@@ -239,6 +239,15 @@ export const jobBillingNotes = mysqlTable("job_billing_notes", {
   id: int("id").autoincrement().primaryKey(),
   airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
   note: text("note").notNull(),
+  // Structured invoicing fields (all optional; the free note above is enough)
+  extraSignage: text("extraSignage"),
+  weekendSurcharge: boolean("weekendSurcharge").default(false).notNull(),
+  holidaySurcharge: boolean("holidaySurcharge").default(false).notNull(),
+  // "yes" | "no" | "unknown"
+  planStamped: varchar("planStamped", { length: 16 }).default("unknown").notNull(),
+  // Optional charge amount stored in cents to avoid float drift
+  chargeAmountCents: int("chargeAmountCents"),
+  chargeCategory: varchar("chargeCategory", { length: 64 }),
   authorName: varchar("authorName", { length: 128 }).notNull(),
   authorUserId: int("authorUserId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -978,13 +978,30 @@ export const coordinatorRouter = router({
     .input(
       z.object({
         jobId: z.string(),
+        // Free note still required so every entry has context
         note: z.string().trim().min(1).max(2000),
+        // Structured invoicing fields (all optional)
+        extraSignage: z.string().trim().max(500).optional(),
+        weekendSurcharge: z.boolean().optional(),
+        holidaySurcharge: z.boolean().optional(),
+        planStamped: z.enum(["yes", "no", "unknown"]).optional(),
+        chargeAmountCents: z.number().int().min(0).max(100_000_00).optional(),
+        chargeCategory: z.string().trim().max(64).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const id = await createBillingNote({
         airtableJobId: input.jobId,
         note: input.note,
+        extraSignage: input.extraSignage?.trim() || null,
+        weekendSurcharge: input.weekendSurcharge ?? false,
+        holidaySurcharge: input.holidaySurcharge ?? false,
+        planStamped: input.planStamped ?? "unknown",
+        chargeAmountCents:
+          input.chargeAmountCents != null && input.chargeAmountCents > 0
+            ? input.chargeAmountCents
+            : null,
+        chargeCategory: input.chargeCategory?.trim() || null,
         authorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
         authorUserId: ctx.user.id,
       });
