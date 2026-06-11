@@ -339,3 +339,65 @@ export const truckAssignments = mysqlTable("truck_assignments", {
 
 export type TruckAssignment = typeof truckAssignments.$inferSelect;
 export type InsertTruckAssignment = typeof truckAssignments.$inferInsert;
+
+/**
+ * Daily job snapshots for change detection. Each row is one job captured on a
+ * given snapshot date (UTC YYYY-MM-DD) while it sits inside the 5-day planning
+ * window. Diffing today's snapshot against the most recent prior snapshot per
+ * job surfaces New / Cancelled / Postponed / Modified changes. Airtable stays
+ * read-only; these snapshots are local.
+ */
+export const jobSnapshots = mysqlTable("job_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Snapshot date, UTC YYYY-MM-DD. */
+  snapshotDate: varchar("snapshotDate", { length: 10 }).notNull(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  requestId: varchar("requestId", { length: 64 }),
+  company: varchar("company", { length: 255 }),
+  jobAddress: varchar("jobAddress", { length: 512 }),
+  startDate: varchar("startDate", { length: 32 }),
+  endDate: varchar("endDate", { length: 32 }),
+  status: varchar("status", { length: 64 }),
+  subStatus: varchar("subStatus", { length: 128 }),
+  setupDuration: varchar("setupDuration", { length: 128 }),
+  closureType: varchar("closureType", { length: 512 }),
+  impact: varchar("impact", { length: 64 }),
+  technicians: text("technicians"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JobSnapshot = typeof jobSnapshots.$inferSelect;
+export type InsertJobSnapshot = typeof jobSnapshots.$inferInsert;
+
+/**
+ * Detected job changes (append-only). One row per detected change of a job
+ * between two consecutive snapshots. changeType is the high-level category;
+ * fieldName/oldValue/newValue carry the detail for "modified" changes.
+ */
+export const jobChanges = mysqlTable("job_changes", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Snapshot date this change was detected on, UTC YYYY-MM-DD. */
+  detectedDate: varchar("detectedDate", { length: 10 }).notNull(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  requestId: varchar("requestId", { length: 64 }),
+  company: varchar("company", { length: 255 }),
+  /** new | cancelled | postponed | modified */
+  changeType: mysqlEnum("changeType", [
+    "new",
+    "cancelled",
+    "postponed",
+    "modified",
+  ]).notNull(),
+  /** For modified: which field changed (e.g. jobAddress, closureType). */
+  fieldName: varchar("fieldName", { length: 64 }),
+  oldValue: text("oldValue"),
+  newValue: text("newValue"),
+  /** The job's startDate at detection time, for the 5-day window display. */
+  startDate: varchar("startDate", { length: 32 }),
+  /** Coordinator can acknowledge/dismiss a change from the alerts tray. */
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type JobChange = typeof jobChanges.$inferSelect;
+export type InsertJobChange = typeof jobChanges.$inferInsert;

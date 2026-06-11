@@ -269,3 +269,22 @@ export async function pingAirtable(): Promise<{ ok: boolean; count: number }> {
   const data = await airtableFetch(`${baseUrl()}?${params.toString()}`);
   return { ok: true, count: (data.records ?? []).length };
 }
+
+// Fetch ALL jobs (any status) for change detection. Includes cancelled/declined
+// so the diff engine can detect cancellations. No status filter applied.
+export async function fetchAllJobsForDetection(): Promise<JobRecord[]> {
+  const records: any[] = [];
+  let offset: string | undefined = undefined;
+
+  do {
+    const params = new URLSearchParams();
+    params.set("pageSize", "100");
+    if (offset) params.set("offset", offset);
+
+    const data: any = await airtableFetch(`${baseUrl()}?${params.toString()}`);
+    records.push(...(data.records ?? []));
+    offset = data.offset;
+  } while (offset);
+
+  return records.map(mapRecordToJob);
+}

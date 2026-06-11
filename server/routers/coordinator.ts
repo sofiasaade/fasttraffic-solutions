@@ -4,6 +4,12 @@ import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
 import {
+  acknowledgeChanges,
+  getActiveChangeBadges,
+  getRecentChanges,
+  runChangeDetection,
+} from "../changeDetection";
+import {
   detectConflicts,
   deriveZone,
   getPayPeriodFor,
@@ -764,4 +770,30 @@ export const coordinatorRouter = router({
       await removeTruckAssignment(input.id);
       return { ok: true as const };
     }),
+
+  // --- 5-day change detection (snapshots/diffs of Airtable jobs) ---
+
+  // Alerts tray: recent changes within the planning window.
+  recentChanges: adminProcedure.query(async () => {
+    return getRecentChanges();
+  }),
+
+  // Map of airtableJobId -> unacknowledged changes, for row badges.
+  changeBadges: adminProcedure.query(async () => {
+    return getActiveChangeBadges();
+  }),
+
+  // Mark a set of changes as seen (dismiss from the tray/badges).
+  acknowledgeChanges: adminProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input }) => {
+      const n = await acknowledgeChanges(input.ids);
+      return { ok: true as const, acknowledged: n };
+    }),
+
+  // Manually run a detection pass now (does not wait for the daily cron).
+  runChangeDetection: adminProcedure.mutation(async () => {
+    const result = await runChangeDetection();
+    return result;
+  }),
 });

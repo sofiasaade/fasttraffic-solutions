@@ -229,3 +229,47 @@
 - [x] Show Setup Duration as a color-coded badge on Scheduler job rows
 - [x] Show Setup Duration badge in JobDetailInline accordion
 - [x] TypeScript clean + 50 tests passing
+
+## Feature 28: Day-column readability + alignment
+- [x] Align day header with body grid (both use grid-cols-[240px_repeat(7,minmax(180px,1fr))])
+- [x] Widen day columns to minmax(180px,1fr) so chip names (e.g. "Alejandro Galindez") read fully
+- [x] Chip text wraps as a fallback; min-w 1500px enables horizontal scroll instead of compressing
+- [x] Verified live in browser (Alejandro chip = 167px, full name fits) + 50 tests passing
+
+## Feature 29: Week/Day view toggle (single-day cards)
+- [x] Add Week/Day view toggle control in the Scheduler header
+- [x] Day picker (Mon..Sun of current week) when in Day view
+- [x] Day view renders that day's jobs as cards grouped by status
+- [x] Each card shows emoji, company, address, closure type, impact, setup duration + assigned resources
+- [x] Preserve drag-and-drop (worker/equipment/truck) onto each day card
+- [x] Click a resource chip to remove (same as grid)
+- [x] TypeScript clean + 50 tests passing
+
+## Feature 30: Color-code week-grid cell shading by Setup Duration
+- [x] Add setupDurationCellShade() (24h->purple, daily/daytime->amber, night->blue, other->neutral)
+- [x] Apply shade to covered day cells + duration bar in the week grid
+- [x] Verified live: Marmot (24h) purple, ALSA (Daily) amber + 50 tests passing
+
+## Feature 31: 5-day change detection (New/Cancelled/Postponed/Modified)
+- [ ] Read references/periodic-updates.md to choose scheduling approach
+- [ ] Add job_snapshots table (date, requestId, status, startDate, key fields hash + raw fields)
+- [ ] Add job_changes table (requestId, changeType, field, oldValue, newValue, detectedAt)
+- [ ] Server: snapshot today's 5-day-window jobs from Airtable + diff vs latest prior snapshot
+- [ ] Detect New / Cancelled(missing or status=Cancelled) / Postponed(startDate changed) / Modified(address, closureType, impact, setupDuration, technicians)
+- [ ] Schedule the snapshot+diff to run daily (Heartbeat)
+- [ ] tRPC: list recent changes (last 24h / 5-day window) + per-job latest change
+- [ ] Change badge (New/Cancelled/Postponed/Modified, color-coded) on Scheduler rows
+- [ ] Change badge on Dispatch Board rows
+- [ ] Changes/Alerts tray listing changes with before/after detail
+- [ ] TypeScript clean + tests passing
+
+## Feature 32: Highlight Alberta statutory holidays in Scheduler
+- [ ] Add Alberta statutory holidays list (computed per year)
+- [ ] Shade holiday day columns/cells with a distinct color (= costlier day) + tooltip with holiday name
+- [ ] TypeScript clean + tests passing
+
+## Feature 33: Grey out non-working days from Client message (pending examples)
+- [ ] Add clientMessage ("Client message") to AF map + JobRecord (read-only)
+- [ ] Interpret non-working days (LLM/parse) from Client message text
+- [ ] Grey out those day cells in the job row with tooltip showing the reason
+- [ ] TypeScript clean + tests passing

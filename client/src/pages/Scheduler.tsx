@@ -131,6 +131,27 @@ function setupDurationBadge(value: string): { label: string; cls: string } {
   return { label: value, cls: "bg-slate-100 text-slate-700 border-slate-200" };
 }
 
+// Returns the cell shade + duration-bar classes for a job, colored by its
+// Setup Duration category (matching the Airtable select colors):
+//   24 Hours -> purple, Daily/Daytime -> amber, Night -> blue, else neutral.
+function setupDurationShade(value: string | null | undefined): {
+  cell: string;
+  bar: string;
+} {
+  const v = (value ?? "").toLowerCase();
+  if (/24\s*hour/.test(v)) {
+    return { cell: "bg-purple-500/10 hover:bg-purple-500/20", bar: "bg-purple-500/60" };
+  }
+  if (/night/.test(v)) {
+    return { cell: "bg-blue-500/10 hover:bg-blue-500/20", bar: "bg-blue-500/60" };
+  }
+  if (/daily|daytime|day\s*time/.test(v)) {
+    return { cell: "bg-amber-400/15 hover:bg-amber-400/25", bar: "bg-amber-500/60" };
+  }
+  // Unknown / no setup duration: fall back to the neutral primary tint.
+  return { cell: "bg-primary/5 hover:bg-primary/10", bar: "bg-primary/40" };
+}
+
 // Status sections mirror the Dispatch board grouping.
 type SectionKey = "submitted" | "approved" | "field" | "cancelled";
 const STATUS_SECTIONS: {
@@ -275,6 +296,13 @@ export default function Scheduler() {
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<PanelTab>("workers");
+  // View mode: full week grid vs a single selected day (cards).
+  const [viewMode, setViewMode] = useState<"week" | "day">("week");
+  // Index (0..6, Mon..Sun) of the selected day in the visible week.
+  const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
+    const todayIdx = (new Date().getDay() + 6) % 7;
+    return todayIdx;
+  });
   const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
     submitted: false,
     approved: false,
@@ -402,6 +430,38 @@ export default function Scheduler() {
     }
     return map;
   }, [weekJobs]);
+
+  // ---- Day view: jobs that cover the selected day, grouped by status ----
+  const selectedDayKey = dayKeys[selectedDayIdx] ?? dayKeys[0];
+  const selectedDayDate = days[selectedDayIdx] ?? days[0];
+  const groupedDay = useMemo(() => {
+    const map: Record<SectionKey, Job[]> = {
+      submitted: [],
+      approved: [],
+      field: [],
+      cancelled: [],
+    };
+    for (const j of weekJobs) {
+      const s = parseDayKey(j.startDate);
+      const e = parseDayKey(j.endDate) || s;
+      if (!(selectedDayKey >= s && selectedDayKey <= e)) continue;
+      if (isCancelledJob(j)) {
+        map.cancelled.push(j);
+        continue;
+      }
+      const section = STATUS_SECTIONS.find((sec) => sec.status === j.status);
+      if (section) map[section.key].push(j);
+    }
+    return map;
+  }, [weekJobs, selectedDayKey]);
+  const dayJobCount = useMemo(
+    () =>
+      groupedDay.submitted.length +
+      groupedDay.approved.length +
+      groupedDay.field.length +
+      groupedDay.cancelled.length,
+    [groupedDay],
+  );
 
   // Technicians already booked (day-pinned) per day this week.
   const bookedByDay = useMemo(() => {
@@ -621,6 +681,183 @@ export default function Scheduler() {
 
   const loading = jobsQuery.isLoading || techQuery.isLoading;
 
+  // Single-day card (Day view). Reuses the same drop + remove handlers as the
+  // grid so assignment behaviour is identical; the drop target is the whole card.
+  const renderJobCard = (job: Job) => {
+    const dk = selectedDayKey;
+    const isExpanded = expandedJobs.has(job.id);
+    const chips = chipsFor(job.id, dk);
+    const equips = equipFor(job.id, dk);
+    const truckChips = trucksFor(job.id, dk);
+    const sd = job.setupDuration ? setupDurationBadge(job.setupDuration) : null;
+    return (
+      <div
+        key={job.id}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(e) => onDropCell(e, job, dk)}
+        className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden"
+      >
+        {/* Card header */}
+        <button
+          type="button"
+          onClick={() => toggleJobExpanded(job.id)}
+          aria-expanded={isExpanded}
+          className="group/card w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-accent/30 transition-colors"
+        >
+          <ChevronRightIcon
+            className={cn(
+              "size-4 mt-0.5 text-muted-foreground shrink-0 transition-transform",
+              isExpanded && "rotate-90 text-primary",
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {job.emoji ? (
+                <span className="text-base shrink-0 leading-none" title={job.calendarInfo ?? undefined}>
+                  {job.emoji}
+                </span>
+              ) : (
+                <Building2 className="size-4 text-muted-foreground shrink-0" />
+              )}
+              <span className="font-semibold text-sm group-hover/card:text-primary">
+                {job.company ?? "\u2014"}
+              </span>
+              {job.impact && (
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border",
+                    impactBadgeClass(job.impact),
+                  )}
+                  title={`Impact: ${job.impact}`}
+                >
+                  {impactLabel(job.impact)}
+                </span>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+              <MapPin className="size-3 shrink-0" />
+              <span className="truncate">{job.jobAddress ?? "No address"}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              {job.closureType && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                  <Construction className="size-3 shrink-0" />
+                  <span className="truncate max-w-[220px]">{job.closureType}</span>
+                </span>
+              )}
+              {sd && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border",
+                    sd.cls,
+                  )}
+                  title={job.setupDuration ?? undefined}
+                >
+                  <Clock className="size-3 shrink-0" />
+                  {sd.label}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+
+        {/* Resource drop zone for the selected day */}
+        <div className="px-4 pb-3 pt-1 border-t border-border/60">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
+            Assigned · {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}
+          </div>
+          {chips.length === 0 && equips.length === 0 && truckChips.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border px-3 py-3 text-center text-[11px] text-muted-foreground">
+              Drag a worker, equipment or truck here
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {chips.map((c) => (
+                <button
+                  key={`dw-${c.id}`}
+                  type="button"
+                  onClick={() => removeChip(c)}
+                  title={`${c.technicianName} \u2022 ${c.phase}${
+                    c.startTime ? ` \u2022 ${c.startTime}-${c.endTime ?? ""}` : ""
+                  } \u2014 click to remove`}
+                  className={cn(
+                    "group text-[11px] leading-tight px-2 py-1 rounded border flex items-center gap-1",
+                    PHASE_COLOR[c.phase as Phase] ??
+                      "bg-card text-foreground border-border",
+                  )}
+                >
+                  <span>{c.technicianName}</span>
+                  <X className="size-3 opacity-50 group-hover:opacity-100 shrink-0" />
+                </button>
+              ))}
+              {equips.map((eq) => {
+                const color = colorByEquipment.get(eq.equipmentName) ?? "#475569";
+                return (
+                  <button
+                    key={`de-${eq.id}`}
+                    type="button"
+                    onClick={() => removeEquipChip(eq)}
+                    title={`${eq.quantity}\u00d7 ${eq.equipmentName}${
+                      eq.technicianName ? ` \u2022 install: ${eq.technicianName}` : ""
+                    }${eq.notes ? ` \u2022 ${eq.notes}` : ""} \u2014 click to remove`}
+                    className="group text-[11px] leading-tight px-2 py-1 rounded border flex items-center gap-1"
+                    style={{
+                      backgroundColor: `${color}1a`,
+                      borderColor: `${color}55`,
+                      color,
+                    }}
+                  >
+                    <Package className="size-3 shrink-0" />
+                    <span>
+                      {eq.quantity > 1 ? `${eq.quantity}\u00d7 ` : ""}
+                      {eq.equipmentName}
+                    </span>
+                    <X className="size-3 opacity-50 group-hover:opacity-100 shrink-0" />
+                  </button>
+                );
+              })}
+              {truckChips.map((tk) => {
+                const color = colorByTruck.get(tk.truckName) ?? "#475569";
+                return (
+                  <button
+                    key={`dt-${tk.id}`}
+                    type="button"
+                    onClick={() => removeTruckChip(tk)}
+                    title={`${tk.truckName}${
+                      tk.driverName ? ` \u2022 driver: ${tk.driverName}` : ""
+                    }${tk.notes ? ` \u2022 ${tk.notes}` : ""} \u2014 click to remove`}
+                    className="group text-[11px] leading-tight px-2 py-1 rounded border border-dashed flex items-center gap-1"
+                    style={{
+                      backgroundColor: `${color}14`,
+                      borderColor: `${color}66`,
+                      color,
+                    }}
+                  >
+                    <Truck className="size-3 shrink-0" />
+                    <span>
+                      {tk.truckName}
+                      {tk.driverName ? ` \u00b7 ${tk.driverName}` : ""}
+                    </span>
+                    <X className="size-3 opacity-50 group-hover:opacity-100 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {isExpanded && (
+          <div className="bg-muted/30 border-t border-border">
+            <JobDetailInline job={job} />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderJobRow = (job: Job) => {
     const isExpanded = expandedJobs.has(job.id);
     return (
@@ -702,6 +939,7 @@ export default function Scheduler() {
         const jobEnd = parseDayKey(job.endDate) || jobStart;
         const isStart = covers && dk === jobStart;
         const isEnd = covers && dk === jobEnd;
+        const shade = setupDurationShade(job.setupDuration);
         return (
           <div
             key={i}
@@ -712,8 +950,7 @@ export default function Scheduler() {
             onDrop={(e) => onDropCell(e, job, dk)}
             className={cn(
               "border-l border-border min-h-[64px] h-full p-1.5 transition-colors",
-              covers ? "bg-primary/5" : "bg-transparent",
-              "hover:bg-primary/10",
+              covers ? shade.cell : "bg-transparent hover:bg-primary/5",
             )}
           >
             <div className="flex flex-col gap-1 h-full min-w-0">
@@ -724,7 +961,8 @@ export default function Scheduler() {
                 {covers && (
                   <div
                     className={cn(
-                      "h-1.5 bg-primary/40",
+                      "h-1.5",
+                      shade.bar,
                       isStart && "rounded-l-full",
                       isEnd && "rounded-r-full",
                       // Bleed into the cell borders so the bar reads as one
@@ -833,6 +1071,33 @@ export default function Scheduler() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Week / Day view toggle */}
+          <div className="flex items-center p-0.5 bg-muted rounded-lg mr-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("week")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                viewMode === "week"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("day")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                viewMode === "day"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Day
+            </button>
+          </div>
           <Button
             variant="outline"
             size="icon"
@@ -868,6 +1133,73 @@ export default function Scheduler() {
           {loading ? (
             <div className="flex justify-center py-20">
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : viewMode === "day" ? (
+            <div className="p-4 md:p-6">
+              {/* Day selector tabs */}
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {days.map((d, i) => {
+                  const isSel = i === selectedDayIdx;
+                  const isToday = dayKeyLocal(d) === dayKeyLocal(new Date());
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedDayIdx(i)}
+                      className={cn(
+                        "flex flex-col items-center min-w-[58px] px-3 py-1.5 rounded-lg border transition-colors",
+                        isSel
+                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                          : "bg-card border-border hover:bg-accent/40",
+                      )}
+                    >
+                      <span className="text-[10px] uppercase tracking-wide opacity-80">
+                        {WEEKDAY[i]}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-base font-bold leading-none mt-0.5",
+                          !isSel && isToday && "text-primary",
+                        )}
+                      >
+                        {d.getDate()}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {dayJobCount === 0 ? (
+                <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                  No jobs on {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}.
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {STATUS_SECTIONS.map((section) => {
+                    const sectionJobs = groupedDay[section.key];
+                    if (!sectionJobs || sectionJobs.length === 0) return null;
+                    return (
+                      <div key={section.key}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span
+                            className="size-2.5 rounded-full"
+                            style={{ backgroundColor: section.dot }}
+                          />
+                          <span className="font-semibold text-sm">
+                            {section.title}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({sectionJobs.length})
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                          {sectionJobs.map(renderJobCard)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             <div className="min-w-[1500px]">
