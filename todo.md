@@ -432,3 +432,9 @@
 - [x] Add filter toggles in Scheduler day view for job status: Field, Permit Approved, Permit Request Submitted (and Cancelled)
 - [x] Filtering hides non-matching status sections; multiple categories selectable; persists while switching days
 - [x] TypeScript clean + tests pass
+
+## Feature 50: Day Timeline category filter + status label
+- [x] Add category filter chips (Field, Permit Approved, Permit Request Submitted, Cancelled) to Day Timeline header
+- [x] Show each job's status/category on its column header
+- [x] Filter hides non-matching project columns; empty state when none match
+- [x] TypeScript clean + tests pass

@@ -21,6 +21,32 @@ import {
   categoryHeaderClasses,
   categoryColumnTint,
 } from "@/lib/jobDuration";
+import { isCancelledJob } from "@shared/jobStatus";
+
+/* --------------------------- status categories --------------------------- */
+
+type StatusKey = "submitted" | "approved" | "field" | "cancelled";
+const STATUS_FILTERS: {
+  key: StatusKey;
+  title: string;
+  dot: string;
+}[] = [
+  { key: "submitted", title: "Permit Request Submitted", dot: "#2563eb" },
+  { key: "approved", title: "Permit Approved", dot: "#ea580c" },
+  { key: "field", title: "Field", dot: "#16a34a" },
+  { key: "cancelled", title: "Cancelled", dot: "#dc2626" },
+];
+
+function statusKeyOf(p: { status: string | null; subStatus: string | null }): StatusKey {
+  if (isCancelledJob({ status: p.status, subStatus: p.subStatus })) return "cancelled";
+  const st = (p.status ?? "").toLowerCase();
+  if (st.includes("submitted")) return "submitted";
+  if (st.includes("approved")) return "approved";
+  return "field";
+}
+function statusMeta(key: StatusKey) {
+  return STATUS_FILTERS.find((s) => s.key === key)!;
+}
 
 /* ----------------------------- date helpers ----------------------------- */
 
@@ -87,6 +113,14 @@ export default function DayTimeline() {
   const [date, setDate] = useState(initialDate);
   const [range, setRange] = useState<"day" | "night" | "all">("all");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<Record<StatusKey, boolean>>({
+    submitted: true,
+    approved: true,
+    field: true,
+    cancelled: true,
+  });
+  const toggleStatus = (key: StatusKey) =>
+    setStatusFilter((prev) => ({ ...prev, [key]: !prev[key] }));
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const utils = trpc.useUtils();
@@ -110,7 +144,22 @@ export default function DayTimeline() {
     onError: (e) => toast.error(e.message),
   });
 
-  const projects = timelineQuery.data?.projects ?? [];
+  const allProjects = (timelineQuery.data?.projects ?? []) as Project[];
+  // Count per category (for the chip labels) and the filtered set shown.
+  const statusCounts = useMemo(() => {
+    const c: Record<StatusKey, number> = {
+      submitted: 0,
+      approved: 0,
+      field: 0,
+      cancelled: 0,
+    };
+    for (const p of allProjects) c[statusKeyOf(p)]++;
+    return c;
+  }, [allProjects]);
+  const projects = useMemo(
+    () => allProjects.filter((p) => statusFilter[statusKeyOf(p)]),
+    [allProjects, statusFilter],
+  );
 
   // Visible hour range based on the Day/Night toggle.
   const visibleHours = useMemo(() => {
@@ -264,6 +313,36 @@ export default function DayTimeline() {
         </div>
       </div>
 
+      {/* Category filter row */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card/60 px-5 py-2">
+        <span className="text-xs font-medium text-muted-foreground mr-1">
+          Filter:
+        </span>
+        {STATUS_FILTERS.map((s) => {
+          const on = statusFilter[s.key];
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => toggleStatus(s.key)}
+              aria-pressed={on}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                on
+                  ? "bg-accent border-border text-foreground"
+                  : "border-dashed border-border text-muted-foreground opacity-60 hover:opacity-100"
+              }`}
+            >
+              <span
+                className="size-2 rounded-full"
+                style={{ backgroundColor: s.dot }}
+              />
+              {s.title}
+              <span className="opacity-70">({statusCounts[s.key]})</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex min-h-0 flex-1">
         {/* Resource panel */}
         <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-muted/30">
@@ -336,8 +415,9 @@ export default function DayTimeline() {
             <div className="p-8 text-sm text-muted-foreground">Loading…</div>
           ) : projects.length === 0 ? (
             <div className="p-8 text-sm text-muted-foreground">
-              No projects scheduled on {prettyDate(date)}. Jobs whose date range
-              covers this day, or that already have assignments, appear here.
+              {allProjects.length === 0
+                ? `No projects scheduled on ${prettyDate(date)}. Jobs whose date range covers this day, or that already have assignments, appear here.`
+                : "No jobs match the selected categories. Adjust the filter above."}
             </div>
           ) : (
             <div
@@ -367,6 +447,22 @@ export default function DayTimeline() {
                       <div className="truncate text-xs text-muted-foreground">
                         {p.jobAddress || "—"}
                       </div>
+                      {(() => {
+                        const sk = statusKeyOf(p);
+                        const meta = statusMeta(sk);
+                        return (
+                          <span
+                            className="mt-1 mr-1 inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                            title={p.status ?? meta.title}
+                          >
+                            <span
+                              className="size-1.5 rounded-full"
+                              style={{ backgroundColor: meta.dot }}
+                            />
+                            {meta.title}
+                          </span>
+                        );
+                      })()}
                       {p.setupDuration && (
                         <span
                           className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${h.chip}`}
@@ -458,6 +554,8 @@ type Project = {
   jobAddress: string | null;
   emoji: string | null;
   setupDuration: string | null;
+  status: string | null;
+  subStatus: string | null;
   blocks: {
     kind: Kind;
     id: number;
