@@ -80,6 +80,11 @@ import {
   removeFlaggingHours,
   listFlaggingHoursForJob,
   listFlaggingHoursInWindow,
+  listDayAssignments,
+  createTimelineBlock,
+  setTimelineBlockTime,
+  moveTimelineBlock,
+  removeTimelineBlock,
 } from "../opsDb";
 import { storageGetSignedUrl, storagePut } from "../storage";
 
@@ -1495,5 +1500,176 @@ export const coordinatorRouter = router({
         peopleCount: j.people.size,
       }));
       return { rows, jobs, totalHours, totalAmountCents };
+    }),
+
+  /* --------------------------- Day Timeline --------------------------- */
+
+  // Projects scheduled on a given day, each with its hour-pinned blocks
+  // (workers/equipment/trucks). Used by the Day Timeline view.
+  dayTimeline: adminProcedure
+    .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .query(async ({ input }) => {
+      const date = input.date;
+      const [jobs, dayAssigns, equipCatalog, truckCatalog] = await Promise.all([
+        fetchMapJobs(),
+        listDayAssignments(date),
+        listEquipmentCatalog(),
+        listTruckCatalog(),
+      ]);
+      const ids = jobs.map((j) => j.id);
+      const overrideMap = await getJobOverridesMap(ids);
+
+      const equipColor = new Map(
+        equipCatalog.map((e) => [e.name, e.color ?? null] as const),
+      );
+      const truckColor = new Map(
+        truckCatalog.map((t) => [t.name, t.color ?? null] as const),
+      );
+
+      // A job is shown on this day if its [startDate, endDate] window covers it,
+      // OR it already has at least one block pinned on this day.
+      const pinnedJobIds = new Set<string>([
+        ...dayAssigns.workers.map((r) => r.airtableJobId),
+        ...dayAssigns.equipment.map((r) => r.airtableJobId),
+        ...dayAssigns.trucks.map((r) => r.airtableJobId),
+      ]);
+
+      const projects = jobs
+        .map((j) => mergeJob(j, undefined, overrideMap.get(j.id)))
+        .filter((j) => {
+          if (pinnedJobIds.has(j.id)) return true;
+          const start = (j.startDate ?? "").slice(0, 10);
+          const end = (j.endDate ?? j.startDate ?? "").slice(0, 10);
+          if (!start) return false;
+          return start <= date && date <= (end || start);
+        })
+        .map((j) => {
+          const workers = dayAssigns.workers
+            .filter((r) => r.airtableJobId === j.id)
+            .map((r) => ({
+              kind: "worker" as const,
+              id: r.id,
+              name: r.technicianName,
+              phase: r.phase,
+              startTime: r.startTime,
+              endTime: r.endTime,
+              color: null as string | null,
+            }));
+          const equipment = dayAssigns.equipment
+            .filter((r) => r.airtableJobId === j.id)
+            .map((r) => ({
+              kind: "equipment" as const,
+              id: r.id,
+              name: r.equipmentName,
+              phase: null as string | null,
+              startTime: r.startTime,
+              endTime: r.endTime,
+              color: equipColor.get(r.equipmentName) ?? null,
+            }));
+          const trucks = dayAssigns.trucks
+            .filter((r) => r.airtableJobId === j.id)
+            .map((r) => ({
+              kind: "truck" as const,
+              id: r.id,
+              name: r.truckName,
+              phase: null as string | null,
+              driverName: r.driverName,
+              startTime: r.startTime,
+              endTime: r.endTime,
+              color: truckColor.get(r.truckName) ?? null,
+            }));
+          return {
+            id: j.id,
+            company: j.company,
+            jobAddress: j.jobAddress,
+            emoji: (j as any).emoji ?? null,
+            closureType: (j as any).closureType ?? null,
+            impact: (j as any).impact ?? null,
+            setupDuration: j.setupDuration ?? null,
+            calendarInfo: (j as any).calendarInfo ?? null,
+            status: j.status,
+            subStatus: j.subStatus,
+            blocks: [...workers, ...equipment, ...trucks],
+          };
+        })
+        .sort((a, b) => (a.company || "").localeCompare(b.company || ""));
+
+      return { date, projects };
+    }),
+
+  // Create a new hour-pinned block on a project (worker/equipment/truck).
+  addTimelineBlock: adminProcedure
+    .input(
+      z.object({
+        kind: z.enum(["worker", "equipment", "truck"]),
+        airtableJobId: z.string(),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+        name: z.string().min(1),
+        phase: z.string().optional(),
+        driverName: z.string().optional(),
+        technicianName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const id = await createTimelineBlock({
+        kind: input.kind,
+        airtableJobId: input.airtableJobId,
+        scheduledDate: input.scheduledDate,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        name: input.name,
+        phase: input.phase ?? null,
+        driverName: input.driverName ?? null,
+        technicianName: input.technicianName ?? null,
+        actor: { userId: ctx.user.id, name: ctx.user.name ?? undefined },
+      });
+      return { id };
+    }),
+
+  // Resize a block (change start/end time only).
+  setTimelineTime: adminProcedure
+    .input(
+      z.object({
+        kind: z.enum(["worker", "equipment", "truck"]),
+        id: z.number(),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      await setTimelineBlockTime(input);
+      return { ok: true as const };
+    }),
+
+  // Move a block to another project / day / hour (keeps identity, no merge).
+  moveTimelineBlock: adminProcedure
+    .input(
+      z.object({
+        kind: z.enum(["worker", "equipment", "truck"]),
+        id: z.number(),
+        airtableJobId: z.string(),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      await moveTimelineBlock(input);
+      return { ok: true as const };
+    }),
+
+  // Remove a block.
+  removeTimelineBlock: adminProcedure
+    .input(
+      z.object({
+        kind: z.enum(["worker", "equipment", "truck"]),
+        id: z.number(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      await removeTimelineBlock(input);
+      return { ok: true as const };
     }),
 });

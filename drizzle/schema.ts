@@ -382,6 +382,9 @@ export const equipmentAssignments = mysqlTable("equipment_assignments", {
   equipmentName: varchar("equipmentName", { length: 128 }).notNull(),
   /** Local date of the equipment placement, stored as YYYY-MM-DD. */
   scheduledDate: varchar("scheduledDate", { length: 10 }).notNull(),
+  /** Start/end clock time as HH:MM (24h), optional (used by the Day Timeline). */
+  startTime: varchar("startTime", { length: 5 }),
+  endTime: varchar("endTime", { length: 5 }),
   /** Optional technician responsible for installing/placing the equipment. */
   technicianName: varchar("technicianName", { length: 128 }),
   quantity: int("quantity").default(1).notNull(),
@@ -433,6 +436,9 @@ export const truckAssignments = mysqlTable("truck_assignments", {
   truckName: varchar("truckName", { length: 128 }).notNull(),
   /** Local date of the truck assignment, stored as YYYY-MM-DD. */
   scheduledDate: varchar("scheduledDate", { length: 10 }).notNull(),
+  /** Start/end clock time as HH:MM (24h), optional (used by the Day Timeline). */
+  startTime: varchar("startTime", { length: 5 }),
+  endTime: varchar("endTime", { length: 5 }),
   /** Optional driver (worker) for the truck that day. */
   driverName: varchar("driverName", { length: 128 }),
   notes: text("notes"),

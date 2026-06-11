@@ -1434,3 +1434,180 @@ export async function listFlaggingHoursInWindow(
     )
     .orderBy(flaggingHours.workDate);
 }
+
+
+/* ----------------------------- Day Timeline ----------------------------- */
+//
+// The Day Timeline lets the coordinator place a worker / equipment / truck on a
+// specific HOUR of a specific project on a given day. Unlike the week grid
+// (which dedupes by job+phase+tech+date), the timeline allows the SAME person to
+// have multiple blocks on the same day/project at different hours (e.g. 9AM
+// Setup + 3PM Pickup). Each block is identified by its row id, so moving /
+// resizing simply updates that row.
+
+export type TimelineKind = "worker" | "equipment" | "truck";
+
+/** All worker/equipment/truck assignments pinned to a single calendar day. */
+export async function listDayAssignments(date: string) {
+  const d = await db();
+  const [workers, equipment, trucks] = await Promise.all([
+    d
+      .select()
+      .from(jobAssignments)
+      .where(eq(jobAssignments.scheduledDate, date)),
+    d
+      .select()
+      .from(equipmentAssignments)
+      .where(eq(equipmentAssignments.scheduledDate, date)),
+    d
+      .select()
+      .from(truckAssignments)
+      .where(eq(truckAssignments.scheduledDate, date)),
+  ]);
+  return { workers, equipment, trucks };
+}
+
+/**
+ * Create a brand-new timeline block (always inserts, never merges) so a person
+ * or resource can have several blocks on the same job/day at different hours.
+ * Returns the new row id.
+ */
+export async function createTimelineBlock(input: {
+  kind: TimelineKind;
+  airtableJobId: string;
+  scheduledDate: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  /** worker: technician name + phase; equipment: equipment name; truck: truck name */
+  name: string;
+  phase?: string | null; // worker only
+  driverName?: string | null; // truck only
+  technicianName?: string | null; // equipment installer (optional)
+  actor?: { userId?: number; name?: string };
+}): Promise<number> {
+  const d = await db();
+  if (input.kind === "worker") {
+    const res = await d.insert(jobAssignments).values({
+      airtableJobId: input.airtableJobId,
+      phase: input.phase ?? "Setup",
+      technicianName: input.name,
+      scheduledDate: input.scheduledDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      createdByUserId: input.actor?.userId ?? null,
+      createdByName: input.actor?.name ?? null,
+    });
+    return Number((res as any)[0]?.insertId ?? 0);
+  }
+  if (input.kind === "equipment") {
+    const res = await d.insert(equipmentAssignments).values({
+      airtableJobId: input.airtableJobId,
+      equipmentName: input.name,
+      scheduledDate: input.scheduledDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      technicianName: input.technicianName ?? null,
+      quantity: 1,
+      createdByUserId: input.actor?.userId ?? null,
+      createdByName: input.actor?.name ?? null,
+    });
+    return Number((res as any)[0]?.insertId ?? 0);
+  }
+  // truck
+  const res = await d.insert(truckAssignments).values({
+    airtableJobId: input.airtableJobId,
+    truckName: input.name,
+    scheduledDate: input.scheduledDate,
+    startTime: input.startTime,
+    endTime: input.endTime,
+    driverName: input.driverName ?? null,
+    createdByUserId: input.actor?.userId ?? null,
+    createdByName: input.actor?.name ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+/** Update only the start/end clock time of an existing timeline block (resize). */
+export async function setTimelineBlockTime(input: {
+  kind: TimelineKind;
+  id: number;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+}): Promise<boolean> {
+  const d = await db();
+  const patch = { startTime: input.startTime, endTime: input.endTime };
+  if (input.kind === "worker") {
+    await d
+      .update(jobAssignments)
+      .set(patch)
+      .where(eq(jobAssignments.id, input.id));
+  } else if (input.kind === "equipment") {
+    await d
+      .update(equipmentAssignments)
+      .set(patch)
+      .where(eq(equipmentAssignments.id, input.id));
+  } else {
+    await d
+      .update(truckAssignments)
+      .set(patch)
+      .where(eq(truckAssignments.id, input.id));
+  }
+  return true;
+}
+
+/**
+ * Move an existing timeline block to a (possibly different) project, day and
+ * hour. Unlike the week-grid move, this NEVER merges — the block keeps its
+ * identity so multiple same-person blocks can coexist.
+ */
+export async function moveTimelineBlock(input: {
+  kind: TimelineKind;
+  id: number;
+  airtableJobId: string;
+  scheduledDate: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+}): Promise<boolean> {
+  const d = await db();
+  const patch = {
+    airtableJobId: input.airtableJobId,
+    scheduledDate: input.scheduledDate,
+    startTime: input.startTime,
+    endTime: input.endTime,
+  };
+  if (input.kind === "worker") {
+    await d
+      .update(jobAssignments)
+      .set(patch)
+      .where(eq(jobAssignments.id, input.id));
+  } else if (input.kind === "equipment") {
+    await d
+      .update(equipmentAssignments)
+      .set(patch)
+      .where(eq(equipmentAssignments.id, input.id));
+  } else {
+    await d
+      .update(truckAssignments)
+      .set(patch)
+      .where(eq(truckAssignments.id, input.id));
+  }
+  return true;
+}
+
+/** Remove a timeline block by kind + id. */
+export async function removeTimelineBlock(input: {
+  kind: TimelineKind;
+  id: number;
+}): Promise<boolean> {
+  const d = await db();
+  if (input.kind === "worker") {
+    await d.delete(jobAssignments).where(eq(jobAssignments.id, input.id));
+  } else if (input.kind === "equipment") {
+    await d
+      .delete(equipmentAssignments)
+      .where(eq(equipmentAssignments.id, input.id));
+  } else {
+    await d.delete(truckAssignments).where(eq(truckAssignments.id, input.id));
+  }
+  return true;
+}

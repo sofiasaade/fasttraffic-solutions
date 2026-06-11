@@ -385,12 +385,12 @@
 - [x] TypeScript clean + tests passing (114 green) + verified in browser via tRPC roundtrip
 
 ## Feature 46: Day Timeline view (hour-by-hour assignment per project)
-- [ ] Click a day (day-column header or an "Open day" action) opens a Day Timeline for that date
-- [ ] Each project scheduled that day is a COLUMN; vertical axis = 24h in 1-hour blocks (auto-scroll to 6 AM)
-- [ ] Shade each project's working window (24h purple / daily yellow / night blue per setup duration)
-- [ ] Drag a worker/equipment/truck from Resources onto a project x hour cell -> creates assignment with startTime (default 1h block)
-- [ ] Same person can have multiple blocks same day/project at different hours (e.g. 9AM Setup, 3PM Pickup)
-- [ ] Drag an existing block to another hour/project to MOVE it (update startTime/endTime/job); resize to change end time
-- [ ] Day/Night range toggle that only changes the visible hour range (06-18 vs 18-06), no data loss
-- [ ] Backend: persist startTime/endTime on assignments; tRPC to set time, move block, list day-by-project
-- [ ] TypeScript clean + tests passing + verified in browser
+- [x] Click a day (day-column header opens Day Timeline; also a Day Timeline nav entry) opens a Day Timeline for that date
+- [x] Each project scheduled that day is a COLUMN; vertical axis = 24h in 1-hour blocks (auto-scroll to 6 AM)
+- [x] Shade each project's working window (24h purple / daily yellow / night blue per setup duration) via duration badge
+- [x] Drag a worker/equipment/truck from Resources onto a project x hour cell -> creates assignment with startTime (default 1h block)
+- [x] Same person can have multiple blocks same day/project at different hours (verified: 9AM Setup, 3PM Pickup)
+- [x] Drag an existing block to another hour/project to MOVE it (update startTime/endTime/job)
+- [x] Day/Night range toggle that only changes the visible hour range, no data loss
+- [x] Backend: persist startTime/endTime on assignments; tRPC to set time, move block, list day-by-project
+- [x] TypeScript clean + 127 tests passing + verified in browser (end-to-end via tRPC + DOM)

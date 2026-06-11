@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -271,6 +272,7 @@ type DragPayload =
 type PanelTab = "workers" | "equipment" | "trucks";
 
 export default function Scheduler() {
+  const [, navigate] = useLocation();
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
   const techQuery = trpc.coordinator.technicians.useQuery();
   const equipmentCatalogQuery = trpc.coordinator.equipmentCatalog.useQuery();
@@ -1430,11 +1432,13 @@ export default function Scheduler() {
                   const isToday = dayKeyLocal(d) === dayKeyLocal(new Date());
                   const hol = holidays[dayKeyLocal(d)] ?? null;
                   return (
-                    <div
+                    <button
                       key={i}
-                      title={hol ? `${hol} — statutory holiday (costlier day)` : undefined}
+                      type="button"
+                      onClick={() => navigate(`/day?date=${dayKeyLocal(d)}`)}
+                      title={hol ? `${hol} — statutory holiday (costlier day). Click to open the day timeline.` : "Click to open the day timeline"}
                       className={cn(
-                        "px-2 py-2 text-center border-l border-border",
+                        "px-2 py-2 text-center border-l border-border cursor-pointer transition-colors hover:bg-accent",
                         isToday && "bg-primary/5",
                         hol && "bg-rose-100/70",
                       )}
@@ -1456,7 +1460,7 @@ export default function Scheduler() {
                           {hol}
                         </div>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>

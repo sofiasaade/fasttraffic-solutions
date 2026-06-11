@@ -478,6 +478,94 @@ vi.mock("../opsDb", () => ({
       .filter((r) => r.workDate >= start && r.workDate <= end)
       .sort((a, b) => a.workDate.localeCompare(b.workDate)),
   ),
+
+  // Day Timeline (hour-pinned blocks). createTimelineBlock ALWAYS inserts a new
+  // row so the same person can hold several blocks on the same day/project.
+  listDayAssignments: vi.fn(async (date: string) => ({
+    workers: state.scheduled.filter((r) => r.scheduledDate === date),
+    equipment: state.equipment.filter((r) => r.scheduledDate === date),
+    trucks: state.trucks.filter((r) => r.scheduledDate === date),
+  })),
+  createTimelineBlock: vi.fn(async (input: any) => {
+    if (input.kind === "worker") {
+      const id = ++state.scheduledSeq;
+      state.scheduled.push({
+        id,
+        airtableJobId: input.airtableJobId,
+        phase: input.phase ?? "Setup",
+        technicianName: input.name,
+        scheduledDate: input.scheduledDate,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      });
+      return id;
+    }
+    if (input.kind === "equipment") {
+      const id = ++state.equipmentSeq;
+      state.equipment.push({
+        id,
+        airtableJobId: input.airtableJobId,
+        equipmentName: input.name,
+        scheduledDate: input.scheduledDate,
+        technicianName: input.technicianName ?? null,
+        quantity: 1,
+        notes: null,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      } as any);
+      return id;
+    }
+    const id = ++state.truckSeq;
+    state.trucks.push({
+      id,
+      airtableJobId: input.airtableJobId,
+      truckName: input.name,
+      scheduledDate: input.scheduledDate,
+      driverName: input.driverName ?? null,
+      notes: null,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    } as any);
+    return id;
+  }),
+  setTimelineBlockTime: vi.fn(async (input: any) => {
+    const arr =
+      input.kind === "worker"
+        ? state.scheduled
+        : input.kind === "equipment"
+          ? state.equipment
+          : state.trucks;
+    const row = (arr as any[]).find((r) => r.id === input.id);
+    if (row) {
+      row.startTime = input.startTime;
+      row.endTime = input.endTime;
+    }
+    return true;
+  }),
+  moveTimelineBlock: vi.fn(async (input: any) => {
+    const arr =
+      input.kind === "worker"
+        ? state.scheduled
+        : input.kind === "equipment"
+          ? state.equipment
+          : state.trucks;
+    const row = (arr as any[]).find((r) => r.id === input.id);
+    if (row) {
+      row.airtableJobId = input.airtableJobId;
+      row.scheduledDate = input.scheduledDate;
+      row.startTime = input.startTime;
+      row.endTime = input.endTime;
+    }
+    return true;
+  }),
+  removeTimelineBlock: vi.fn(async (input: any) => {
+    if (input.kind === "worker")
+      state.scheduled = state.scheduled.filter((r) => r.id !== input.id);
+    else if (input.kind === "equipment")
+      state.equipment = state.equipment.filter((r) => r.id !== input.id);
+    else state.trucks = state.trucks.filter((r) => r.id !== input.id);
+    return true;
+  }),
 }));
 
 import { appRouter } from "../routers";
@@ -1182,6 +1270,144 @@ describe("Flagging hours (per person-hour billing)", () => {
         technicianName: "Hector",
         workDate: "2026-06-11",
         hours: 5,
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("coordinator.dayTimeline", () => {
+  it("lists jobs whose date window covers the day, even with no blocks", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({ id: "recJOB1", startDate: "2026-06-15", endDate: "2026-06-15" }),
+    ];
+    const res = await caller.coordinator.dayTimeline({ date: "2026-06-15" });
+    expect(res.projects.length).toBe(1);
+    expect(res.projects[0].id).toBe("recJOB1");
+    expect(res.projects[0].blocks.length).toBe(0);
+  });
+
+  it("excludes jobs outside the day window unless they have a pinned block", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({ id: "recJOB1", startDate: "2026-06-15", endDate: "2026-06-15" }),
+    ];
+    const res = await caller.coordinator.dayTimeline({ date: "2026-06-20" });
+    expect(res.projects.length).toBe(0);
+  });
+
+  it("allows the SAME worker to hold multiple hour blocks on the same day/project", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({ id: "recJOB1", startDate: "2026-06-15", endDate: "2026-06-15" }),
+    ];
+    // 9:00 Setup
+    await caller.coordinator.addTimelineBlock({
+      kind: "worker",
+      airtableJobId: "recJOB1",
+      scheduledDate: "2026-06-15",
+      startTime: "09:00",
+      endTime: "10:00",
+      name: "Hector",
+      phase: "Setup",
+    });
+    // 15:00 Pickup (same person, same day, same project)
+    await caller.coordinator.addTimelineBlock({
+      kind: "worker",
+      airtableJobId: "recJOB1",
+      scheduledDate: "2026-06-15",
+      startTime: "15:00",
+      endTime: "16:00",
+      name: "Hector",
+      phase: "Pickup",
+    });
+    const res = await caller.coordinator.dayTimeline({ date: "2026-06-15" });
+    const hectorBlocks = res.projects[0].blocks.filter(
+      (b: any) => b.kind === "worker" && b.name === "Hector",
+    );
+    expect(hectorBlocks.length).toBe(2);
+    expect(hectorBlocks.map((b: any) => b.startTime).sort()).toEqual([
+      "09:00",
+      "15:00",
+    ]);
+  });
+
+  it("resizes a block via setTimelineTime", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [makeJob({ id: "recJOB1", startDate: "2026-06-15", endDate: "2026-06-15" })];
+    const { id } = await caller.coordinator.addTimelineBlock({
+      kind: "worker",
+      airtableJobId: "recJOB1",
+      scheduledDate: "2026-06-15",
+      startTime: "09:00",
+      endTime: "10:00",
+      name: "Hector",
+      phase: "Setup",
+    });
+    await caller.coordinator.setTimelineTime({
+      kind: "worker",
+      id,
+      startTime: "09:00",
+      endTime: "12:00",
+    });
+    const res = await caller.coordinator.dayTimeline({ date: "2026-06-15" });
+    const block = res.projects[0].blocks.find((b: any) => b.id === id);
+    expect(block?.endTime).toBe("12:00");
+  });
+
+  it("moves a block to another hour without merging", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [makeJob({ id: "recJOB1", startDate: "2026-06-15", endDate: "2026-06-15" })];
+    const { id } = await caller.coordinator.addTimelineBlock({
+      kind: "truck",
+      airtableJobId: "recJOB1",
+      scheduledDate: "2026-06-15",
+      startTime: "09:00",
+      endTime: "10:00",
+      name: "Truck 1",
+      driverName: "Hector",
+    });
+    await caller.coordinator.moveTimelineBlock({
+      kind: "truck",
+      id,
+      airtableJobId: "recJOB1",
+      scheduledDate: "2026-06-15",
+      startTime: "14:00",
+      endTime: "15:00",
+    });
+    const res = await caller.coordinator.dayTimeline({ date: "2026-06-15" });
+    const block = res.projects[0].blocks.find((b: any) => b.id === id && b.kind === "truck");
+    expect(block?.startTime).toBe("14:00");
+    expect(block?.driverName).toBe("Hector");
+  });
+
+  it("removes a block", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [makeJob({ id: "recJOB1", startDate: "2026-06-15", endDate: "2026-06-15" })];
+    const { id } = await caller.coordinator.addTimelineBlock({
+      kind: "equipment",
+      airtableJobId: "recJOB1",
+      scheduledDate: "2026-06-15",
+      startTime: "09:00",
+      endTime: "10:00",
+      name: "Barricades",
+    });
+    await caller.coordinator.removeTimelineBlock({ kind: "equipment", id });
+    const res = await caller.coordinator.dayTimeline({ date: "2026-06-15" });
+    expect(res.projects[0].blocks.filter((b: any) => b.kind === "equipment").length).toBe(0);
+  });
+
+  it("rejects timeline edits from a non-admin technician", async () => {
+    const caller = appRouter.createCaller(techCtx());
+    await expect(
+      caller.coordinator.addTimelineBlock({
+        kind: "worker",
+        airtableJobId: "recJOB1",
+        scheduledDate: "2026-06-15",
+        startTime: "09:00",
+        endTime: "10:00",
+        name: "Hector",
+        phase: "Setup",
       }),
     ).rejects.toThrow();
   });
