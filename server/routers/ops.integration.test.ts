@@ -263,6 +263,25 @@ vi.mock("../opsDb", () => ({
   removeAssignment: vi.fn(async (id: number) => {
     state.scheduled = state.scheduled.filter((r) => r.id !== id);
   }),
+  moveScheduledAssignment: vi.fn(async (input: { id: number; scheduledDate: string }) => {
+    const row = state.scheduled.find((r) => r.id === input.id);
+    if (!row) return null;
+    if (row.scheduledDate === input.scheduledDate) return row.id;
+    const dup = state.scheduled.find(
+      (r) =>
+        r.id !== row.id &&
+        r.airtableJobId === row.airtableJobId &&
+        r.phase === row.phase &&
+        r.technicianName === row.technicianName &&
+        r.scheduledDate === input.scheduledDate,
+    );
+    if (dup) {
+      state.scheduled = state.scheduled.filter((r) => r.id !== row.id);
+      return dup.id;
+    }
+    row.scheduledDate = input.scheduledDate;
+    return row.id;
+  }),
   listBookedTechniciansOnDate: vi.fn(async (date: string) =>
     Array.from(
       new Set(
@@ -302,6 +321,24 @@ vi.mock("../opsDb", () => ({
   ),
   removeEquipmentAssignment: vi.fn(async (id: number) => {
     state.equipment = state.equipment.filter((r) => r.id !== id);
+  }),
+  moveEquipmentAssignment: vi.fn(async (input: { id: number; scheduledDate: string }) => {
+    const row = state.equipment.find((r) => r.id === input.id);
+    if (!row) return null;
+    if (row.scheduledDate === input.scheduledDate) return row.id;
+    const dup = state.equipment.find(
+      (r) =>
+        r.id !== row.id &&
+        r.airtableJobId === row.airtableJobId &&
+        r.equipmentName === row.equipmentName &&
+        r.scheduledDate === input.scheduledDate,
+    );
+    if (dup) {
+      state.equipment = state.equipment.filter((r) => r.id !== row.id);
+      return dup.id;
+    }
+    row.scheduledDate = input.scheduledDate;
+    return row.id;
   }),
   // Truck catalog + assignments (local)
   seedTruckCatalog: vi.fn(async () => {
@@ -350,6 +387,24 @@ vi.mock("../opsDb", () => ({
   ),
   removeTruckAssignment: vi.fn(async (id: number) => {
     state.trucks = state.trucks.filter((r) => r.id !== id);
+  }),
+  moveTruckAssignment: vi.fn(async (input: { id: number; scheduledDate: string }) => {
+    const row = state.trucks.find((r) => r.id === input.id);
+    if (!row) return null;
+    if (row.scheduledDate === input.scheduledDate) return row.id;
+    const dup = state.trucks.find(
+      (r) =>
+        r.id !== row.id &&
+        r.airtableJobId === row.airtableJobId &&
+        r.truckName === row.truckName &&
+        r.scheduledDate === input.scheduledDate,
+    );
+    if (dup) {
+      state.trucks = state.trucks.filter((r) => r.id !== row.id);
+      return dup.id;
+    }
+    row.scheduledDate = input.scheduledDate;
+    return row.id;
   }),
   createBillingNote: vi.fn(async (n: any) => {
     const id = ++state.billingSeq;
@@ -657,6 +712,50 @@ describe("Day & time scheduler (local, no Airtable write)", () => {
     expect(state.scheduled.length).toBe(0);
     expect(state.airtableWriteCalls.length).toBe(0);
   });
+
+  it("moves a worker assignment to another day (updates date, no duplicate)", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Adrian",
+      scheduledDate: "2026-06-16", // Tuesday
+    });
+    const id = res.ok ? res.id : 0;
+    const moved = await caller.coordinator.moveScheduled({
+      id,
+      scheduledDate: "2026-06-18", // Thursday
+    });
+    expect(moved.ok).toBe(true);
+    expect(state.scheduled.length).toBe(1);
+    expect(state.scheduled[0].scheduledDate).toBe("2026-06-18");
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("merges instead of duplicating when moving onto a day that already has the same worker", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const a = await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Adrian",
+      scheduledDate: "2026-06-16",
+    });
+    await caller.coordinator.setScheduled({
+      jobId: "recJOB1",
+      phase: "Setup",
+      technicianName: "Adrian",
+      scheduledDate: "2026-06-18",
+    });
+    expect(state.scheduled.length).toBe(2);
+    const moved = await caller.coordinator.moveScheduled({
+      id: a.ok ? a.id : 0,
+      scheduledDate: "2026-06-18",
+    });
+    expect(moved.ok).toBe(true);
+    // Merged: still only one row on the target day.
+    expect(state.scheduled.length).toBe(1);
+    expect(state.scheduled[0].scheduledDate).toBe("2026-06-18");
+  });
 });
 
 describe("Equipment scheduling (local, no Airtable write)", () => {
@@ -706,6 +805,23 @@ describe("Equipment scheduling (local, no Airtable write)", () => {
     const id = res.id;
     await caller.coordinator.removeEquipment({ id });
     expect(state.equipment.length).toBe(0);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("moves an equipment placement to another day", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setEquipment({
+      jobId: "recJOB1",
+      equipmentName: "Barricades",
+      scheduledDate: "2026-06-15",
+    });
+    const moved = await caller.coordinator.moveEquipment({
+      id: res.id,
+      scheduledDate: "2026-06-17",
+    });
+    expect(moved.ok).toBe(true);
+    expect(state.equipment.length).toBe(1);
+    expect(state.equipment[0].scheduledDate).toBe("2026-06-17");
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 });
@@ -768,6 +884,25 @@ describe("Truck scheduling (local, no Airtable write)", () => {
     const id = (res as any).id as number;
     await caller.coordinator.removeTruck({ id });
     expect(state.trucks.length).toBe(0);
+    expect(state.airtableWriteCalls.length).toBe(0);
+  });
+
+  it("moves a truck assignment to another day and preserves the driver", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    const res = await caller.coordinator.setTruck({
+      jobId: "recJOB1",
+      truckName: "F 14",
+      scheduledDate: "2026-06-12",
+      driverName: "Hector",
+    });
+    const moved = await caller.coordinator.moveTruck({
+      id: (res as any).id as number,
+      scheduledDate: "2026-06-14",
+    });
+    expect(moved.ok).toBe(true);
+    expect(state.trucks.length).toBe(1);
+    expect(state.trucks[0].scheduledDate).toBe("2026-06-14");
+    expect(state.trucks[0].driverName).toBe("Hector");
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 });

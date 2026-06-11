@@ -44,6 +44,7 @@ import {
   setScheduledAssignment,
   listScheduledAssignmentsForWeek,
   removeAssignment,
+  moveScheduledAssignment,
   listBookedTechniciansOnDate,
   setSetting,
   sumHoursInPeriod,
@@ -53,11 +54,13 @@ import {
   setEquipmentAssignment,
   listEquipmentAssignmentsForWeek,
   removeEquipmentAssignment,
+  moveEquipmentAssignment,
   listTruckCatalog,
   seedTruckCatalog,
   setTruckAssignment,
   listTruckAssignmentsForWeek,
   removeTruckAssignment,
+  moveTruckAssignment,
   createBillingNote,
   listBillingNotes,
   getBillingNoteCounts,
@@ -679,6 +682,56 @@ export const coordinatorRouter = router({
       return { ok: true as const };
     }),
 
+  // Move an existing worker assignment to another day (drag within a job).
+  // Honors the same-day conflict check unless forced.
+  moveScheduled: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        force: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // Look up the row to know which technician/job is moving.
+      const sameDayRows = await listScheduledAssignmentsForWeek(
+        input.scheduledDate,
+        input.scheduledDate,
+      );
+      const moving = (
+        await listScheduledAssignmentsForWeek("0000-01-01", "9999-12-31")
+      ).find((r) => r.id === input.id);
+      if (!moving) return { ok: false as const, reason: "not_found" as const };
+
+      const conflict = sameDayRows.find(
+        (r) =>
+          r.technicianName === moving.technicianName &&
+          r.airtableJobId !== moving.airtableJobId,
+      );
+      if (conflict && !input.force) {
+        let label = conflict.airtableJobId;
+        try {
+          const oj = await fetchJobById(conflict.airtableJobId);
+          label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
+        } catch {
+          /* keep id */
+        }
+        return {
+          ok: false as const,
+          reason: "conflict" as const,
+          conflicts: [
+            { technician: moving.technicianName, otherJobLabel: label },
+          ],
+        };
+      }
+
+      const id = await moveScheduledAssignment({
+        id: input.id,
+        scheduledDate: input.scheduledDate,
+      });
+      return { ok: true as const, id };
+    }),
+
   /* ------------------------- Equipment (local only) ------------------------- */
 
   // Draggable equipment catalog for the Scheduler "Equipment" tab.
@@ -773,6 +826,19 @@ export const coordinatorRouter = router({
       return { ok: true as const };
     }),
 
+  // Move an existing equipment placement to another day.
+  moveEquipment: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const id = await moveEquipmentAssignment(input);
+      return { ok: id !== null, id };
+    }),
+
   /* ------------------------------- Trucks -------------------------------- */
 
   // The fleet catalog. Re-seed on every read so the latest fleet details
@@ -852,6 +918,19 @@ export const coordinatorRouter = router({
       }
 
       return { ok: true as const, id };
+    }),
+
+  // Move an existing truck placement to another day (driver preserved).
+  moveTruck: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const id = await moveTruckAssignment(input);
+      return { ok: id !== null, id };
     }),
 
   // Remove a single truck assignment (by row id).

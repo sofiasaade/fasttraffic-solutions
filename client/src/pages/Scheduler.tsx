@@ -261,7 +261,11 @@ type TruckItem = {
 type DragPayload =
   | { kind: "worker"; techName: string; techDisplay: string }
   | { kind: "equipment"; equipmentName: string; color: string | null }
-  | { kind: "truck"; truckName: string; color: string | null };
+  | { kind: "truck"; truckName: string; color: string | null }
+  // Existing assignments being dragged from one day cell to another.
+  | { kind: "move-worker"; id: number; jobId: string; label: string }
+  | { kind: "move-equipment"; id: number; jobId: string; label: string }
+  | { kind: "move-truck"; id: number; jobId: string; label: string };
 
 type PanelTab = "workers" | "equipment" | "trucks";
 
@@ -277,6 +281,9 @@ export default function Scheduler() {
   const truckCatalogQuery = trpc.coordinator.truckCatalog.useQuery();
   const setTruck = trpc.coordinator.setTruck.useMutation();
   const removeTruck = trpc.coordinator.removeTruck.useMutation();
+  const moveScheduled = trpc.coordinator.moveScheduled.useMutation();
+  const moveEquipment = trpc.coordinator.moveEquipment.useMutation();
+  const moveTruck = trpc.coordinator.moveTruck.useMutation();
   const changeBadgesQuery = trpc.coordinator.changeBadges.useQuery(undefined, {
     refetchInterval: 60_000,
   });
@@ -625,14 +632,76 @@ export default function Scheduler() {
         setEquipTech("none");
         setEquipNotes("");
         setEquipDrop({ job, dayKey: dk, equipmentName: payload.equipmentName });
-      } else {
+      } else if (payload.kind === "truck") {
         setTruckDriver("none");
         setTruckNotes("");
         setTruckDrop({ job, dayKey: dk, truckName: payload.truckName });
+      } else if (payload.kind === "move-worker") {
+        void doMoveWorker(payload, job, dk);
+      } else if (payload.kind === "move-equipment") {
+        void doMoveEquipment(payload, job, dk);
+      } else if (payload.kind === "move-truck") {
+        void doMoveTruck(payload, job, dk);
       }
     } catch {
       /* ignore */
     }
+  };
+
+  const doMoveWorker = async (
+    payload: { kind: "move-worker"; id: number; jobId: string; label: string },
+    job: Job,
+    dk: string,
+  ) => {
+    if (payload.jobId !== job.id) {
+      toast.error("You can only move an assignment within the same job.");
+      return;
+    }
+    const res = await moveScheduled.mutateAsync({ id: payload.id, scheduledDate: dk });
+    if (!res.ok) {
+      if (res.reason === "conflict") {
+        const force = await moveScheduled.mutateAsync({
+          id: payload.id,
+          scheduledDate: dk,
+          force: true,
+        });
+        if (force.ok) {
+          toast.success(`${payload.label} moved to ${dk} (over a day conflict).`);
+          utils.coordinator.scheduledAssignments.invalidate();
+        }
+      }
+      return;
+    }
+    toast.success(`${payload.label} moved to ${dk}.`);
+    utils.coordinator.scheduledAssignments.invalidate();
+  };
+
+  const doMoveEquipment = async (
+    payload: { kind: "move-equipment"; id: number; jobId: string; label: string },
+    job: Job,
+    dk: string,
+  ) => {
+    if (payload.jobId !== job.id) {
+      toast.error("You can only move equipment within the same job.");
+      return;
+    }
+    await moveEquipment.mutateAsync({ id: payload.id, scheduledDate: dk });
+    toast.success(`${payload.label} moved to ${dk}.`);
+    utils.coordinator.equipmentAssignments.invalidate();
+  };
+
+  const doMoveTruck = async (
+    payload: { kind: "move-truck"; id: number; jobId: string; label: string },
+    job: Job,
+    dk: string,
+  ) => {
+    if (payload.jobId !== job.id) {
+      toast.error("You can only move a truck within the same job.");
+      return;
+    }
+    await moveTruck.mutateAsync({ id: payload.id, scheduledDate: dk });
+    toast.success(`${payload.label} moved to ${dk}.`);
+    utils.coordinator.truckAssignments.invalidate();
   };
 
   const doSchedule = async (force: boolean) => {
@@ -837,6 +906,17 @@ export default function Scheduler() {
                   <button
                     key={`de-${eq.id}`}
                     type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      const payload: DragPayload = {
+                        kind: "move-equipment",
+                        id: eq.id,
+                        jobId: job.id,
+                        label: eq.equipmentName,
+                      };
+                      e.dataTransfer.setData("application/json", JSON.stringify(payload));
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
                     onClick={() => removeEquipChip(eq)}
                     title={`${eq.quantity}\u00d7 ${eq.equipmentName}${
                       eq.technicianName ? ` \u2022 install: ${eq.technicianName}` : ""
@@ -863,6 +943,17 @@ export default function Scheduler() {
                   <button
                     key={`dt-${tk.id}`}
                     type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      const payload: DragPayload = {
+                        kind: "move-truck",
+                        id: tk.id,
+                        jobId: job.id,
+                        label: tk.truckName,
+                      };
+                      e.dataTransfer.setData("application/json", JSON.stringify(payload));
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
                     onClick={() => removeTruckChip(tk)}
                     title={`${tk.truckName}${
                       tk.driverName ? ` \u2022 driver: ${tk.driverName}` : ""
@@ -1041,12 +1132,23 @@ export default function Scheduler() {
               </div>
               {chips.map((c) => (
                 <button
-                  key={`w-${c.id}`}
+                  key={`dw-${c.id}`}
                   type="button"
+                  draggable
+                  onDragStart={(e) => {
+                    const payload: DragPayload = {
+                      kind: "move-worker",
+                      id: c.id,
+                      jobId: job.id,
+                      label: c.technicianName,
+                    };
+                    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
                   onClick={() => removeChip(c)}
                   title={`${c.technicianName} • ${c.phase}${
                     c.startTime ? ` • ${c.startTime}-${c.endTime ?? ""}` : ""
-                  } — click to remove`}
+                  } — drag to move · click to remove`}
                   className={cn(
                     "group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start justify-between gap-1",
                     PHASE_COLOR[c.phase as Phase] ??
@@ -1063,6 +1165,17 @@ export default function Scheduler() {
                   <button
                     key={`e-${eq.id}`}
                     type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      const payload: DragPayload = {
+                        kind: "move-equipment",
+                        id: eq.id,
+                        jobId: job.id,
+                        label: eq.equipmentName,
+                      };
+                      e.dataTransfer.setData("application/json", JSON.stringify(payload));
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
                     onClick={() => removeEquipChip(eq)}
                     title={`${eq.quantity}× ${eq.equipmentName}${
                       eq.technicianName ? ` • install: ${eq.technicianName}` : ""
@@ -1089,6 +1202,17 @@ export default function Scheduler() {
                   <button
                     key={`t-${tk.id}`}
                     type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      const payload: DragPayload = {
+                        kind: "move-truck",
+                        id: tk.id,
+                        jobId: job.id,
+                        label: tk.truckName,
+                      };
+                      e.dataTransfer.setData("application/json", JSON.stringify(payload));
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
                     onClick={() => removeTruckChip(tk)}
                     title={`${tk.truckName}${
                       tk.driverName ? ` • driver: ${tk.driverName}` : ""

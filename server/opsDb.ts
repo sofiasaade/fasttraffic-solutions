@@ -770,6 +770,49 @@ export async function removeAssignment(id: number) {
   await d.delete(jobAssignments).where(eq(jobAssignments.id, id));
 }
 
+/**
+ * Move an existing day-pinned worker assignment to a different calendar day.
+ * If the target day already has the same (job, phase, technician), the moved
+ * row is merged (deleted) into the existing one to avoid duplicates.
+ * Returns the id of the surviving row, or null if the source id was not found.
+ */
+export async function moveScheduledAssignment(input: {
+  id: number;
+  scheduledDate: string; // YYYY-MM-DD
+}): Promise<number | null> {
+  const d = await db();
+  const found = await d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.id, input.id));
+  const row = found[0];
+  if (!row) return null;
+  if (row.scheduledDate === input.scheduledDate) return row.id;
+
+  // Merge if the same worker is already on the target day for this job+phase.
+  const dup = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, row.airtableJobId),
+        eq(jobAssignments.phase, row.phase),
+        eq(jobAssignments.technicianName, row.technicianName),
+        eq(jobAssignments.scheduledDate, input.scheduledDate),
+      ),
+    );
+  if (dup.length > 0) {
+    await d.delete(jobAssignments).where(eq(jobAssignments.id, input.id));
+    return dup[0].id;
+  }
+
+  await d
+    .update(jobAssignments)
+    .set({ scheduledDate: input.scheduledDate })
+    .where(eq(jobAssignments.id, input.id));
+  return input.id;
+}
+
 /** Technician names already booked (day-pinned) on a given calendar date. */
 export async function listBookedTechniciansOnDate(scheduledDate: string) {
   const d = await db();
@@ -1015,6 +1058,45 @@ export async function removeEquipmentAssignment(id: number) {
     .where(eq(equipmentAssignments.id, id));
 }
 
+/**
+ * Move an existing equipment placement to a different day. Merges into an
+ * existing same (job, equipment) row on the target day if present.
+ */
+export async function moveEquipmentAssignment(input: {
+  id: number;
+  scheduledDate: string;
+}): Promise<number | null> {
+  const d = await db();
+  const found = await d
+    .select()
+    .from(equipmentAssignments)
+    .where(eq(equipmentAssignments.id, input.id));
+  const row = found[0];
+  if (!row) return null;
+  if (row.scheduledDate === input.scheduledDate) return row.id;
+  const dup = await d
+    .select()
+    .from(equipmentAssignments)
+    .where(
+      and(
+        eq(equipmentAssignments.airtableJobId, row.airtableJobId),
+        eq(equipmentAssignments.equipmentName, row.equipmentName),
+        eq(equipmentAssignments.scheduledDate, input.scheduledDate),
+      ),
+    );
+  if (dup.length > 0) {
+    await d
+      .delete(equipmentAssignments)
+      .where(eq(equipmentAssignments.id, input.id));
+    return dup[0].id;
+  }
+  await d
+    .update(equipmentAssignments)
+    .set({ scheduledDate: input.scheduledDate })
+    .where(eq(equipmentAssignments.id, input.id));
+  return input.id;
+}
+
 
 /* ------------------------------ Truck Catalog ------------------------------ */
 
@@ -1225,4 +1307,41 @@ export async function listTruckAssignmentsForWeek(
 export async function removeTruckAssignment(id: number) {
   const d = await db();
   await d.delete(truckAssignments).where(eq(truckAssignments.id, id));
+}
+
+/**
+ * Move an existing truck placement to a different day (driver preserved).
+ * Merges into an existing same (job, truck) row on the target day if present.
+ */
+export async function moveTruckAssignment(input: {
+  id: number;
+  scheduledDate: string;
+}): Promise<number | null> {
+  const d = await db();
+  const found = await d
+    .select()
+    .from(truckAssignments)
+    .where(eq(truckAssignments.id, input.id));
+  const row = found[0];
+  if (!row) return null;
+  if (row.scheduledDate === input.scheduledDate) return row.id;
+  const dup = await d
+    .select()
+    .from(truckAssignments)
+    .where(
+      and(
+        eq(truckAssignments.airtableJobId, row.airtableJobId),
+        eq(truckAssignments.truckName, row.truckName),
+        eq(truckAssignments.scheduledDate, input.scheduledDate),
+      ),
+    );
+  if (dup.length > 0) {
+    await d.delete(truckAssignments).where(eq(truckAssignments.id, input.id));
+    return dup[0].id;
+  }
+  await d
+    .update(truckAssignments)
+    .set({ scheduledDate: input.scheduledDate })
+    .where(eq(truckAssignments.id, input.id));
+  return input.id;
 }

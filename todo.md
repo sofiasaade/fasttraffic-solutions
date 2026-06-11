@@ -374,3 +374,12 @@
 - [x] Make the first "Job" column sticky (left:0) so it stays visible while scrolling to see more days of the week
 - [x] Apply to both the header row and each job row; ensure background + border so content underneath doesn't show through
 - [x] TypeScript clean + verified in browser
+
+## Feature 45: Drag existing assignments between days (move, not recreate)
+- [x] Make assigned worker chips draggable; dropping on another day cell of the same job MOVES the assignment (updates scheduledDate) instead of creating a duplicate
+- [x] Same for equipment chips (move equipment assignment to another day)
+- [x] Same for truck chips (move truck assignment to another day, keep driver)
+- [x] Keep existing behavior: dragging from the Resources panel still CREATES a new assignment
+- [x] Avoid duplicates: if target day already has that same worker/equipment/truck for the job, merge (no duplicate)
+- [x] tRPC: moveScheduled / moveEquipment / moveTruck procedures
+- [x] TypeScript clean + tests passing (114 green) + verified in browser via tRPC roundtrip
