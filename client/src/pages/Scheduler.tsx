@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
+import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
 
@@ -323,6 +324,14 @@ export default function Scheduler() {
     [weekStart],
   );
   const dayKeys = useMemo(() => days.map(dayKeyLocal), [days]);
+
+  // Alberta statutory holidays for the years covered by the visible week
+  // (a week can straddle Dec/Jan). Highlighted as "costlier days" — NOT marked
+  // as non-working, since some clients work holidays.
+  const holidays = useMemo(() => {
+    const years = Array.from(new Set(days.map((d) => d.getFullYear())));
+    return albertaHolidaysForYears(years);
+  }, [days]);
 
   // Day-pinned scheduled assignments for the visible week.
   const schedQuery = trpc.coordinator.scheduledAssignments.useQuery({
@@ -950,9 +959,11 @@ export default function Scheduler() {
         const isStart = covers && dk === jobStart;
         const isEnd = covers && dk === jobEnd;
         const shade = setupDurationShade(job.setupDuration);
+        const hol = holidays[dk] ?? null;
         return (
           <div
             key={i}
+            title={hol ? `${hol} — statutory holiday (costlier day)` : undefined}
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "copy";
@@ -961,6 +972,7 @@ export default function Scheduler() {
             className={cn(
               "border-l border-border min-h-[64px] h-full p-1.5 transition-colors",
               covers ? shade.cell : "bg-transparent hover:bg-primary/5",
+              hol && "ring-1 ring-inset ring-rose-300 bg-rose-50/40",
             )}
           >
             <div className="flex flex-col gap-1 h-full min-w-0">
@@ -1146,21 +1158,34 @@ export default function Scheduler() {
             </div>
           ) : viewMode === "day" ? (
             <div className="p-4 md:p-6">
+              {holidays[dayKeyLocal(selectedDayDate)] && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                  <Calendar className="size-4 shrink-0" />
+                  <span>
+                    <strong>{holidays[dayKeyLocal(selectedDayDate)]}</strong> — Alberta
+                    statutory holiday. Scheduling here may incur holiday rates.
+                  </span>
+                </div>
+              )}
               {/* Day selector tabs */}
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {days.map((d, i) => {
                   const isSel = i === selectedDayIdx;
                   const isToday = dayKeyLocal(d) === dayKeyLocal(new Date());
+                  const hol = holidays[dayKeyLocal(d)] ?? null;
                   return (
                     <button
                       key={i}
                       type="button"
+                      title={hol ? `${hol} — statutory holiday (costlier day)` : undefined}
                       onClick={() => setSelectedDayIdx(i)}
                       className={cn(
                         "flex flex-col items-center min-w-[58px] px-3 py-1.5 rounded-lg border transition-colors",
                         isSel
                           ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "bg-card border-border hover:bg-accent/40",
+                          : hol
+                            ? "bg-rose-50 border-rose-300 hover:bg-rose-100"
+                            : "bg-card border-border hover:bg-accent/40",
                       )}
                     >
                       <span className="text-[10px] uppercase tracking-wide opacity-80">
@@ -1170,10 +1195,19 @@ export default function Scheduler() {
                         className={cn(
                           "text-base font-bold leading-none mt-0.5",
                           !isSel && isToday && "text-primary",
+                          !isSel && hol && "text-rose-700",
                         )}
                       >
                         {d.getDate()}
                       </span>
+                      {hol && (
+                        <span
+                          className={cn(
+                            "mt-1 size-1.5 rounded-full",
+                            isSel ? "bg-primary-foreground" : "bg-rose-500",
+                          )}
+                        />
+                      )}
                     </button>
                   );
                 })}
@@ -1223,12 +1257,15 @@ export default function Scheduler() {
                 </div>
                 {days.map((d, i) => {
                   const isToday = dayKeyLocal(d) === dayKeyLocal(new Date());
+                  const hol = holidays[dayKeyLocal(d)] ?? null;
                   return (
                     <div
                       key={i}
+                      title={hol ? `${hol} — statutory holiday (costlier day)` : undefined}
                       className={cn(
                         "px-2 py-2 text-center border-l border-border",
                         isToday && "bg-primary/5",
+                        hol && "bg-rose-100/70",
                       )}
                     >
                       <div className="text-[11px] uppercase text-muted-foreground">
@@ -1238,10 +1275,16 @@ export default function Scheduler() {
                         className={cn(
                           "text-sm font-semibold",
                           isToday && "text-primary",
+                          hol && "text-rose-700",
                         )}
                       >
                         {d.getDate()}
                       </div>
+                      {hol && (
+                        <div className="mt-0.5 text-[9px] font-medium leading-tight text-rose-700 truncate">
+                          {hol}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

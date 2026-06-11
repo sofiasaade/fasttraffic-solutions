@@ -264,9 +264,9 @@
 - [x] TypeScript clean + 61 tests passing
 
 ## Feature 32: Highlight Alberta statutory holidays in Scheduler
-- [ ] Add Alberta statutory holidays list (computed per year)
-- [ ] Shade holiday day columns/cells with a distinct color (= costlier day) + tooltip with holiday name
-- [ ] TypeScript clean + tests passing
+- [x] Add Alberta statutory holidays list (computed per year, shared/albertaHolidays.ts incl. Easter/Good Friday algorithm)
+- [x] Shade holiday day columns/cells with a distinct color (rose = costlier day) + tooltip with holiday name (week header, day cells, day-view selector + banner)
+- [x] TypeScript clean + 71 tests passing (added 10 holiday tests)
 
 ## Feature 33: Grey out non-working days from Client message (pending examples)
 - [ ] Add clientMessage ("Client message") to AF map + JobRecord (read-only)
