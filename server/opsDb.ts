@@ -619,6 +619,105 @@ export async function getAssignmentsMap(jobIds: string[]) {
   return map;
 }
 
+export type AssignmentStatus = "tentative" | "confirmed";
+
+/**
+ * Per-job assignment summary used to derive the Pending / Tentative / Confirmed
+ * job state and to color individual technician chips. Counts BOTH phase-level
+ * and day-pinned rows. A job with zero assignments is "pending".
+ */
+export async function getAssignmentStatusMap(jobIds: string[]) {
+  const map = new Map<
+    string,
+    {
+      total: number;
+      confirmed: number;
+      tentative: number;
+      byTech: Record<string, AssignmentStatus>;
+    }
+  >();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(inArray(jobAssignments.airtableJobId, jobIds));
+  for (const r of rows) {
+    if (!map.has(r.airtableJobId)) {
+      map.set(r.airtableJobId, {
+        total: 0,
+        confirmed: 0,
+        tentative: 0,
+        byTech: {},
+      });
+    }
+    const entry = map.get(r.airtableJobId)!;
+    entry.total += 1;
+    const status: AssignmentStatus =
+      r.status === "confirmed" ? "confirmed" : "tentative";
+    if (status === "confirmed") entry.confirmed += 1;
+    else entry.tentative += 1;
+    // A technician shown as confirmed once stays confirmed in the summary.
+    if (status === "confirmed" || !entry.byTech[r.technicianName]) {
+      entry.byTech[r.technicianName] = status;
+    }
+  }
+  return map;
+}
+
+/** Set the confirmation status of a single assignment row. */
+export async function setAssignmentStatus(
+  id: number,
+  status: AssignmentStatus,
+  actorName?: string,
+) {
+  const d = await db();
+  await d
+    .update(jobAssignments)
+    .set({
+      status,
+      confirmedAt: status === "confirmed" ? new Date() : null,
+      confirmedByName: status === "confirmed" ? actorName ?? null : null,
+    })
+    .where(eq(jobAssignments.id, id));
+}
+
+/**
+ * Confirm (or unconfirm) EVERY assignment row of a job. Returns the list of
+ * affected rows BEFORE the change so callers can decide which technicians need
+ * a notification (only newly-confirmed ones).
+ */
+export async function setJobAssignmentsStatus(
+  airtableJobId: string,
+  status: AssignmentStatus,
+  actorName?: string,
+) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.airtableJobId, airtableJobId));
+  await d
+    .update(jobAssignments)
+    .set({
+      status,
+      confirmedAt: status === "confirmed" ? new Date() : null,
+      confirmedByName: status === "confirmed" ? actorName ?? null : null,
+    })
+    .where(eq(jobAssignments.airtableJobId, airtableJobId));
+  return rows;
+}
+
+/** Look up a single assignment row by id (with its current status). */
+export async function getAssignmentById(id: number) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(eq(jobAssignments.id, id));
+  return rows[0] ?? null;
+}
+
 /** Replace the full technician set for a (job, phase). Returns old technicians. */
 export async function setPhaseAssignments(
   airtableJobId: string,
@@ -638,6 +737,19 @@ export async function setPhaseAssignments(
       ),
     );
   const old = existing.map((r) => r.technicianName);
+  // Preserve confirmation state for technicians who remain on the phase, so
+  // re-touching the phase list does not silently revert a confirmed worker
+  // back to tentative.
+  const prevByName = new Map(
+    existing.map((r) => [
+      r.technicianName,
+      {
+        status: r.status,
+        confirmedAt: r.confirmedAt as Date | null,
+        confirmedByName: r.confirmedByName as string | null,
+      },
+    ]),
+  );
 
   await d
     .delete(jobAssignments)
@@ -650,13 +762,19 @@ export async function setPhaseAssignments(
     );
 
   if (technicianNames.length > 0) {
-    const values: InsertJobAssignment[] = technicianNames.map((t) => ({
-      airtableJobId,
-      phase,
-      technicianName: t,
-      createdByUserId: actor.userId ?? null,
-      createdByName: actor.name ?? null,
-    }));
+    const values: InsertJobAssignment[] = technicianNames.map((t) => {
+      const prev = prevByName.get(t);
+      return {
+        airtableJobId,
+        phase,
+        technicianName: t,
+        status: prev?.status ?? "tentative",
+        confirmedAt: prev?.confirmedAt ?? null,
+        confirmedByName: prev?.confirmedByName ?? null,
+        createdByUserId: actor.userId ?? null,
+        createdByName: actor.name ?? null,
+      };
+    });
     await d.insert(jobAssignments).values(values);
   }
   return old;
@@ -666,13 +784,22 @@ export async function setPhaseAssignments(
  * Jobs (ids) a technician is assigned to, with the set of phases. Combines both
  * phase-level rows and day-pinned scheduler rows so the technician sees every
  * job they are on. Phases are de-duplicated.
+ *
+ * IMPORTANT: only CONFIRMED assignments are returned. Tentative assignments are
+ * the coordinator's working draft (moving people around) and must stay
+ * invisible to the technician until explicitly confirmed.
  */
 export async function listJobIdsForTechnician(technicianName: string) {
   const d = await db();
   const rows = await d
     .select()
     .from(jobAssignments)
-    .where(eq(jobAssignments.technicianName, technicianName));
+    .where(
+      and(
+        eq(jobAssignments.technicianName, technicianName),
+        eq(jobAssignments.status, "confirmed"),
+      ),
+    );
   const byJob = new Map<string, Set<string>>();
   for (const r of rows) {
     if (!byJob.has(r.airtableJobId)) byJob.set(r.airtableJobId, new Set());

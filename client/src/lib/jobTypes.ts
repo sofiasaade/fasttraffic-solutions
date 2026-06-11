@@ -26,6 +26,10 @@ export interface DispatchJob {
   emoji: string | null;
   clientMessage: string | null;
   zone: string;
+  // Coordinator assignment workflow (optional; present on board/dispatch jobs).
+  assignmentState?: "pending" | "tentative" | "confirmed" | "cancelled";
+  assignmentSummary?: { total: number; confirmed: number; tentative: number };
+  techStatus?: Record<string, "tentative" | "confirmed">;
 }
 
 export interface MyJob extends DispatchJob {

@@ -353,10 +353,10 @@
 - [ ] Allow a job to have separate per-day role slots, not just a single technician list (e.g. Setup crew vs Flagger)
 - [ ] Add a "Flagger" role slot to the job card so a job can be marked install-only (no flaggers) or with technicians staying as flaggers
 - [ ] Each role slot shows its own assigned count (e.g. 0/3) + time window + assigned people
-- [ ] Track flagging hours SEPARATELY from setup/install hours (flagger hours are billed to the client separately)
-- [ ] Surface a billable flagging-hours summary/report per job (and per week)
+- [x] Track flagging hours SEPARATELY from setup/install hours (flagger hours billed separately, per person-hour) via flagging_hours table
+- [x] Surface a billable flagging-hours summary/report per job (FlaggingHoursPanel) and per week (Workers calendar summary)
 - [x] Confirm with user: flagging billed per person-hour vs per service block -> PER PERSON-HOUR
-- [ ] TypeScript clean + tests passing
+- [x] TypeScript clean + tests passing (Flagger role available as a phase + flagging_hours billing)
 
 ## Feature 44: Worker recommendation engine (impact-based, override-friendly)
 - [x] Read job difficulty from Airtable `impact` field (High / Medium / Low) — already mapped
@@ -394,3 +394,36 @@
 - [x] Day/Night range toggle that only changes the visible hour range, no data loss
 - [x] Backend: persist startTime/endTime on assignments; tRPC to set time, move block, list day-by-project
 - [x] TypeScript clean + 127 tests passing + verified in browser (end-to-end via tRPC + DOM)
+
+## Feature 47: Pending jobs (no technician assigned) + coordinator alert
+- [ ] Backend: derive jobs in the active window with NO technician (scheduler_assignment) for their scheduled date(s)
+- [ ] Expose a `pendingJobs` tRPC query returning the unassigned jobs (emoji, dates, impact)
+- [ ] Scheduler: show a "Pending" badge on job rows with no technician assigned
+- [ ] Coordinator alert: badge/banner with count of pending jobs + a panel listing them
+- [ ] Dashboard: show pending jobs count
+- [ ] Tests passing + TypeScript clean
+
+## Feature 48: Tentative vs Confirmed assignments (suppress technician alerts until confirmed)
+- [ ] Schema: add `status` (tentative|confirmed) + confirmedAt/confirmedBy to job_assignments; push migration
+- [ ] assignTechnicians/setScheduled create rows as TENTATIVE and send NO technician notifications
+- [ ] Add confirmAssignment / unconfirmAssignment (and confirmJob = confirm all of a job) procedures
+- [ ] Notification to the technician fires ONLY on confirm (one alert), not on assign/move
+- [ ] Scheduler/Workers: tentative chips one color (amber/dashed), confirmed chips another (green/solid)
+- [ ] Confirm button on chip + "Confirm all" per job; allow revert to tentative
+- [ ] Job status: no techs = Pending, has techs = Tentative, all confirmed = Confirmed
+- [ ] Tests passing + TypeScript clean
+
+## Feature 47 — Completed
+- [x] Schema: status/confirmedAt/confirmedByName on job_assignments (pushed)
+- [x] Assigning/scheduling/moving = tentative, NO technician notification
+- [x] Technician app only sees CONFIRMED assignments
+- [x] No same-day double-booking block (techs work multiple jobs/day)
+- [x] confirmAssignment / confirmJob (+ revert) send one alert per newly-confirmed tech
+- [x] Re-touching a phase preserves confirmed technicians
+- [x] pendingJobs query (no technician, excludes cancelled)
+- [x] Scheduler: Pending/Tentative/Confirmed badge + "Confirm all" + per-chip confirm
+- [x] WorkerChip: amber dashed = tentative, green = confirmed
+- [x] WorkersCalendar: tentative vs confirmed bars + legend
+- [x] Coordinator sidebar: "Pending Jobs" nav with red count badge
+- [x] /pending page listing unassigned jobs with Assign action
+- [x] Tests: assignmentState + assignmentWorkflow (opsDb) + fixed ops.integration mock — 139 pass

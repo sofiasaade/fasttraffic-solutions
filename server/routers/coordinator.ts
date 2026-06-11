@@ -4,6 +4,7 @@ import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
 import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
+import { deriveAssignmentState } from "../../shared/jobStatus";
 import {
   recommendWorkers as computeRecommendations,
   type ExperienceLevel,
@@ -27,6 +28,10 @@ import {
   appendChangeHistory,
   createNotification,
   getAssignmentsMap,
+  getAssignmentStatusMap,
+  setAssignmentStatus,
+  setJobAssignmentsStatus,
+  getAssignmentById,
   getJobOverride,
   getJobOverridesMap,
   listAllAssignmentsForTechnician,
@@ -179,28 +184,74 @@ function mergeJob(
   return { ...merged, zone: deriveZone(merged as any) };
 }
 
+/**
+ * Attach the coordinator-facing assignment state (pending / tentative /
+ * confirmed / cancelled) plus a per-technician confirmation map to a merged
+ * job, without disturbing the existing job shape. New fields only.
+ */
+function withAssignmentState(
+  job: JobRecord & { zone?: string },
+  summary?: {
+    total: number;
+    confirmed: number;
+    tentative: number;
+    byTech: Record<string, "tentative" | "confirmed">;
+  },
+) {
+  const total = summary?.total ?? 0;
+  const confirmed = summary?.confirmed ?? 0;
+  const assignmentState = deriveAssignmentState({
+    status: job.status,
+    subStatus: job.subStatus,
+    total,
+    confirmed,
+  });
+  return {
+    ...job,
+    assignmentState,
+    assignmentSummary: {
+      total,
+      confirmed,
+      tentative: summary?.tentative ?? 0,
+    },
+    techStatus: summary?.byTech ?? {},
+  };
+}
+
 export const coordinatorRouter = router({
   // Dispatch board: Field + Permit Approved + Permit Request Submitted, merged
   // with local assignments and overrides.
   dispatchJobs: adminProcedure.query(async () => {
     const jobs = await fetchMapJobs();
     const ids = jobs.map((j) => j.id);
-    const [assignMap, overrideMap] = await Promise.all([
+    const [assignMap, overrideMap, statusMap] = await Promise.all([
       getAssignmentsMap(ids),
       getJobOverridesMap(ids),
+      getAssignmentStatusMap(ids),
     ]);
-    return jobs.map((j) => mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)));
+    return jobs.map((j) =>
+      withAssignmentState(
+        mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)),
+        statusMap.get(j.id),
+      ),
+    );
   }),
 
   // Board table: same merged shape for all three statuses.
   boardJobs: adminProcedure.query(async () => {
     const jobs = await fetchMapJobs();
     const ids = jobs.map((j) => j.id);
-    const [assignMap, overrideMap] = await Promise.all([
+    const [assignMap, overrideMap, statusMap] = await Promise.all([
       getAssignmentsMap(ids),
       getJobOverridesMap(ids),
+      getAssignmentStatusMap(ids),
     ]);
-    return jobs.map((j) => mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)));
+    return jobs.map((j) =>
+      withAssignmentState(
+        mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)),
+        statusMap.get(j.id),
+      ),
+    );
   }),
 
   // Jobs for the coordinator map view, with local overrides applied.
@@ -365,32 +416,10 @@ export const coordinatorRouter = router({
         details: `Phase: ${input.phase}${conflicts.length ? " (forced over conflict)" : ""}`,
       });
 
-      // Notifications: newly assigned / removed.
-      const before = new Set(oldValue);
-      const after = new Set(input.technicians);
-      const jobLabel = `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`;
-      for (const t of input.technicians) {
-        if (!before.has(t)) {
-          await createNotification({
-            technicianName: t,
-            airtableJobId: input.jobId,
-            type: "assigned",
-            title: `New ${input.phase} assignment`,
-            body: jobLabel,
-          });
-        }
-      }
-      for (const t of oldValue) {
-        if (!after.has(t)) {
-          await createNotification({
-            technicianName: t,
-            airtableJobId: input.jobId,
-            type: "cancelled",
-            title: `Removed from ${input.phase}`,
-            body: jobLabel,
-          });
-        }
-      }
+      // NOTE: assignments are created as TENTATIVE drafts. While the coordinator
+      // moves people around we deliberately send NO technician notifications —
+      // the technician is only alerted once the coordinator CONFIRMS them
+      // (see confirmAssignment / confirmJob). This avoids alert spam.
 
       // Return merged job so UI sees updated assignments.
       const assigns = await listAssignmentsForJob(input.jobId);
@@ -591,6 +620,9 @@ export const coordinatorRouter = router({
         scheduledDate: r.scheduledDate,
         startTime: r.startTime,
         endTime: r.endTime,
+        status: (r.status === "confirmed" ? "confirmed" : "tentative") as
+          | "tentative"
+          | "confirmed",
       }));
     }),
 
@@ -614,8 +646,6 @@ export const coordinatorRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const job = await fetchJobById(input.jobId);
-
       // Availability check: is this technician already booked that day on a
       // DIFFERENT job? Block unless forced.
       const bookedNames = await listBookedTechniciansOnDate(input.scheduledDate);
@@ -672,13 +702,8 @@ export const coordinatorRouter = router({
           : "Scheduled",
       });
 
-      await createNotification({
-        technicianName: input.technicianName,
-        airtableJobId: input.jobId,
-        type: "assigned",
-        title: `Scheduled: ${input.phase} on ${input.scheduledDate}`,
-        body: `${job.company ?? "Job"} — ${job.jobAddress ?? ""}`,
-      });
+      // Tentative draft — no technician notification here. The technician is
+      // alerted only when the coordinator confirms (see confirmAssignment).
 
       return { ok: true as const, id };
     }),
@@ -1317,6 +1342,9 @@ export const coordinatorRouter = router({
           scheduledDate: a.scheduledDate,
           startTime: a.startTime,
           endTime: a.endTime,
+          status: (a.status === "confirmed" ? "confirmed" : "tentative") as
+            | "tentative"
+            | "confirmed",
           company: j?.company ?? null,
           jobAddress: j?.jobAddress ?? null,
           municipality: j?.municipality ?? null,
@@ -1671,5 +1699,162 @@ export const coordinatorRouter = router({
     .mutation(async ({ input }) => {
       await removeTimelineBlock(input);
       return { ok: true as const };
+    }),
+
+  /* ----------------- Pending jobs + assignment confirmation ----------------- */
+
+  // Jobs that still have NO technician assigned (excludes cancelled/declined).
+  // These are surfaced to the coordinator as a "Pending" alert.
+  pendingJobs: adminProcedure.query(async () => {
+    const jobs = await fetchMapJobs();
+    const ids = jobs.map((j) => j.id);
+    const [overrideMap, statusMap] = await Promise.all([
+      getJobOverridesMap(ids),
+      getAssignmentStatusMap(ids),
+    ]);
+    const pending = jobs
+      .map((j) => withAssignmentState(mergeJob(j, undefined, overrideMap.get(j.id)), statusMap.get(j.id)))
+      .filter((j) => j.assignmentState === "pending")
+      .map((j) => ({
+        id: j.id,
+        company: j.company,
+        jobAddress: j.jobAddress,
+        municipality: j.municipality,
+        startDate: j.startDate,
+        endDate: j.endDate,
+        setupDuration: j.setupDuration,
+        status: j.status,
+        subStatus: j.subStatus,
+        impact: j.impact,
+        emoji: j.emoji,
+        closureType: j.closureType,
+        zone: j.zone,
+      }));
+    // Soonest start date first; nulls last.
+    pending.sort((a, b) => {
+      const ta = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+      const tb = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+      return ta - tb;
+    });
+    return { count: pending.length, jobs: pending };
+  }),
+
+  // Confirm or unconfirm a single assignment row (a technician chip). When
+  // confirming, the technician receives ONE notification (only if this is a
+  // fresh confirmation). Unconfirming sends nothing.
+  confirmAssignment: adminProcedure
+    .input(z.object({ id: z.number(), confirmed: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await getAssignmentById(input.id);
+      if (!row) return { ok: false as const, reason: "not_found" as const };
+      const actorName = ctx.user.name ?? ctx.user.email ?? "Coordinator";
+      const wasConfirmed = row.status === "confirmed";
+      await setAssignmentStatus(
+        input.id,
+        input.confirmed ? "confirmed" : "tentative",
+        actorName,
+      );
+      if (input.confirmed && !wasConfirmed) {
+        let label = row.airtableJobId;
+        try {
+          const oj = await fetchJobById(row.airtableJobId);
+          label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
+        } catch {
+          /* keep id */
+        }
+        await createNotification({
+          technicianName: row.technicianName,
+          airtableJobId: row.airtableJobId,
+          type: "assigned",
+          title: `Confirmed: ${row.phase}${row.scheduledDate ? ` on ${row.scheduledDate}` : ""}`,
+          body: label,
+        });
+        await appendChangeHistory({
+          airtableJobId: row.airtableJobId,
+          actorUserId: ctx.user.id,
+          actorName,
+          action: "confirm_assignment",
+          fieldName: row.phase,
+          oldValue: "tentative",
+          newValue: "confirmed",
+          details: `Confirmed ${row.technicianName}`,
+        });
+      } else if (!input.confirmed && wasConfirmed) {
+        await appendChangeHistory({
+          airtableJobId: row.airtableJobId,
+          actorUserId: ctx.user.id,
+          actorName,
+          action: "unconfirm_assignment",
+          fieldName: row.phase,
+          oldValue: "confirmed",
+          newValue: "tentative",
+          details: `Reverted ${row.technicianName} to tentative`,
+        });
+      }
+      return { ok: true as const };
+    }),
+
+  // Confirm (or unconfirm) EVERY assignment of a job at once. Sends ONE
+  // notification per technician that is newly confirmed.
+  confirmJob: adminProcedure
+    .input(z.object({ jobId: z.string(), confirmed: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const actorName = ctx.user.name ?? ctx.user.email ?? "Coordinator";
+      const before = await setJobAssignmentsStatus(
+        input.jobId,
+        input.confirmed ? "confirmed" : "tentative",
+        actorName,
+      );
+      if (before.length === 0) {
+        return { ok: false as const, reason: "no_assignments" as const };
+      }
+      let label = input.jobId;
+      try {
+        const oj = await fetchJobById(input.jobId);
+        label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
+      } catch {
+        /* keep id */
+      }
+      if (input.confirmed) {
+        // Notify each technician once (dedupe across phases/days), only those
+        // who were not already confirmed.
+        const newlyConfirmed: string[] = [];
+        for (const r of before) {
+          if (r.status !== "confirmed" && !newlyConfirmed.includes(r.technicianName)) {
+            newlyConfirmed.push(r.technicianName);
+          }
+        }
+        for (const name of newlyConfirmed) {
+          await createNotification({
+            technicianName: name,
+            airtableJobId: input.jobId,
+            type: "assigned",
+            title: "Assignment confirmed",
+            body: label,
+          });
+        }
+        await appendChangeHistory({
+          airtableJobId: input.jobId,
+          actorUserId: ctx.user.id,
+          actorName,
+          action: "confirm_job",
+          fieldName: null,
+          oldValue: "tentative",
+          newValue: "confirmed",
+          details: `Confirmed ${newlyConfirmed.length} technician(s)`,
+        });
+        return { ok: true as const, notified: newlyConfirmed };
+      }
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName,
+        action: "unconfirm_job",
+        fieldName: null,
+        oldValue: "confirmed",
+        newValue: "tentative",
+        details: "Reverted all assignments to tentative",
+      });
+      return { ok: true as const, notified: [] as string[] };
     }),
 });

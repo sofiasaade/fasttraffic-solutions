@@ -267,8 +267,12 @@ export default function WorkersCalendar() {
           Unavailable
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block size-3 rounded border border-blue-200 bg-blue-100" />
-          Assigned to a job
+          <span className="inline-block size-3 rounded border border-amber-400 border-dashed bg-amber-100" />
+          Tentative (not notified)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block size-3 rounded border border-emerald-500 bg-emerald-100" />
+          Confirmed (notified)
         </span>
       </div>
 
@@ -378,9 +382,15 @@ export default function WorkersCalendar() {
                           className={cn(
                             "min-w-0 max-w-full rounded border px-1.5 py-1 text-[10px] leading-tight",
                             colorForJob(a.airtableJobId),
+                            a.status === "confirmed"
+                              ? "ring-1 ring-emerald-500"
+                              : "border-dashed opacity-90",
                           )}
                         >
-                          <div className="font-semibold truncate">
+                          <div className="font-semibold truncate flex items-center gap-1">
+                            {a.status === "confirmed" && (
+                              <span className="inline-block size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                            )}
                             {PHASE_LABEL[a.phase] ?? a.phase}
                           </div>
                           <div className="truncate opacity-90">

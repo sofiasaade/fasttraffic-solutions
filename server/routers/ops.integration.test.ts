@@ -225,6 +225,37 @@ vi.mock("../opsDb", () => ({
     for (const id of ids) if (state.overrides[id]) map.set(id, state.overrides[id]);
     return map;
   }),
+  getAssignmentStatusMap: vi.fn(async (ids: string[]) => {
+    const map = new Map<
+      string,
+      {
+        total: number;
+        confirmed: number;
+        tentative: number;
+        byTech: Record<string, "tentative" | "confirmed">;
+      }
+    >();
+    for (const a of state.assignments as any[]) {
+      if (!ids.includes(a.airtableJobId)) continue;
+      const entry =
+        map.get(a.airtableJobId) ?? {
+          total: 0,
+          confirmed: 0,
+          tentative: 0,
+          byTech: {} as Record<string, "tentative" | "confirmed">,
+        };
+      const status: "tentative" | "confirmed" =
+        a.status === "confirmed" ? "confirmed" : "tentative";
+      entry.total += 1;
+      if (status === "confirmed") entry.confirmed += 1;
+      else entry.tentative += 1;
+      if (status === "confirmed" || !entry.byTech[a.technicianName]) {
+        entry.byTech[a.technicianName] = status;
+      }
+      map.set(a.airtableJobId, entry);
+    }
+    return map;
+  }),
 
   // Local photos / notes
   createJobPhoto: vi.fn(async (p: any) => {

@@ -13,6 +13,7 @@ import {
   BellRing,
   Gauge,
   Users,
+  AlertTriangle,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
   { href: "/day", label: "Day Timeline", icon: CalendarClock },
   { href: "/workers", label: "Workers", icon: Users },
+  { href: "/pending", label: "Pending Jobs", icon: AlertTriangle },
   { href: "/map", label: "Permit Map", icon: MapIcon },
   { href: "/alerts", label: "Change Alerts", icon: BellRing },
   { href: "/overtime", label: "Overtime", icon: Clock },
@@ -41,6 +43,10 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
   const alertCount = badges.data
     ? Object.values(badges.data).reduce((n, arr) => n + (arr?.length ?? 0), 0)
     : 0;
+  const pending = trpc.coordinator.pendingJobs.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
+  const pendingCount = pending.data?.count ?? 0;
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -79,6 +85,11 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
                 {item.href === "/alerts" && alertCount > 0 && (
                   <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
                     {alertCount > 99 ? "99+" : alertCount}
+                  </span>
+                )}
+                {item.href === "/pending" && pendingCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                    {pendingCount > 99 ? "99+" : pendingCount}
                   </span>
                 )}
               </Link>

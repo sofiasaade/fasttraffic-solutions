@@ -16,6 +16,7 @@ import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Scheduler from "./pages/Scheduler";
 import WorkersCalendar from "./pages/WorkersCalendar";
+import PendingJobs from "./pages/PendingJobs";
 import DayTimeline from "./pages/DayTimeline";
 import TechnicianApp from "./pages/TechnicianApp";
 
@@ -69,6 +70,11 @@ function Router() {
           <Route path="/workers">
             <CoordinatorShell>
               <WorkersCalendar />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/pending">
+            <CoordinatorShell>
+              <PendingJobs />
             </CoordinatorShell>
           </Route>
           <Route path="/day">

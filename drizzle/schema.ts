@@ -267,6 +267,12 @@ export const jobAssignments = mysqlTable("job_assignments", {
   scheduledDate: varchar("scheduledDate", { length: 10 }),
   startTime: varchar("startTime", { length: 5 }),
   endTime: varchar("endTime", { length: 5 }),
+  // Confirmation workflow: assignments start as "tentative" (the coordinator is
+  // still moving people around — NO technician alert is sent). Only when the
+  // coordinator confirms does the technician get a single notification.
+  status: varchar("status", { length: 16 }).default("tentative").notNull(),
+  confirmedAt: timestamp("confirmedAt"),
+  confirmedByName: varchar("confirmedByName", { length: 128 }),
   createdByUserId: int("createdByUserId"),
   createdByName: varchar("createdByName", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

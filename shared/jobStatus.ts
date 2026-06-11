@@ -21,3 +21,30 @@ export function isCancelledJob(j: StatusLike): boolean {
     sub.includes("declin")
   );
 }
+
+/**
+ * The coordinator's assignment state for a job, derived from how many
+ * technicians are assigned and whether they are confirmed:
+ *  - "pending"    -> no technician assigned at all (needs coordinator action)
+ *  - "tentative"  -> at least one technician assigned, but not all confirmed
+ *  - "confirmed"  -> every assigned technician is confirmed
+ *
+ * Cancelled jobs return "cancelled" and are excluded from pending alerts.
+ */
+export type AssignmentState =
+  | "pending"
+  | "tentative"
+  | "confirmed"
+  | "cancelled";
+
+export function deriveAssignmentState(input: {
+  status: string | null;
+  subStatus: string | null;
+  total: number;
+  confirmed: number;
+}): AssignmentState {
+  if (isCancelledJob(input)) return "cancelled";
+  if (input.total === 0) return "pending";
+  if (input.confirmed >= input.total) return "confirmed";
+  return "tentative";
+}

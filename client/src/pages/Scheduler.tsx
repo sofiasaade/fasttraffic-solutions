@@ -47,6 +47,7 @@ import {
   Construction,
   Ban,
   Receipt,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -220,6 +221,7 @@ type ScheduledRow = {
   scheduledDate: string | null;
   startTime: string | null;
   endTime: string | null;
+  status?: "tentative" | "confirmed";
 };
 
 type EquipmentRow = {
@@ -271,6 +273,118 @@ type DragPayload =
 
 type PanelTab = "workers" | "equipment" | "trucks";
 
+// A scheduled worker chip with explicit Tentative vs Confirmed styling.
+// - Tentative: amber, dashed border (coordinator is still moving people around;
+//   the technician is NOT notified and does NOT see the job yet).
+// - Confirmed: solid green (technician has been notified).
+// The small check button toggles confirmation; the X removes the assignment.
+function WorkerChip({
+  row,
+  compact,
+  draggable,
+  onDragStart,
+  onToggleConfirm,
+  onRemove,
+}: {
+  row: ScheduledRow;
+  compact?: boolean;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onToggleConfirm: () => void;
+  onRemove: () => void;
+}) {
+  const confirmed = row.status === "confirmed";
+  return (
+    <div
+      draggable={draggable}
+      onDragStart={onDragStart}
+      title={`${row.technicianName} • ${row.phase}${
+        row.startTime ? ` • ${row.startTime}-${row.endTime ?? ""}` : ""
+      } — ${confirmed ? "confirmed" : "tentative"}`}
+      className={cn(
+        "group rounded border flex items-center gap-1",
+        compact
+          ? "w-full text-[10px] leading-tight px-1 py-0.5"
+          : "text-[11px] leading-tight px-1.5 py-1",
+        confirmed
+          ? "bg-emerald-500/15 text-emerald-900 border-emerald-500"
+          : "bg-amber-100 text-amber-900 border-amber-400 border-dashed",
+      )}
+    >
+      {confirmed ? (
+        <Check className="size-3 shrink-0 text-emerald-600" />
+      ) : null}
+      <span className="min-w-0 flex-1 whitespace-normal break-words">
+        {row.technicianName}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleConfirm();
+        }}
+        title={confirmed ? "Revert to tentative" : "Confirm (notify technician)"}
+        className={cn(
+          "shrink-0 rounded p-0.5 transition-colors",
+          confirmed
+            ? "hover:bg-emerald-500/20 text-emerald-700"
+            : "hover:bg-amber-200 text-amber-700",
+        )}
+      >
+        <Check className="size-3" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        title="Remove assignment"
+        className="shrink-0 rounded p-0.5 opacity-50 group-hover:opacity-100 hover:bg-black/10"
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  );
+}
+
+// Small badge summarizing a job's coordinator assignment state.
+function AssignmentStateBadge({ job }: { job: Job }) {
+  const state = job.assignmentState;
+  if (!state || state === "cancelled") return null;
+  if (state === "pending") {
+    return (
+      <span
+        className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-rose-300 bg-rose-50 text-rose-700"
+        title="No technician assigned yet"
+      >
+        <AlertTriangle className="size-2.5" />
+        Pending
+      </span>
+    );
+  }
+  const s = job.assignmentSummary;
+  if (state === "confirmed") {
+    return (
+      <span
+        className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-emerald-400 bg-emerald-50 text-emerald-700"
+        title="All assigned technicians confirmed"
+      >
+        <Check className="size-2.5" />
+        Confirmed
+      </span>
+    );
+  }
+  return (
+    <span
+      className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-amber-400 bg-amber-50 text-amber-700"
+      title="Some technicians not yet confirmed"
+    >
+      Tentative{s ? ` ${s.confirmed}/${s.total}` : ""}
+    </span>
+  );
+}
+
 export default function Scheduler() {
   const [, navigate] = useLocation();
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
@@ -279,6 +393,8 @@ export default function Scheduler() {
   const utils = trpc.useUtils();
   const setScheduled = trpc.coordinator.setScheduled.useMutation();
   const removeScheduled = trpc.coordinator.removeScheduled.useMutation();
+  const confirmAssignment = trpc.coordinator.confirmAssignment.useMutation();
+  const confirmJob = trpc.coordinator.confirmJob.useMutation();
   const setEquipment = trpc.coordinator.setEquipment.useMutation();
   const removeEquipment = trpc.coordinator.removeEquipment.useMutation();
   const truckCatalogQuery = trpc.coordinator.truckCatalog.useQuery();
@@ -751,6 +867,39 @@ export default function Scheduler() {
     utils.coordinator.scheduledAssignments.invalidate();
   };
 
+  // Toggle a single chip between tentative and confirmed. Confirming sends the
+  // technician one notification (server-side); reverting sends nothing.
+  const toggleConfirmChip = async (row: ScheduledRow) => {
+    const next = row.status === "confirmed" ? false : true;
+    await confirmAssignment.mutateAsync({ id: row.id, confirmed: next });
+    toast.success(
+      next
+        ? `Confirmed ${row.technicianName} — technician notified.`
+        : `Reverted ${row.technicianName} to tentative.`,
+    );
+    utils.coordinator.scheduledAssignments.invalidate();
+    utils.coordinator.boardJobs.invalidate();
+    utils.coordinator.pendingJobs.invalidate();
+  };
+
+  // Confirm every assignment (phase + day chips) of a job at once.
+  const confirmAllForJob = async (jobId: string, jobLabel: string) => {
+    const res = await confirmJob.mutateAsync({ jobId, confirmed: true });
+    if (!res.ok) {
+      toast.error("This job has no technicians to confirm yet.");
+      return;
+    }
+    const n = res.notified?.length ?? 0;
+    toast.success(
+      n > 0
+        ? `Confirmed ${jobLabel} — notified ${n} technician${n === 1 ? "" : "s"}.`
+        : `Confirmed ${jobLabel}.`,
+    );
+    utils.coordinator.scheduledAssignments.invalidate();
+    utils.coordinator.boardJobs.invalidate();
+    utils.coordinator.pendingJobs.invalidate();
+  };
+
   const removeEquipChip = async (row: EquipmentRow) => {
     await removeEquipment.mutateAsync({ id: row.id });
     toast.success(`Removed ${row.equipmentName} from ${row.scheduledDate}.`);
@@ -886,22 +1035,12 @@ export default function Scheduler() {
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {chips.map((c) => (
-                <button
+                <WorkerChip
                   key={`dw-${c.id}`}
-                  type="button"
-                  onClick={() => removeChip(c)}
-                  title={`${c.technicianName} \u2022 ${c.phase}${
-                    c.startTime ? ` \u2022 ${c.startTime}-${c.endTime ?? ""}` : ""
-                  } \u2014 click to remove`}
-                  className={cn(
-                    "group text-[11px] leading-tight px-2 py-1 rounded border flex items-center gap-1",
-                    PHASE_COLOR[c.phase as Phase] ??
-                      "bg-card text-foreground border-border",
-                  )}
-                >
-                  <span>{c.technicianName}</span>
-                  <X className="size-3 opacity-50 group-hover:opacity-100 shrink-0" />
-                </button>
+                  row={c}
+                  onToggleConfirm={() => toggleConfirmChip(c)}
+                  onRemove={() => removeChip(c)}
+                />
               ))}
               {equips.map((eq) => {
                 const color = colorByEquipment.get(eq.equipmentName) ?? "#475569";
@@ -1034,6 +1173,7 @@ export default function Scheduler() {
               </span>
             )}
             <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
+            <AssignmentStateBadge job={job} />
             {(billingCountsMap[job.id] ?? 0) > 0 && (
               <span
                 className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-amber-300 bg-amber-50 text-amber-700"
@@ -1044,6 +1184,28 @@ export default function Scheduler() {
               </span>
             )}
           </div>
+          {job.assignmentState === "tentative" && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                confirmAllForJob(job.id, job.company ?? "job");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  confirmAllForJob(job.id, job.company ?? "job");
+                }
+              }}
+              title="Confirm all technicians on this job (notifies them)"
+              className="mt-1 inline-flex items-center gap-1 rounded-md border border-emerald-500 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+            >
+              <Check className="size-3" />
+              Confirm all
+            </span>
+          )}
           <div className="text-xs text-muted-foreground truncate mt-0.5">
             {job.jobAddress ?? "No address"}
           </div>
@@ -1134,9 +1296,10 @@ export default function Scheduler() {
                 )}
               </div>
               {chips.map((c) => (
-                <button
+                <WorkerChip
                   key={`dw-${c.id}`}
-                  type="button"
+                  row={c}
+                  compact
                   draggable
                   onDragStart={(e) => {
                     const payload: DragPayload = {
@@ -1148,19 +1311,9 @@ export default function Scheduler() {
                     e.dataTransfer.setData("application/json", JSON.stringify(payload));
                     e.dataTransfer.effectAllowed = "move";
                   }}
-                  onClick={() => removeChip(c)}
-                  title={`${c.technicianName} • ${c.phase}${
-                    c.startTime ? ` • ${c.startTime}-${c.endTime ?? ""}` : ""
-                  } — drag to move · click to remove`}
-                  className={cn(
-                    "group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start justify-between gap-1",
-                    PHASE_COLOR[c.phase as Phase] ??
-                      "bg-card text-foreground border-border",
-                  )}
-                >
-                  <span className="whitespace-normal break-words min-w-0">{c.technicianName}</span>
-                  <X className="size-3 opacity-0 group-hover:opacity-100 shrink-0" />
-                </button>
+                  onToggleConfirm={() => toggleConfirmChip(c)}
+                  onRemove={() => removeChip(c)}
+                />
               ))}
               {equips.map((eq) => {
                 const color = colorByEquipment.get(eq.equipmentName) ?? "#475569";
