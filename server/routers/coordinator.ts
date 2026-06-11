@@ -4,6 +4,10 @@ import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
 import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
+import {
+  recommendWorkers as computeRecommendations,
+  type ExperienceLevel,
+} from "../../shared/workerRecommendation";
 import { describeWeatherCode, DEFAULT_WEATHER_LOCATION } from "../../shared/weather";
 import { invokeLLM } from "../_core/llm";
 import {
@@ -58,7 +62,19 @@ import {
   listBillingNotes,
   getBillingNoteCounts,
   deleteBillingNote,
+  getTechnicianProfile,
+  upsertTechnicianProfile,
+  listTechnicianCertificates,
+  createTechnicianCertificate,
+  deleteTechnicianCertificate,
+  getCertificateCounts,
+  listTechnicianAvailability,
+  listAvailabilityForNames,
+  setWeekdayAvailability,
+  setDateAvailability,
+  removeAvailabilityRule,
 } from "../opsDb";
+import { storageGetSignedUrl, storagePut } from "../storage";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
 
@@ -227,12 +243,12 @@ export const coordinatorRouter = router({
     return listTechnicians();
   }),
 
-  // Set a technician's experience level (junior | senior). LOCAL only.
+  // Set a technician's experience level (apprentice | junior | senior). LOCAL only.
   setTechnicianLevel: adminProcedure
     .input(
       z.object({
         airtableName: z.string(),
-        level: z.enum(["junior", "senior"]),
+        level: z.enum(["apprentice", "junior", "senior"]),
       }),
     )
     .mutation(async ({ input }) => {
@@ -1021,5 +1037,280 @@ export const coordinatorRouter = router({
     .mutation(async ({ ctx, input }) => {
       await deleteBillingNote(input.id, ctx.user.id);
       return { ok: true as const };
+    }),
+
+  /* ------------------ Technician profile / certs / availability ----------- */
+
+  // Full profile bundle for one technician: profile text + certificates + availability.
+  technicianProfile: adminProcedure
+    .input(z.object({ airtableName: z.string() }))
+    .query(async ({ input }) => {
+      const [profile, certificates, availability] = await Promise.all([
+        getTechnicianProfile(input.airtableName),
+        listTechnicianCertificates(input.airtableName),
+        listTechnicianAvailability(input.airtableName),
+      ]);
+      // Sign certificate URLs so they resolve through the storage proxy.
+      const certs = await Promise.all(
+        certificates.map(async (c) => ({
+          ...c,
+          fileUrl: c.fileKey
+            ? await storageGetSignedUrl(c.fileKey).catch(() => c.fileUrl)
+            : c.fileUrl,
+        })),
+      );
+      return { profile, certificates: certs, availability };
+    }),
+
+  // Create/update the professional profile (experience summary, headline, years).
+  saveTechnicianProfile: adminProcedure
+    .input(
+      z.object({
+        airtableName: z.string(),
+        headline: z.string().trim().max(255).optional(),
+        experienceSummary: z.string().trim().max(5000).optional(),
+        yearsExperience: z.number().int().min(0).max(80).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const profile = await upsertTechnicianProfile({
+        airtableName: input.airtableName,
+        headline: input.headline?.trim() || null,
+        experienceSummary: input.experienceSummary?.trim() || null,
+        yearsExperience: input.yearsExperience ?? null,
+        updatedByUserId: ctx.user.id,
+        updatedByName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+      });
+      return { ok: true as const, profile };
+    }),
+
+  // Counts of certificates per technician name (for list badges).
+  certificateCounts: adminProcedure
+    .input(z.object({ airtableNames: z.array(z.string()) }))
+    .query(async ({ input }) => {
+      return getCertificateCounts(input.airtableNames);
+    }),
+
+  // Upload a safety certificate file (PDF/image) to S3 + metadata row.
+  uploadCertificate: adminProcedure
+    .input(
+      z.object({
+        airtableName: z.string(),
+        name: z.string().trim().min(1).max(255),
+        issuer: z.string().trim().max(255).optional(),
+        issuedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        // Optional file: base64 data + mime; allowed when present.
+        dataBase64: z.string().optional(),
+        mimeType: z.string().max(128).optional(),
+        fileName: z.string().max(255).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      let fileKey: string | null = null;
+      let fileUrl: string | null = null;
+      if (input.dataBase64 && input.dataBase64.length > 0) {
+        const base64 = input.dataBase64.includes(",")
+          ? input.dataBase64.split(",")[1]
+          : input.dataBase64;
+        const buffer = Buffer.from(base64, "base64");
+        const mime = input.mimeType || "application/pdf";
+        const ext = (input.fileName?.split(".").pop() || mime.split("/")[1] || "pdf").slice(0, 8);
+        const safeName = `${Date.now()}.${ext}`;
+        const key = `tech-certs/${input.airtableName.replace(/[^a-zA-Z0-9_-]/g, "_")}/${safeName}`;
+        const stored = await storagePut(key, buffer, mime);
+        fileKey = stored.key;
+        fileUrl = stored.url;
+      }
+      const id = await createTechnicianCertificate({
+        airtableName: input.airtableName,
+        name: input.name,
+        issuer: input.issuer?.trim() || null,
+        issuedDate: input.issuedDate || null,
+        expiryDate: input.expiryDate || null,
+        fileKey,
+        fileUrl,
+        fileName: input.fileName || null,
+        mimeType: input.mimeType || null,
+        uploadedByUserId: ctx.user.id,
+        uploadedByName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+      });
+      return { ok: true as const, id };
+    }),
+
+  // Delete a certificate row (file bytes become unreferenced in S3).
+  deleteCertificate: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await deleteTechnicianCertificate(input.id);
+      return { ok: true as const };
+    }),
+
+  // Set a recurring weekday availability rule (0=Sun..6=Sat).
+  setWeekdayAvailability: adminProcedure
+    .input(
+      z.object({
+        airtableName: z.string(),
+        weekday: z.number().int().min(0).max(6),
+        available: z.boolean(),
+        reason: z.string().trim().max(255).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const id = await setWeekdayAvailability({
+        airtableName: input.airtableName,
+        weekday: input.weekday,
+        available: input.available,
+        reason: input.reason?.trim() || null,
+        updatedByName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+      });
+      return { ok: true as const, id };
+    }),
+
+  // Set a specific-date availability override.
+  setDateAvailability: adminProcedure
+    .input(
+      z.object({
+        airtableName: z.string(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        available: z.boolean(),
+        reason: z.string().trim().max(255).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const id = await setDateAvailability({
+        airtableName: input.airtableName,
+        date: input.date,
+        available: input.available,
+        reason: input.reason?.trim() || null,
+        updatedByName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+      });
+      return { ok: true as const, id };
+    }),
+
+  // Remove an availability rule by id.
+  removeAvailabilityRule: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await removeAvailabilityRule(input.id);
+      return { ok: true as const };
+    }),
+
+  /* --------------------------- Worker week grid --------------------------- */
+
+  // Build the worker-week calendar: for each technician, the day-pinned project
+  // assignments and their availability across a date range (inclusive).
+  workerWeek: adminProcedure
+    .input(
+      z.object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    )
+    .query(async ({ input }) => {
+      await seedTechnicians();
+      const techs = await listTechnicians();
+      const names = techs.map((t) => t.airtableName);
+      const [assigns, availability, jobs, certCounts] = await Promise.all([
+        listScheduledAssignmentsForWeek(input.startDate, input.endDate),
+        listAvailabilityForNames(names),
+        fetchMapJobs(),
+        getCertificateCounts(names),
+      ]);
+      // Map job id -> label/company for the assignment bars.
+      const jobById = new Map(jobs.map((j) => [j.id, j]));
+      const assignments = assigns.map((a) => {
+        const j = a.airtableJobId ? jobById.get(a.airtableJobId) : undefined;
+        return {
+          id: a.id,
+          technicianName: a.technicianName,
+          airtableJobId: a.airtableJobId,
+          phase: a.phase,
+          scheduledDate: a.scheduledDate,
+          startTime: a.startTime,
+          endTime: a.endTime,
+          company: j?.company ?? null,
+          jobAddress: j?.jobAddress ?? null,
+          municipality: j?.municipality ?? null,
+        };
+      });
+      return {
+        technicians: techs.map((t) => ({
+          airtableName: t.airtableName,
+          displayName: t.displayName,
+          experienceLevel: t.experienceLevel,
+          certificateCount: certCounts.get(t.airtableName) ?? 0,
+        })),
+        assignments,
+        availability,
+      };
+    }),
+
+  /* --------------------- Worker recommendation engine -------------------- */
+
+  // Suggest technicians for a job based on its Airtable `impact` difficulty,
+  // availability on the target date, and same-day double-booking. This is a
+  // SUGGESTION ONLY — it never excludes anyone; the coordinator can override.
+  recommendWorkers: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        // Optional target day (YYYY-MM-DD) to factor in availability + bookings.
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      await seedTechnicians();
+      const [job, techs] = await Promise.all([
+        fetchJobById(input.jobId).catch(() => null),
+        listTechnicians(),
+      ]);
+      const names = techs.map((t) => t.airtableName);
+      const [availability, certCounts, bookedNames] = await Promise.all([
+        listAvailabilityForNames(names),
+        getCertificateCounts(names),
+        input.date
+          ? listBookedTechniciansOnDate(input.date)
+          : Promise.resolve([] as string[]),
+      ]);
+      const bookedSet = new Set(bookedNames);
+
+      // Availability resolver: date override beats weekday rule; default available.
+      const wd = input.date ? new Date(input.date + "T12:00:00").getDay() : null;
+      function isUnavailable(name: string): boolean {
+        if (!input.date) return false;
+        const rules = availability.filter((r) => r.airtableName === name);
+        const dateRule = rules.find(
+          (r) => r.kind === "date" && r.date === input.date,
+        );
+        if (dateRule) return !dateRule.available;
+        const wdRule = rules.find(
+          (r) => r.kind === "weekday" && r.weekday === wd,
+        );
+        if (wdRule) return !wdRule.available;
+        return false;
+      }
+
+      const recoInput = techs.map((t) => ({
+        airtableName: t.airtableName,
+        displayName: t.displayName,
+        experienceLevel: t.experienceLevel as ExperienceLevel,
+        certificateCount: certCounts.get(t.airtableName) ?? 0,
+        unavailable: isUnavailable(t.airtableName),
+        alreadyBooked: bookedSet.has(t.airtableName),
+      }));
+
+      const { difficulty, recommendations } = computeRecommendations(
+        recoInput,
+        job?.impact ?? null,
+      );
+      return {
+        difficulty,
+        impact: job?.impact ?? null,
+        recommendations,
+      };
     }),
 });

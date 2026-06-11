@@ -14,6 +14,12 @@ import {
   timeLogs,
   schedulerAssignments,
   InsertSchedulerAssignment,
+  technicianProfiles,
+  InsertTechnicianProfile,
+  technicianCertificates,
+  InsertTechnicianCertificate,
+  technicianAvailability,
+  InsertTechnicianAvailability,
 } from "../drizzle/schema";
 import {
   ALBERTA_OT_THRESHOLD_DEFAULT,
@@ -83,16 +89,196 @@ export async function updateTechnician(
   await d.update(technicians).set(patch).where(eq(technicians.id, id));
 }
 
-/** Set a technician's experience level (junior | senior) by airtableName. */
+/** Set a technician's experience level (apprentice | junior | senior). */
 export async function setTechnicianLevel(
   airtableName: string,
-  level: "junior" | "senior",
+  level: "apprentice" | "junior" | "senior",
 ) {
   const d = await db();
   await d
     .update(technicians)
     .set({ experienceLevel: level })
     .where(eq(technicians.airtableName, airtableName));
+}
+
+/* --------------------- Technician profiles / certs / availability ------- */
+
+export async function getTechnicianProfile(airtableName: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(technicianProfiles)
+    .where(eq(technicianProfiles.airtableName, airtableName))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function upsertTechnicianProfile(
+  data: InsertTechnicianProfile,
+) {
+  const d = await db();
+  await d
+    .insert(technicianProfiles)
+    .values(data)
+    .onDuplicateKeyUpdate({
+      set: {
+        headline: data.headline ?? null,
+        experienceSummary: data.experienceSummary ?? null,
+        yearsExperience: data.yearsExperience ?? null,
+        updatedByUserId: data.updatedByUserId ?? null,
+        updatedByName: data.updatedByName ?? null,
+      },
+    });
+  return getTechnicianProfile(data.airtableName);
+}
+
+export async function listTechnicianCertificates(airtableName: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(technicianCertificates)
+    .where(eq(technicianCertificates.airtableName, airtableName))
+    .orderBy(desc(technicianCertificates.createdAt));
+}
+
+export async function createTechnicianCertificate(
+  data: InsertTechnicianCertificate,
+) {
+  const d = await db();
+  const res = await d.insert(technicianCertificates).values(data);
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+export async function deleteTechnicianCertificate(id: number) {
+  const d = await db();
+  await d
+    .delete(technicianCertificates)
+    .where(eq(technicianCertificates.id, id));
+}
+
+/** Count certificates per technician (for list badges). */
+export async function getCertificateCounts(airtableNames: string[]) {
+  if (airtableNames.length === 0) return new Map<string, number>();
+  const d = await db();
+  const rows = await d
+    .select({
+      airtableName: technicianCertificates.airtableName,
+      total: sql<number>`count(*)`,
+    })
+    .from(technicianCertificates)
+    .where(inArray(technicianCertificates.airtableName, airtableNames))
+    .groupBy(technicianCertificates.airtableName);
+  const out = new Map<string, number>();
+  for (const r of rows) out.set(r.airtableName, Number(r.total));
+  return out;
+}
+
+export async function listTechnicianAvailability(airtableName: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(technicianAvailability)
+    .where(eq(technicianAvailability.airtableName, airtableName));
+}
+
+/** Availability rows for many technicians (for the worker-week grid). */
+export async function listAvailabilityForNames(airtableNames: string[]) {
+  if (airtableNames.length === 0)
+    return [] as (typeof technicianAvailability.$inferSelect)[];
+  const d = await db();
+  return d
+    .select()
+    .from(technicianAvailability)
+    .where(inArray(technicianAvailability.airtableName, airtableNames));
+}
+
+/** Set a recurring weekday availability rule (upsert by name+weekday). */
+export async function setWeekdayAvailability(input: {
+  airtableName: string;
+  weekday: number; // 0..6
+  available: boolean;
+  reason?: string | null;
+  updatedByName?: string | null;
+}) {
+  const d = await db();
+  const existing = await d
+    .select()
+    .from(technicianAvailability)
+    .where(
+      and(
+        eq(technicianAvailability.airtableName, input.airtableName),
+        eq(technicianAvailability.kind, "weekday"),
+        eq(technicianAvailability.weekday, input.weekday),
+      ),
+    );
+  if (existing.length > 0) {
+    await d
+      .update(technicianAvailability)
+      .set({
+        available: input.available,
+        reason: input.reason ?? null,
+        updatedByName: input.updatedByName ?? null,
+      })
+      .where(eq(technicianAvailability.id, existing[0].id));
+    return existing[0].id;
+  }
+  const res = await d.insert(technicianAvailability).values({
+    airtableName: input.airtableName,
+    kind: "weekday",
+    weekday: input.weekday,
+    available: input.available,
+    reason: input.reason ?? null,
+    updatedByName: input.updatedByName ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+/** Set a specific-date availability override (upsert by name+date). */
+export async function setDateAvailability(input: {
+  airtableName: string;
+  date: string; // YYYY-MM-DD
+  available: boolean;
+  reason?: string | null;
+  updatedByName?: string | null;
+}) {
+  const d = await db();
+  const existing = await d
+    .select()
+    .from(technicianAvailability)
+    .where(
+      and(
+        eq(technicianAvailability.airtableName, input.airtableName),
+        eq(technicianAvailability.kind, "date"),
+        eq(technicianAvailability.date, input.date),
+      ),
+    );
+  if (existing.length > 0) {
+    await d
+      .update(technicianAvailability)
+      .set({
+        available: input.available,
+        reason: input.reason ?? null,
+        updatedByName: input.updatedByName ?? null,
+      })
+      .where(eq(technicianAvailability.id, existing[0].id));
+    return existing[0].id;
+  }
+  const res = await d.insert(technicianAvailability).values({
+    airtableName: input.airtableName,
+    kind: "date",
+    date: input.date,
+    available: input.available,
+    reason: input.reason ?? null,
+    updatedByName: input.updatedByName ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+export async function removeAvailabilityRule(id: number) {
+  const d = await db();
+  await d
+    .delete(technicianAvailability)
+    .where(eq(technicianAvailability.id, id));
 }
 
 /* --------------------------- Hazard Assessments --------------------------- */

@@ -15,6 +15,7 @@ import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Scheduler from "./pages/Scheduler";
+import WorkersCalendar from "./pages/WorkersCalendar";
 import TechnicianApp from "./pages/TechnicianApp";
 
 function FullScreenLoader() {
@@ -62,6 +63,11 @@ function Router() {
           <Route path="/scheduler">
             <CoordinatorShell>
               <Scheduler />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/workers">
+            <CoordinatorShell>
+              <WorkersCalendar />
             </CoordinatorShell>
           </Route>
           <Route path="/map">

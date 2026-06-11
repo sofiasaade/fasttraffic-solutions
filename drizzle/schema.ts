@@ -45,7 +45,11 @@ export const technicians = mysqlTable("technicians", {
   userId: int("userId"),
   phone: varchar("phone", { length: 32 }),
   zones: text("zones"),
-  experienceLevel: mysqlEnum("experienceLevel", ["junior", "senior"])
+  experienceLevel: mysqlEnum("experienceLevel", [
+    "apprentice",
+    "junior",
+    "senior",
+  ])
     .default("junior")
     .notNull(),
   active: boolean("active").default(true).notNull(),
@@ -55,6 +59,80 @@ export const technicians = mysqlTable("technicians", {
 
 export type Technician = typeof technicians.$inferSelect;
 export type InsertTechnician = typeof technicians.$inferInsert;
+
+/**
+ * Per-technician professional profile: free-text experience summary and an
+ * optional headline. Level lives on the `technicians` row (experienceLevel).
+ * One row per technician (keyed by airtableName).
+ */
+export const technicianProfiles = mysqlTable("technician_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableName: varchar("airtableName", { length: 128 }).notNull().unique(),
+  headline: varchar("headline", { length: 255 }),
+  experienceSummary: text("experienceSummary"),
+  yearsExperience: int("yearsExperience"),
+  updatedByUserId: int("updatedByUserId"),
+  updatedByName: varchar("updatedByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TechnicianProfile = typeof technicianProfiles.$inferSelect;
+export type InsertTechnicianProfile = typeof technicianProfiles.$inferInsert;
+
+/**
+ * Safety-course / training certificates for a technician. The file bytes live
+ * in S3; we store the storage key + url here plus metadata.
+ */
+export const technicianCertificates = mysqlTable("technician_certificates", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableName: varchar("airtableName", { length: 128 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  issuer: varchar("issuer", { length: 255 }),
+  /** Stored as YYYY-MM-DD. */
+  issuedDate: varchar("issuedDate", { length: 10 }),
+  /** Stored as YYYY-MM-DD; null = no expiry. */
+  expiryDate: varchar("expiryDate", { length: 10 }),
+  fileKey: varchar("fileKey", { length: 512 }),
+  fileUrl: varchar("fileUrl", { length: 1024 }),
+  fileName: varchar("fileName", { length: 255 }),
+  mimeType: varchar("mimeType", { length: 128 }),
+  uploadedByUserId: int("uploadedByUserId"),
+  uploadedByName: varchar("uploadedByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TechnicianCertificate = typeof technicianCertificates.$inferSelect;
+export type InsertTechnicianCertificate =
+  typeof technicianCertificates.$inferInsert;
+
+/**
+ * Technician availability overrides. Two kinds of rows:
+ *  - kind="weekday": recurring weekly rule, weekday 0..6 (Sun..Sat), available bool
+ *  - kind="date": a specific calendar date (YYYY-MM-DD), available bool
+ * Absence of any rule = available by default. A date override beats a weekday rule.
+ */
+export const technicianAvailability = mysqlTable(
+  "technician_availability",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airtableName: varchar("airtableName", { length: 128 }).notNull(),
+    kind: mysqlEnum("kind", ["weekday", "date"]).notNull(),
+    /** 0..6 (Sun..Sat) when kind=weekday, else null. */
+    weekday: int("weekday"),
+    /** YYYY-MM-DD when kind=date, else null. */
+    date: varchar("date", { length: 10 }),
+    available: boolean("available").notNull(),
+    reason: varchar("reason", { length: 255 }),
+    updatedByName: varchar("updatedByName", { length: 128 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+);
+
+export type TechnicianAvailability =
+  typeof technicianAvailability.$inferSelect;
+export type InsertTechnicianAvailability =
+  typeof technicianAvailability.$inferInsert;
 
 /**
  * Hazard assessments. A submitted assessment for a (jobId, technician, phase)

@@ -11,6 +11,7 @@ import {
   CalendarRange,
   BellRing,
   Gauge,
+  Users,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -21,6 +22,7 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
   { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
+  { href: "/workers", label: "Workers", icon: Users },
   { href: "/map", label: "Permit Map", icon: MapIcon },
   { href: "/alerts", label: "Change Alerts", icon: BellRing },
   { href: "/overtime", label: "Overtime", icon: Clock },

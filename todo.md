@@ -308,3 +308,61 @@
 - [x] Dialog: structured form (extra signage, weekend/holiday surcharge toggles, plan stamped, charge amount + category) alongside the free note; render badges on saved entries
 - [x] Show a compact summary (signage/surcharge/amount chips) in the saved note card
 - [x] TypeScript clean + tests passing (3 new integration tests, verified end-to-end in browser)
+
+## Feature 38: Dashboard active works — count cards + collapsible sections [DONE]
+- [x] Add three count cards (Field, Permit Request Submitted, Permit Approved) like the "In the field" stat
+- [x] Make each status section collapsible (click card or header to expand/collapse) so no long scroll
+- [x] TypeScript clean; verified in browser
+
+## Feature 39: Employee (technician) profiles
+- [x] Inspect how technicians are modeled today (Airtable workers vs local DB) to choose storage
+- [x] Add employee_profiles table: experienceSummary (text), level (apprentice/junior/senior), updatedAt/by
+- [x] Add employee_certificates table: name, issuer, issuedAt, expiresAt, fileKey/url (S3 upload), uploadedAt/by
+- [x] Add employee_availability: per-day available/unavailable with reason (recurring weekday rules + specific date overrides)
+- [x] tRPC: get profile + availability + certs for a technician; upsert profile; add/delete cert (with file upload); set availability
+- [x] UI: clicking a technician opens a profile panel/page showing availability calendar, experience, level, and certificates
+- [x] Upload safety-course certificate files (store in S3 via storagePut, save key/url in DB)
+- [x] Level badge (Apprentice/Junior/Senior) shown on the technician and editable in profile
+- [x] TypeScript clean + tests passing
+
+## Feature 40: Worker week calendar (availability + assignments) — Assignar style
+- [x] New "Workers" calendar view: rows = employees, columns = days of the selected week
+- [x] Grey diagonal hatch on days the worker is NOT available (from employee_availability)
+- [x] Colored bars on days the worker is assigned, showing role/project (past = where they were, future = where they will be)
+- [x] Reuse existing phase assignments (workerWeek) as the assignment source per day
+- [x] Week navigation (prev/next/today) + filter by worker name
+- [x] Click a worker row/name to open the employee profile (Feature 39)
+- [x] TypeScript clean + tests passing
+
+## Feature 41: Assignar-style project windows (resource cards + detail)
+- [ ] Day cards with compact resource header: workers assigned (e.g. "3/3") + equipment count + time window (e.g. 7:00 AM - 5:00 PM)
+- [ ] Stacked worker avatars with "+N" overflow and equipment/truck icons on each day card
+- [ ] "Show Details" opens the project window with full info: assigned employees (level + role), equipment/trucks, dates, address, billing novedades
+- [ ] Side "Resources" panel (Workers / Equipment tabs) with search + crews to view/assign
+- [ ] Consistent visual look (rounded cards, soft shadows, status accent) matching the reference
+- [ ] TypeScript clean + tests passing
+
+## Feature 42: Employee communication / portal (permitted info only) — LATER
+- [ ] Worker view shows their weekly schedule (days + hours assigned)
+- [ ] Per assigned project, show ONLY: plans/drawings, project address, day, time, and requesting company name
+- [ ] Strictly hide billing, internal notes, client contact, margins, etc.
+- [ ] (Phase 2) Notify worker on assignment/shift change (SMS/email + link)
+- [ ] TypeScript clean + tests passing
+
+## Feature 43: Per-day role slots (incl. Flagger) + separately-billable flagging hours (part of project-window redesign)
+- [ ] Allow a job to have separate per-day role slots, not just a single technician list (e.g. Setup crew vs Flagger)
+- [ ] Add a "Flagger" role slot to the job card so a job can be marked install-only (no flaggers) or with technicians staying as flaggers
+- [ ] Each role slot shows its own assigned count (e.g. 0/3) + time window + assigned people
+- [ ] Track flagging hours SEPARATELY from setup/install hours (flagger hours are billed to the client separately)
+- [ ] Surface a billable flagging-hours summary/report per job (and per week)
+- [ ] Confirm with user: flagging billed per person-hour vs per service block
+- [ ] TypeScript clean + tests passing
+
+## Feature 44: Worker recommendation engine (impact-based, override-friendly)
+- [x] Read job difficulty from Airtable `impact` field (High / Medium / Low) — already mapped
+- [x] Matching rule: High impact -> Senior recommended; Medium -> Junior or Senior; Low -> any level (incl. Apprentice)
+- [x] Consider availability (skip workers marked unavailable that day) and avoid same-day double-booking
+- [x] "Recommended workers" panel sorted by match quality (best first), green check for full match, yellow warning for level mismatch
+- [x] Suggestions only — coordinator can override (no hard block)
+- [x] Pure helper for the matching logic in shared/ + unit tests
+- [x] TypeScript clean + tests passing

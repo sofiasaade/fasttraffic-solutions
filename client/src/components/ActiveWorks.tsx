@@ -1,8 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { fmtDate } from "@/lib/format";
-import { Loader2, MapPin, Building2, ArrowRight } from "lucide-react";
+import {
+  Loader2,
+  MapPin,
+  Building2,
+  ArrowRight,
+  ChevronDown,
+  HardHat,
+  FileClock,
+  FileCheck2,
+} from "lucide-react";
 
 type MapJob = {
   id: string;
@@ -25,34 +34,45 @@ function isActive(status: string | null): boolean {
   return !(s.includes("cancel") || s.includes("declin"));
 }
 
-// Status groups shown on the dashboard, in priority order.
-const GROUPS: {
+type GroupDef = {
   key: string;
   label: string;
   match: (s: string) => boolean;
   dot: string;
-  headerBg: string;
-}[] = [
+  Icon: typeof HardHat;
+  /** Tailwind classes for the count card accent. */
+  cardAccent: string;
+  iconWrap: string;
+};
+
+// Status groups shown on the dashboard, in priority order.
+const GROUPS: GroupDef[] = [
   {
     key: "field",
     label: "Field",
     match: (s) => s === "field",
     dot: "#16a34a",
-    headerBg: "bg-green-50 text-green-800",
-  },
-  {
-    key: "permit-approved",
-    label: "Permit Approved",
-    match: (s) => s.includes("approved"),
-    dot: "#ea580c",
-    headerBg: "bg-orange-50 text-orange-800",
+    Icon: HardHat,
+    cardAccent: "data-[active=true]:ring-green-500/60 data-[active=true]:bg-green-50",
+    iconWrap: "bg-green-100 text-green-700",
   },
   {
     key: "permit-requested",
     label: "Permit Request Submitted",
     match: (s) => s.includes("request") || s.includes("submitted"),
     dot: "#2563eb",
-    headerBg: "bg-blue-50 text-blue-800",
+    Icon: FileClock,
+    cardAccent: "data-[active=true]:ring-blue-500/60 data-[active=true]:bg-blue-50",
+    iconWrap: "bg-blue-100 text-blue-700",
+  },
+  {
+    key: "permit-approved",
+    label: "Permit Approved",
+    match: (s) => s.includes("approved"),
+    dot: "#ea580c",
+    Icon: FileCheck2,
+    cardAccent: "data-[active=true]:ring-orange-500/60 data-[active=true]:bg-orange-50",
+    iconWrap: "bg-orange-100 text-orange-700",
   },
 ];
 
@@ -102,6 +122,11 @@ export default function ActiveWorks() {
     return { grouped, otherActive, total: list.length };
   }, [jobs]);
 
+  // Collapsed state per group key. Default: all collapsed so nothing forces scroll.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const toggle = (key: string) =>
+    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -128,36 +153,110 @@ export default function ActiveWorks() {
           No active works right now.
         </div>
       ) : (
-        <div className="max-h-[520px] overflow-y-auto">
-          {grouped.map((g) =>
-            g.jobs.length === 0 ? null : (
-              <div key={g.key}>
-                <div
-                  className={`sticky top-0 z-10 flex items-center justify-between px-5 py-2 text-xs font-bold uppercase tracking-wide backdrop-blur ${g.headerBg}`}
+        <div>
+          {/* Count cards — click to expand/collapse the matching section */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4">
+            {grouped.map((g) => {
+              const isOpen = !!open[g.key];
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  data-active={isOpen}
+                  onClick={() => toggle(g.key)}
+                  className={`group flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-left ring-2 ring-transparent transition-all duration-200 hover:bg-accent/50 active:scale-[0.98] ${g.cardAccent}`}
+                >
+                  <span
+                    className={`flex size-10 items-center justify-center rounded-lg ${g.iconWrap}`}
+                  >
+                    <g.Icon className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-2xl font-bold leading-none tabular-nums">
+                      {g.jobs.length}
+                    </span>
+                    <span className="mt-1 block truncate text-xs font-medium text-muted-foreground">
+                      {g.label}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Collapsible sections */}
+          <div className="border-t border-border">
+            {grouped.map((g) =>
+              g.jobs.length === 0 ? null : (
+                <div key={g.key} className="border-b border-border last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => toggle(g.key)}
+                    className={`flex w-full items-center justify-between px-5 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors hover:brightness-95 ${
+                      g.key === "field"
+                        ? "bg-green-50 text-green-800"
+                        : g.key === "permit-requested"
+                          ? "bg-blue-50 text-blue-800"
+                          : "bg-orange-50 text-orange-800"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="size-2.5 rounded-full"
+                        style={{ background: g.dot }}
+                      />
+                      {g.label}
+                      <span className="tabular-nums opacity-70">
+                        ({g.jobs.length})
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`size-4 transition-transform duration-200 ${
+                        open[g.key] ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+                  {open[g.key] && (
+                    <div className="max-h-[360px] overflow-y-auto">
+                      <JobTable jobs={g.jobs} dot={g.dot} />
+                    </div>
+                  )}
+                </div>
+              ),
+            )}
+
+            {otherActive.length > 0 && (
+              <div className="border-b border-border last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => toggle("other")}
+                  className="flex w-full items-center justify-between px-5 py-2.5 text-xs font-bold uppercase tracking-wide bg-muted/60 text-muted-foreground transition-colors hover:brightness-95"
                 >
                   <span className="flex items-center gap-2">
-                    <span
-                      className="size-2.5 rounded-full"
-                      style={{ background: g.dot }}
-                    />
-                    {g.label}
+                    Other
+                    <span className="tabular-nums opacity-70">
+                      ({otherActive.length})
+                    </span>
                   </span>
-                  <span className="tabular-nums">{g.jobs.length}</span>
-                </div>
-                <JobTable jobs={g.jobs} dot={g.dot} />
+                  <ChevronDown
+                    className={`size-4 transition-transform duration-200 ${
+                      open["other"] ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {open["other"] && (
+                  <div className="max-h-[360px] overflow-y-auto">
+                    <JobTable jobs={otherActive} dot="#94a3b8" />
+                  </div>
+                )}
               </div>
-            ),
-          )}
-
-          {otherActive.length > 0 && (
-            <div>
-              <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-2 text-xs font-bold uppercase tracking-wide bg-muted/60 text-muted-foreground backdrop-blur">
-                <span>Other</span>
-                <span className="tabular-nums">{otherActive.length}</span>
-              </div>
-              <JobTable jobs={otherActive} dot="#94a3b8" />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

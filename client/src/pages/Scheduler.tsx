@@ -51,6 +51,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import { BillingNotesButton } from "@/components/BillingNotes";
+import { TechnicianProfileButton } from "@/components/TechnicianProfile";
+import { RecommendedWorkers } from "@/components/RecommendedWorkers";
 import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
@@ -1486,10 +1488,16 @@ export default function Scheduler() {
                                 "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                                 w.experienceLevel === "senior"
                                   ? "bg-blue-100 text-blue-700"
-                                  : "bg-slate-100 text-slate-600",
+                                  : w.experienceLevel === "apprentice"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-slate-100 text-slate-600",
                               )}
                             >
-                              {w.experienceLevel === "senior" ? "Senior" : "Junior"}
+                              {w.experienceLevel === "senior"
+                                ? "Senior"
+                                : w.experienceLevel === "apprentice"
+                                  ? "Apprentice"
+                                  : "Junior"}
                             </span>
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">
@@ -1501,23 +1509,33 @@ export default function Scheduler() {
                             )}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          title="Toggle Junior / Senior"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLevelMutation.mutate({
-                              airtableName: w.airtableName,
-                              level:
-                                w.experienceLevel === "senior"
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <TechnicianProfileButton
+                            airtableName={w.airtableName}
+                            displayName={w.displayName}
+                            experienceLevel={w.experienceLevel}
+                          />
+                          <button
+                            type="button"
+                            title="Cycle level: Apprentice → Junior → Senior"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const next =
+                                w.experienceLevel === "apprentice"
                                   ? "junior"
-                                  : "senior",
-                            });
-                          }}
-                          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                        >
-                          <ChevronsUpDown className="size-3.5" />
-                        </button>
+                                  : w.experienceLevel === "junior"
+                                    ? "senior"
+                                    : "apprentice";
+                              setLevelMutation.mutate({
+                                airtableName: w.airtableName,
+                                level: next,
+                              });
+                            }}
+                            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          >
+                            <ChevronsUpDown className="size-3.5" />
+                          </button>
+                        </div>
                       </li>
                     );
                   })}
@@ -2154,6 +2172,11 @@ function JobDetailInline({ job }: { job: Job }) {
               </span>
             )}
           </DetailRow>
+
+          <RecommendedWorkers
+            jobId={job.id}
+            date={job.startDate ? parseDayKey(job.startDate) || undefined : undefined}
+          />
         </div>
       </div>
 
