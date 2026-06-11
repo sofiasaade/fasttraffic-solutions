@@ -89,6 +89,16 @@ function prettyDate(key: string): string {
     year: "numeric",
   });
 }
+function shortDate(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso.slice(0, 10) || null;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 function hhmm(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00`;
 }
@@ -461,32 +471,103 @@ export default function DayTimeline() {
                           {p.company || "Untitled"}
                         </span>
                       </div>
+                      {p.projectTitle && (
+                        <div className="truncate text-xs font-medium text-foreground/80">
+                          {p.projectTitle}
+                        </div>
+                      )}
                       <div className="truncate text-xs text-muted-foreground">
                         {p.jobAddress || "—"}
                       </div>
+                      {(p.municipality || p.zone) && (
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {[p.municipality, p.zone].filter(Boolean).join(" · ")}
+                        </div>
+                      )}
+
+                      {/* Start / End dates */}
                       {(() => {
-                        const sk = statusKeyOf(p);
-                        const meta = statusMeta(sk);
+                        const s = shortDate(p.startDate);
+                        const e = shortDate(p.endDate);
+                        if (!s && !e) return null;
                         return (
-                          <span
-                            className="mt-1 mr-1 inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                            title={p.status ?? meta.title}
-                          >
-                            <span
-                              className="size-1.5 rounded-full"
-                              style={{ backgroundColor: meta.dot }}
-                            />
-                            {meta.title}
-                          </span>
+                          <div className="mt-1 flex flex-col gap-0.5 rounded-md border border-border bg-background/60 px-1.5 py-1 text-[10px] leading-tight">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-muted-foreground">Start</span>
+                              <span className="font-medium">{s ?? "—"}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="text-muted-foreground">End</span>
+                              <span className="font-medium">{e ?? s ?? "—"}</span>
+                            </div>
+                          </div>
                         );
                       })()}
-                      {p.setupDuration && (
-                        <span
-                          className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${h.chip}`}
-                          title={p.setupDuration}
-                        >
-                          {p.setupDuration}
-                        </span>
+
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(() => {
+                          const sk = statusKeyOf(p);
+                          const meta = statusMeta(sk);
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                              title={p.status ?? meta.title}
+                            >
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ backgroundColor: meta.dot }}
+                              />
+                              {meta.title}
+                            </span>
+                          );
+                        })()}
+                        {p.subStatus && (
+                          <span className="inline-block rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {p.subStatus}
+                          </span>
+                        )}
+                        {p.setupDuration && (
+                          <span
+                            className={`inline-block rounded border px-1.5 py-0.5 text-[10px] font-medium ${h.chip}`}
+                            title={p.setupDuration}
+                          >
+                            {p.setupDuration}
+                          </span>
+                        )}
+                        {p.impact && (
+                          <span className="inline-block rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                            {p.impact}
+                          </span>
+                        )}
+                        {p.closureType && (
+                          <span
+                            className="inline-block rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                            title={p.closureType}
+                          >
+                            {p.closureType}
+                          </span>
+                        )}
+                      </div>
+
+                      {(p.requestId || p.requestorName || p.siteContactPhone) && (
+                        <div className="mt-1 space-y-0.5 text-[10px] text-muted-foreground">
+                          {p.requestId && (
+                            <div className="truncate">ID: {p.requestId}</div>
+                          )}
+                          {p.requestorName && (
+                            <div className="truncate">Requestor: {p.requestorName}</div>
+                          )}
+                          {p.siteContactPhone && (
+                            <div className="truncate">
+                              <a
+                                href={`tel:${p.siteContactPhone}`}
+                                className="hover:underline"
+                              >
+                                {p.siteContactPhone}
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -569,8 +650,19 @@ type Project = {
   id: string;
   company: string | null;
   jobAddress: string | null;
+  projectTitle?: string | null;
   emoji: string | null;
   setupDuration: string | null;
+  closureType?: string | null;
+  impact?: string | null;
+  calendarInfo?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  municipality?: string | null;
+  zone?: string | null;
+  requestId?: string | null;
+  requestorName?: string | null;
+  siteContactPhone?: string | null;
   status: string | null;
   subStatus: string | null;
   blocks: {
