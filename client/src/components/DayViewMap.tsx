@@ -39,6 +39,24 @@ const BUCKET_THEME: Record<
 
 const DEFAULT_CENTER = { lat: 51.0447, lng: -114.0719 }; // Calgary
 
+// Build a circular DOM pin split into N equal color wedges (used when a job
+// belongs to more than one bucket on the same day, e.g. starting + pickup).
+function makeSplitPin(colors: string[]): HTMLElement {
+  const el = document.createElement("div");
+  const size = 26;
+  el.style.width = `${size}px`;
+  el.style.height = `${size}px`;
+  el.style.borderRadius = "50%";
+  el.style.border = "2px solid #ffffff";
+  el.style.boxShadow = "0 1px 4px rgba(0,0,0,0.4)";
+  if (colors.length === 2) {
+    el.style.background = `linear-gradient(90deg, ${colors[0]} 0 50%, ${colors[1]} 50% 100%)`;
+  } else {
+    el.style.background = `conic-gradient(${colors[0]} 0 120deg, ${colors[1]} 120deg 240deg, ${colors[2]} 240deg 360deg)`;
+  }
+  return el;
+}
+
 function shortDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const s = iso.slice(0, 10);
@@ -90,8 +108,13 @@ export default function DayViewMap({
     [markers, visible],
   );
 
-  const infoHtml = (j: DayMarker) => {
-    const t = BUCKET_THEME[j.bucket];
+  const infoHtml = (j: DayMarker, buckets: DayMarker["bucket"][]) => {
+    const badges = buckets
+      .map((b) => {
+        const t = BUCKET_THEME[b];
+        return `<span style="display:inline-block;font-size:10px;font-weight:600;background:${t.bg}1a;color:${t.bg};padding:2px 8px;border-radius:999px;margin-right:4px">${t.label}</span>`;
+      })
+      .join("");
     return `<div style="font-family:Inter,system-ui,sans-serif;max-width:240px">
       <div style="font-weight:700;font-size:13px;margin-bottom:2px">${escapeHtml(
         j.company ?? "Job",
@@ -104,9 +127,7 @@ export default function DayViewMap({
       )} → ${escapeHtml(shortDate(j.endDate))}${
         j.permitStartTime ? ` · ${escapeHtml(j.permitStartTime)}` : ""
       }</div>
-      <div style="margin-top:6px;display:inline-block;font-size:10px;font-weight:600;background:${
-        t.bg
-      }1a;color:${t.bg};padding:2px 8px;border-radius:999px">${t.label}</div>
+      <div style="margin-top:6px">${badges}</div>
     </div>`;
   };
 
@@ -127,37 +148,59 @@ export default function DayViewMap({
       markersRef.current.forEach((m) => (m.map = null));
       markersRef.current = [];
 
-      // De-dupe jobs that appear in both starting + pickup (single-day jobs):
-      // show a single marker, preferring the "starting" theme.
-      const seen = new Map<string, DayMarker>();
+      // Collapse the (possibly multiple) markers for a single job id into ONE
+      // map pin, while remembering EVERY bucket that job belongs to. A one-day
+      // job appears in both "starting" and "pickup"; we want a split pin so the
+      // coordinator can see it begins AND ends the same day.
+      const grouped = new Map<
+        string,
+        { job: DayMarker; buckets: Set<DayMarker["bucket"]> }
+      >();
       for (const j of list) {
-        const prev = seen.get(j.id);
-        if (!prev || (prev.bucket === "pickup" && j.bucket === "starting")) {
-          seen.set(j.id, j);
+        const entry = grouped.get(j.id);
+        if (entry) {
+          entry.buckets.add(j.bucket);
+          // Prefer the "starting" record as the representative for info/title.
+          if (entry.job.bucket === "pickup" && j.bucket === "starting") {
+            entry.job = j;
+          }
+        } else {
+          grouped.set(j.id, { job: j, buckets: new Set([j.bucket]) });
         }
       }
 
-      for (const j of Array.from(seen.values())) {
+      for (const { job: j, buckets } of Array.from(grouped.values())) {
         if (typeof j.lat !== "number" || typeof j.lon !== "number") {
           missing++;
           continue;
         }
         const pos = { lat: j.lat, lng: j.lon };
-        const theme = BUCKET_THEME[j.bucket];
-        const pin = new PinElement({
-          background: theme.bg,
-          borderColor: theme.border,
-          glyphColor: "#ffffff",
-          scale: 1.05,
-        });
+        // Ordered list of distinct bucket colors present for this job.
+        const order: DayMarker["bucket"][] = ["starting", "ongoing", "pickup"];
+        const activeBuckets = order.filter((b) => buckets.has(b));
+        const isSplit = activeBuckets.length > 1;
+
+        let content: HTMLElement;
+        if (isSplit) {
+          content = makeSplitPin(activeBuckets.map((b) => BUCKET_THEME[b].bg));
+        } else {
+          const theme = BUCKET_THEME[activeBuckets[0] ?? j.bucket];
+          const pin = new PinElement({
+            background: theme.bg,
+            borderColor: theme.border,
+            glyphColor: "#ffffff",
+            scale: 1.05,
+          });
+          content = pin.element;
+        }
         const marker = new AdvancedMarkerElement({
           map,
           position: pos,
           title: j.company ?? "Job",
-          content: pin.element,
+          content,
         });
         marker.addListener("click", () => {
-          infoRef.current?.setContent(infoHtml(j));
+          infoRef.current?.setContent(infoHtml(j, activeBuckets));
           infoRef.current?.open(map, marker);
         });
         markersRef.current.push(marker);
@@ -228,6 +271,17 @@ export default function DayViewMap({
             );
           })}
         </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 px-4 py-1 text-[11px] text-muted-foreground border-b border-border">
+        <span
+          className="inline-block size-3 rounded-full ring-2 ring-white shadow shrink-0"
+          style={{
+            background:
+              "linear-gradient(90deg, #ea580c 0 50%, #16a34a 50% 100%)",
+          }}
+        />
+        Split pin = job starts and is picked up the same day.
       </div>
 
       {unlocated > 0 && (

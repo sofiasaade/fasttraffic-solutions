@@ -504,6 +504,11 @@
 - [x] Generalize LLM extraction prompt for non-Calgary permit layouts (long dates, 12h times)
 - [x] Remove Start/End-date time fallback; show "permit info not available" when NO permit attached
 - [x] Aggregate Custom Signs / Arrow Boards / Message Boards over Starting-today jobs in dashboardDay
-- [ ] Ensure entire Dashboard (widgets/weather) filters by the selected day
-- [ ] Add sign-count widget AFTER the weather widget
-- [ ] Tests pass + TypeScript clean
+- [x] Ensure entire Dashboard (widgets/weather) filters by the selected day
+- [x] Add sign-count widget AFTER the weather widget
+- [x] Tests pass + TypeScript clean
+
+## Day map: same-day jobs
+- [x] Split-color pin (starting + pickup) for jobs that begin and are picked up the same day
+- [x] Filter-aware: pin shows only colors of active buckets; info window lists both labels
+- [x] Legend hint for split pin; tests pass + TypeScript clean
