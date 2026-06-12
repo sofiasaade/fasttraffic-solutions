@@ -6,6 +6,12 @@ import { AF, JobRecord } from "../../shared/airtableFields";
 import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
 import { classifyJobForDay } from "../../shared/dashboardDay";
 import { deriveAssignmentState } from "../../shared/jobStatus";
+import { getPermitSchedulesForJobs } from "../permitExtraction";
+import {
+  classifyNineAm,
+  isPickupOnDate,
+  startsOnDate,
+} from "../../shared/permitSchedule";
 import {
   recommendWorkers as computeRecommendations,
   type ExperienceLevel,
@@ -281,14 +287,27 @@ export const coordinatorRouter = router({
         ),
       );
 
-      const startingToday = [];
-      const ongoing = [];
-      const pickup = [];
+      const startingToday: any[] = [];
+      const ongoing: any[] = [];
+      const pickup: any[] = [];
       for (const j of merged) {
         const b = classifyJobForDay(j.startDate, j.endDate, date, j.setupDuration);
         if (b.startingToday) startingToday.push(j);
         if (b.pickup) pickup.push(j);
         if (b.ongoing) ongoing.push(j);
+      }
+
+      // Enrich the "Starting today" jobs with their Street Use Permit start
+      // time so the UI can split them into before / at / after 9 AM sections.
+      // Uses the same cached SU extraction as the Day Timeline summary.
+      const permitMap = await getPermitSchedulesForJobs(
+        startingToday.map((j) => ({ id: j.id, planFile: (j as any).planFile ?? [] })),
+      );
+      for (const j of startingToday) {
+        const sched = permitMap.get(j.id);
+        const permitStartTime = sched?.validFromTime ?? null;
+        (j as any).permitStartTime = permitStartTime;
+        (j as any).nineAmBucket = classifyNineAm(permitStartTime);
       }
 
       const byCompany = (a: { company: string | null }, b: { company: string | null }) =>
@@ -1686,7 +1705,46 @@ export const coordinatorRouter = router({
         })
         .sort((a, b) => (a.company || "").localeCompare(b.company || ""));
 
-      return { date, projects };
+      // Street Use Permit (SU) schedule summary for the visible projects.
+      // before/at/after 9AM is derived from each job's SU permit start time
+      // (Permit Valid From), counted only for jobs that start on this day.
+      // finished/picked up is the count of jobs whose SU permit ends today.
+      const permitInputs = projects.map((p) => {
+        const src = jobs.find((j) => j.id === p.id);
+        return { id: p.id, planFile: (src?.planFile ?? []) as any };
+      });
+      const permitMap = await getPermitSchedulesForJobs(permitInputs);
+
+      let before9 = 0;
+      let at9 = 0;
+      let after9 = 0;
+      let finished = 0;
+      let analyzed = 0;
+      let total = 0;
+      for (const p of projects) {
+        const sched = permitMap.get(p.id);
+        // total counts projects that have an SU permit at all
+        const hasPermitInput =
+          (jobs.find((j) => j.id === p.id)?.planFile ?? []).some((a: any) =>
+            /^su[\s_-]?\d|^su[\s_-]/i.test(a.filename ?? ""),
+          );
+        if (hasPermitInput) total++;
+        if (!sched) continue;
+        analyzed++;
+        if (startsOnDate(sched, date)) {
+          const bucket = classifyNineAm(sched.validFromTime);
+          if (bucket === "before9") before9++;
+          else if (bucket === "at9") at9++;
+          else if (bucket === "after9") after9++;
+        }
+        if (isPickupOnDate(sched, date)) finished++;
+      }
+
+      return {
+        date,
+        projects,
+        permitSummary: { before9, at9, after9, finished, analyzed, total },
+      };
     }),
 
   // Create a new hour-pinned block on a project (worker/equipment/truck).

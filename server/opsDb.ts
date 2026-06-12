@@ -574,6 +574,8 @@ import {
   truckCatalog,
   InsertTruckCatalogItem,
   truckAssignments,
+  permitExtractions,
+  InsertPermitExtraction,
 } from "../drizzle/schema";
 
 const PHASES = ["Preparation", "Setup", "Pickup"] as const;
@@ -1737,4 +1739,83 @@ export async function removeTimelineBlock(input: {
     await d.delete(truckAssignments).where(eq(truckAssignments.id, input.id));
   }
   return true;
+}
+
+
+// ---------------------------------------------------------------------------
+// Street Use Permit (SU) PDF extraction cache
+// ---------------------------------------------------------------------------
+
+/** Look up a cached permit extraction by (jobId + filename). */
+export async function getPermitExtraction(
+  airtableJobId: string,
+  filename: string,
+) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(permitExtractions)
+    .where(
+      and(
+        eq(permitExtractions.airtableJobId, airtableJobId),
+        eq(permitExtractions.filename, filename),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** All cached permit extractions for a set of jobs, keyed by jobId. */
+export async function getPermitExtractionsMap(jobIds: string[]) {
+  const map = new Map<string, PermitExtractionRow[]>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(permitExtractions)
+    .where(inArray(permitExtractions.airtableJobId, jobIds));
+  for (const r of rows) {
+    const list = map.get(r.airtableJobId) ?? [];
+    list.push(r);
+    map.set(r.airtableJobId, list);
+  }
+  return map;
+}
+
+export type PermitExtractionRow = typeof permitExtractions.$inferSelect;
+
+/** Insert or update a permit extraction row keyed by (jobId + filename). */
+export async function upsertPermitExtraction(input: InsertPermitExtraction) {
+  const d = await db();
+  const existing = await d
+    .select()
+    .from(permitExtractions)
+    .where(
+      and(
+        eq(permitExtractions.airtableJobId, input.airtableJobId),
+        eq(permitExtractions.filename, input.filename),
+      ),
+    )
+    .limit(1);
+  if (existing.length > 0) {
+    await d
+      .update(permitExtractions)
+      .set({
+        fileUrl: input.fileUrl,
+        permitNumber: input.permitNumber,
+        validFromDate: input.validFromDate,
+        validFromTime: input.validFromTime,
+        validFromDay: input.validFromDay,
+        validToDate: input.validToDate,
+        validToTime: input.validToTime,
+        validToDay: input.validToDay,
+        numberOfDays: input.numberOfDays,
+        parseStatus: input.parseStatus,
+        rawJson: input.rawJson,
+      })
+      .where(eq(permitExtractions.id, existing[0].id));
+    return existing[0].id;
+  }
+  const res = await d.insert(permitExtractions).values(input);
+  return Number((res as any).insertId ?? 0);
 }

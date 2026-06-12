@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
+import DayViewMap, { type DayMarker } from "@/components/DayViewMap";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,10 @@ import {
   ChevronRight,
   MapPin,
   Building2,
+  Sunrise,
+  Clock,
+  Sunset,
+  HelpCircle,
 } from "lucide-react";
 
 function toKey(d: Date): string {
@@ -51,7 +56,22 @@ type DayJob = {
   subStatus: string | null;
   setupDuration?: string | null;
   assignmentState?: string;
+  permitStartTime?: string | null;
+  nineAmBucket?: "before9" | "at9" | "after9" | "unknown";
 };
+
+/** Format an HH:MM (24h) permit time into a friendly 12h label. */
+function prettyTime(t: string | null | undefined): string | null {
+  if (!t) return null;
+  const m = t.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = m[2];
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${min} ${ampm}`;
+}
 
 function durationLabel(setup: string | null | undefined): {
   text: string;
@@ -102,6 +122,11 @@ function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
                 </span>
               ) : null;
             })()}
+            {prettyTime(job.permitStartTime) && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700">
+                <Clock className="size-3" /> {prettyTime(job.permitStartTime)}
+              </span>
+            )}
             {job.subStatus && (
               <span className="truncate rounded bg-muted px-1.5 py-0.5">
                 {job.subStatus}
@@ -161,6 +186,89 @@ function Section({
   );
 }
 
+/** A "Starting today" column split into before / at / after 9 AM sub-groups. */
+function StartingTodaySection({
+  jobs,
+  isLoading,
+  onJob,
+}: {
+  jobs: DayJob[];
+  isLoading: boolean;
+  onJob: (id: string) => void;
+}) {
+  const accent = "#ea580c";
+  const groups: {
+    key: "before9" | "at9" | "after9" | "unknown";
+    label: string;
+    icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+    color: string;
+  }[] = [
+    { key: "before9", label: "Jobs before 9 AM", icon: Sunrise, color: "#d97706" },
+    { key: "at9", label: "Jobs at 9 AM", icon: Clock, color: "#2563eb" },
+    { key: "after9", label: "Jobs after 9 AM", icon: Sunset, color: "#4f46e5" },
+    { key: "unknown", label: "Time not in permit", icon: HelpCircle, color: "#64748b" },
+  ];
+  const byBucket = (b: string) =>
+    jobs.filter((j) => (j.nineAmBucket ?? "unknown") === b);
+
+  return (
+    <div className="rounded-2xl border border-border bg-card/50 p-4 flex flex-col min-h-[140px]">
+      <div className="flex items-center gap-2 mb-3">
+        <div
+          className="flex items-center justify-center size-7 rounded-lg shrink-0"
+          style={{ background: `${accent}1a`, color: accent }}
+        >
+          <CalendarPlus className="size-4" />
+        </div>
+        <h3 className="font-bold text-sm">Starting today</h3>
+        <span className="ml-auto text-sm font-extrabold" style={{ color: accent }}>
+          {isLoading ? "…" : jobs.length}
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2 flex-1">
+          <Skeleton className="h-16 w-full rounded-xl" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+        </div>
+      ) : jobs.length === 0 ? (
+        <div className="flex items-center justify-center flex-1 text-xs text-muted-foreground py-6">
+          No jobs
+        </div>
+      ) : (
+        <div className="space-y-3 flex-1">
+          {groups.map((g) => {
+            const list = byBucket(g.key);
+            if (list.length === 0) return null;
+            const Icon = g.icon;
+            return (
+              <div key={g.key}>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Icon className="size-3.5" style={{ color: g.color }} />
+                  <span
+                    className="text-[11px] font-bold uppercase tracking-wide"
+                    style={{ color: g.color }}
+                  >
+                    {g.label}
+                  </span>
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    ({list.length})
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {list.map((j) => (
+                    <JobCard key={j.id} job={j} onClick={() => onJob(j.id)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardDay() {
   const [, navigate] = useLocation();
   const [date, setDate] = useState(() => toKey(new Date()));
@@ -170,6 +278,18 @@ export default function DashboardDay() {
   // No dedicated job-detail route exists; send the coordinator to the
   // scheduler where jobs are managed/assigned.
   const onJob = (_id: string) => navigate("/scheduler");
+
+  // Build map markers from all three buckets. Single-day jobs naturally appear
+  // in both startingToday and pickup; DayViewMap de-dupes by id for the map.
+  const mapMarkers = useMemo<DayMarker[]>(() => {
+    const mk = (list: DayJob[] | undefined, bucket: DayMarker["bucket"]) =>
+      ((list as any[]) ?? []).map((j) => ({ ...j, bucket }));
+    return [
+      ...mk(data?.startingToday as DayJob[] | undefined, "starting"),
+      ...mk(data?.ongoing as DayJob[] | undefined, "ongoing"),
+      ...mk(data?.pickup as DayJob[] | undefined, "pickup"),
+    ];
+  }, [data]);
 
   const pretty = (() => {
     const [y, m, d] = date.split("-").map(Number);
@@ -228,10 +348,7 @@ export default function DashboardDay() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Section
-          icon={CalendarPlus}
-          title="Starting today"
-          accent="#ea580c"
+        <StartingTodaySection
           jobs={(data?.startingToday as DayJob[]) ?? []}
           isLoading={isLoading}
           onJob={onJob}
@@ -253,6 +370,9 @@ export default function DashboardDay() {
           onJob={onJob}
         />
       </div>
+
+      {/* Map of the day's jobs (starting / ongoing / pickup). */}
+      <DayViewMap markers={mapMarkers} isLoading={isLoading} />
     </div>
   );
 }

@@ -545,3 +545,39 @@ export const flaggingHours = mysqlTable("flagging_hours", {
 
 export type FlaggingHours = typeof flaggingHours.$inferSelect;
 export type InsertFlaggingHours = typeof flaggingHours.$inferInsert;
+
+
+/**
+ * Cache of Street Use Permit (SU) schedule data extracted from the permit PDF
+ * via the LLM. Keyed by (airtableJobId + filename) so we never re-analyze the
+ * same PDF. Stores the parsed valid-from / valid-to schedule that powers the
+ * Day Timeline summary boxes (before/at/after 9AM, finished/picked up).
+ */
+export const permitExtractions = mysqlTable("permit_extractions", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  /** The SU attachment filename this extraction came from. */
+  filename: varchar("filename", { length: 512 }).notNull(),
+  /** The attachment URL at extraction time (for reference / re-fetch). */
+  fileUrl: text("fileUrl"),
+  /** Permit number parsed from the PDF, e.g. SU-26-672264. */
+  permitNumber: varchar("permitNumber", { length: 64 }),
+  /** Permit Valid From — date (YYYY-MM-DD), time (HH:MM 24h), day of week. */
+  validFromDate: varchar("validFromDate", { length: 10 }),
+  validFromTime: varchar("validFromTime", { length: 5 }),
+  validFromDay: varchar("validFromDay", { length: 16 }),
+  /** Permit Valid To — date (YYYY-MM-DD), time (HH:MM 24h), day of week. */
+  validToDate: varchar("validToDate", { length: 10 }),
+  validToTime: varchar("validToTime", { length: 5 }),
+  validToDay: varchar("validToDay", { length: 16 }),
+  /** Number Of Days parsed from the permit, if present. */
+  numberOfDays: int("numberOfDays"),
+  /** "ok" when parsed successfully, "error" when the LLM could not parse. */
+  parseStatus: varchar("parseStatus", { length: 16 }).notNull().default("ok"),
+  rawJson: text("rawJson"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type PermitExtraction = typeof permitExtractions.$inferSelect;
+export type InsertPermitExtraction = typeof permitExtractions.$inferInsert;

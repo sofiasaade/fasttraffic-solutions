@@ -467,3 +467,22 @@
 - [x] Shared classifier + unit tests; TypeScript clean + tests pass
 - [x] Dashboard: three sections (Starting today / Ongoing / Pick up today) with job cards (emoji, company, address, dates)
 - [x] TypeScript clean + tests pass
+
+## Feature 52 (cont.): Street Use Permit (SU) PDF extraction
+- [x] Helper to pick SU attachment(s) from planFile (filename starts with "SU"), choose latest
+- [x] Backend permit extraction via invokeLLM (PDF) -> validFrom/validTo date+time+day
+- [x] Cache extracted permit result by jobId+filename to avoid re-analysis
+- [x] dayTimeline returns permitSummary (before/at/after 9AM, finished/picked up)
+- [x] Day Timeline summary boxes show before/at/after 9AM + finished/picked up counts
+- [x] Unit tests for SU selection + 9AM classification helpers
+
+## Feature 55: Dashboard Day view map
+- [x] dashboardDay returns lat/lon (+ bucket) for jobs so the map can plot them (mergeJob keeps lat/lon)
+- [x] Add a map to the Dashboard Day view plotting that day's jobs (starting/ongoing/pickup)
+- [x] Color markers by bucket; info window with company/address/dates
+
+## Feature 56: Starting-today sections by 9AM + single-day in both columns
+- [x] dashboardDay returns each startingToday job's SU permit start time (validFromTime) + 9AM bucket
+- [x] Single-day jobs (start == end) appear in BOTH startingToday and pickup (already in classifyJobForDay)
+- [x] DashboardDay: split Starting today into before 9 AM / at 9 AM / after 9 AM sections
+- [x] Tests for bucketing + single-day duplication (covered in permitSchedule.test + dashboardDay.test)

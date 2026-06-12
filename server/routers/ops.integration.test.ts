@@ -70,6 +70,9 @@ const state = {
     note: string | null;
   }[],
   flaggingSeq: 0,
+  // Street Use Permit extraction cache (in-memory).
+  permitExtractions: [] as any[],
+  permitSeq: 0,
   // Any of these being > 0 means a read-only violation occurred.
   airtableWriteCalls: [] as { fn: string; id: string }[],
 };
@@ -596,6 +599,27 @@ vi.mock("../opsDb", () => ({
       state.equipment = state.equipment.filter((r) => r.id !== input.id);
     else state.trucks = state.trucks.filter((r) => r.id !== input.id);
     return true;
+  }),
+  // Street Use Permit extraction cache (in-memory).
+  getPermitExtractionsMap: vi.fn(async (jobIds: string[]) => {
+    const map = new Map<string, any[]>();
+    for (const id of jobIds) {
+      const rows = state.permitExtractions.filter((r) => r.airtableJobId === id);
+      if (rows.length) map.set(id, rows);
+    }
+    return map;
+  }),
+  upsertPermitExtraction: vi.fn(async (input: any) => {
+    const existing = state.permitExtractions.find(
+      (r) => r.airtableJobId === input.airtableJobId && r.filename === input.filename,
+    );
+    if (existing) {
+      Object.assign(existing, input);
+      return existing.id;
+    }
+    const id = ++state.permitSeq;
+    state.permitExtractions.push({ id, parseStatus: "ok", ...input });
+    return id;
   }),
 }));
 
@@ -1441,5 +1465,46 @@ describe("coordinator.dayTimeline", () => {
         phase: "Setup",
       }),
     ).rejects.toThrow();
+  });
+
+  it("returns permitSummary from cached SU permit schedules (no LLM re-call)", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recPERMIT1",
+        startDate: "2026-06-15",
+        endDate: "2026-06-17",
+        planFile: [
+          { url: "https://x/SU-26-1.PDF", filename: "SU-26-1.PDF", type: "application/pdf" },
+        ],
+      }),
+    ];
+    // Pre-seed the extraction cache so no LLM call is made.
+    state.permitExtractions = [
+      {
+        id: 1,
+        airtableJobId: "recPERMIT1",
+        filename: "SU-26-1.PDF",
+        parseStatus: "ok",
+        validFromDate: "2026-06-15",
+        validFromTime: "09:00",
+        validToDate: "2026-06-17",
+        validToTime: "22:00",
+      },
+    ];
+    const res: any = await caller.coordinator.dayTimeline({ date: "2026-06-15" });
+    expect(res.permitSummary).toBeDefined();
+    expect(res.permitSummary.total).toBe(1);
+    expect(res.permitSummary.analyzed).toBe(1);
+    expect(res.permitSummary.at9).toBe(1);
+    expect(res.permitSummary.before9).toBe(0);
+    expect(res.permitSummary.after9).toBe(0);
+    expect(res.permitSummary.finished).toBe(0);
+
+    // On the pickup day, finished should count.
+    const res2: any = await caller.coordinator.dayTimeline({ date: "2026-06-17" });
+    expect(res2.permitSummary.finished).toBe(1);
+    // start-of-day buckets should not double count on the pickup day
+    expect(res2.permitSummary.at9).toBe(0);
   });
 });
