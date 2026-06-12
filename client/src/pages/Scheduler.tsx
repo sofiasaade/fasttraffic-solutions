@@ -489,6 +489,9 @@ export default function Scheduler() {
   });
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  // How many days the week-grid spans. Lets the coordinator scroll horizontally
+  // across a longer horizon (up to a full year) to see a job's start and end.
+  const [rangeDays, setRangeDays] = useState<number>(7);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<PanelTab>("workers");
   // View mode: full week grid vs a single selected day (cards).
@@ -506,10 +509,22 @@ export default function Scheduler() {
   });
 
   const days = useMemo(
+    () => Array.from({ length: rangeDays }, (_, i) => addDays(weekStart, i)),
+    [weekStart, rangeDays],
+  );
+  const dayKeys = useMemo(() => days.map(dayKeyLocal), [days]);
+  // The Day view selector always shows a fixed 7-day week starting at weekStart,
+  // independent of the (possibly long) week-grid range.
+  const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
   );
-  const dayKeys = useMemo(() => days.map(dayKeyLocal), [days]);
+  const rangeFirst = dayKeys[0];
+  const rangeLast = dayKeys[dayKeys.length - 1];
+  // Pixel width of each day column; wider for short ranges, denser for long ones.
+  const colWidth = rangeDays <= 7 ? 180 : rangeDays <= 14 ? 150 : rangeDays <= 31 ? 120 : 96;
+  const gridTemplate = `240px repeat(${rangeDays}, ${colWidth}px)`;
+  const gridMinWidth = 240 + rangeDays * colWidth;
 
   // Alberta statutory holidays for the years covered by the visible week
   // (a week can straddle Dec/Jan). Highlighted as "costlier days" — NOT marked
@@ -519,17 +534,17 @@ export default function Scheduler() {
     return albertaHolidaysForYears(years);
   }, [days]);
 
-  // Day-pinned scheduled assignments for the visible week.
+  // Day-pinned scheduled assignments for the visible range.
   const schedQuery = trpc.coordinator.scheduledAssignments.useQuery({
-    startDate: dayKeys[0],
-    endDate: dayKeys[6],
+    startDate: rangeFirst,
+    endDate: rangeLast,
   });
   const scheduled = (schedQuery.data ?? []) as ScheduledRow[];
 
-  // Equipment placements for the visible week.
+  // Equipment placements for the visible range.
   const equipQuery = trpc.coordinator.equipmentAssignments.useQuery({
-    startDate: dayKeys[0],
-    endDate: dayKeys[6],
+    startDate: rangeFirst,
+    endDate: rangeLast,
   });
   const equipment = (equipQuery.data ?? []) as EquipmentRow[];
   const catalog = (equipmentCatalogQuery.data ?? []) as EquipmentItem[];
@@ -539,10 +554,10 @@ export default function Scheduler() {
     return m;
   }, [catalog]);
 
-  // Truck placements for the visible week.
+  // Truck placements for the visible range.
   const truckQuery = trpc.coordinator.truckAssignments.useQuery({
-    startDate: dayKeys[0],
-    endDate: dayKeys[6],
+    startDate: rangeFirst,
+    endDate: rangeLast,
   });
   const trucks = (truckQuery.data ?? []) as TruckRow[];
   const truckCatalog = (truckCatalogQuery.data ?? []) as TruckItem[];
@@ -600,8 +615,8 @@ export default function Scheduler() {
   // Jobs that overlap the visible week (start..end intersects the week).
   const weekJobs = useMemo(() => {
     const list = (jobsQuery.data ?? []) as Job[];
-    const weekFirst = dayKeys[0];
-    const weekLast = dayKeys[6];
+    const weekFirst = rangeFirst;
+    const weekLast = rangeLast;
     return list
       .filter((j) => {
         const s = parseDayKey(j.startDate);
@@ -635,8 +650,8 @@ export default function Scheduler() {
   }, [weekJobs]);
 
   // ---- Day view: jobs that cover the selected day, grouped by status ----
-  const selectedDayKey = dayKeys[selectedDayIdx] ?? dayKeys[0];
-  const selectedDayDate = days[selectedDayIdx] ?? days[0];
+  const selectedDayKey = dayKeyLocal(weekDays[selectedDayIdx] ?? weekDays[0]);
+  const selectedDayDate = weekDays[selectedDayIdx] ?? weekDays[0];
   // Day-view category filter: which status sections are visible. Defaults to all.
   const [dayStatusFilter, setDayStatusFilter] = useState<Record<SectionKey, boolean>>({
     submitted: true,
@@ -989,7 +1004,7 @@ export default function Scheduler() {
   const weekLabel = `${days[0].toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-  })} – ${days[6].toLocaleDateString(undefined, {
+  })} – ${days[days.length - 1].toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -1192,7 +1207,7 @@ export default function Scheduler() {
     const nwRule = parseNonWorkingDays(job.clientMessage);
     return (
     <div key={job.id} className="border-b border-border">
-     <div className="grid grid-cols-[240px_repeat(7,minmax(180px,1fr))] items-stretch hover:bg-accent/20">
+     <div className="grid items-stretch hover:bg-accent/20" style={{ gridTemplateColumns: gridTemplate }}>
       {/* Job label — click to expand inline detail */}
       <button
         type="button"
@@ -1504,11 +1519,39 @@ export default function Scheduler() {
               Day
             </button>
           </div>
+          {/* Range selector — only relevant for the week grid. Lets the user
+              scroll horizontally across up to a full year. */}
+          {viewMode === "week" && (
+            <div className="flex items-center p-0.5 bg-muted rounded-lg mr-1">
+              {([
+                { label: "1W", days: 7 },
+                { label: "2W", days: 14 },
+                { label: "Month", days: 31 },
+                { label: "Quarter", days: 92 },
+                { label: "Year", days: 365 },
+              ] as const).map((r) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  onClick={() => setRangeDays(r.days)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
+                    rangeDays === r.days
+                      ? "bg-card shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  title={`Show ${r.days} days`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setWeekStart(addDays(weekStart, -7))}
-            aria-label="Previous week"
+            onClick={() => setWeekStart(addDays(weekStart, -(viewMode === "week" ? rangeDays : 7)))}
+            aria-label="Previous"
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -1522,8 +1565,8 @@ export default function Scheduler() {
           <Button
             variant="outline"
             size="icon"
-            onClick={() => setWeekStart(addDays(weekStart, 7))}
-            aria-label="Next week"
+            onClick={() => setWeekStart(addDays(weekStart, viewMode === "week" ? rangeDays : 7))}
+            aria-label="Next"
           >
             <ChevronRight className="size-4" />
           </Button>
@@ -1553,10 +1596,11 @@ export default function Scheduler() {
               )}
               {/* Day selector tabs */}
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {days.map((d, i) => {
+                {weekDays.map((d, i) => {
                   const isSel = i === selectedDayIdx;
                   const isToday = dayKeyLocal(d) === dayKeyLocal(new Date());
                   const hol = holidays[dayKeyLocal(d)] ?? null;
+                  const wd = WEEKDAY[(d.getDay() + 6) % 7];
                   return (
                     <button
                       key={i}
@@ -1573,7 +1617,7 @@ export default function Scheduler() {
                       )}
                     >
                       <span className="text-[10px] uppercase tracking-wide opacity-80">
-                        {WEEKDAY[i]}
+                        {wd}
                       </span>
                       <span
                         className={cn(
@@ -1667,18 +1711,23 @@ export default function Scheduler() {
               )}
             </div>
           ) : (
-            <div className="min-w-[1500px]">
+            <div style={{ minWidth: gridMinWidth }}>
               {/* Day header */}
-              <div className={cn(
-                "grid grid-cols-[240px_repeat(7,minmax(180px,1fr))] sticky top-0 bg-card border-b border-border",
-                "z-20",
-              )}>
+              <div
+                className="grid sticky top-0 bg-card border-b border-border z-20"
+                style={{ gridTemplateColumns: gridTemplate }}
+              >
                 <div className="sticky left-0 z-10 bg-card px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground border-r border-border">
                   Job
                 </div>
                 {days.map((d, i) => {
                   const isToday = dayKeyLocal(d) === dayKeyLocal(new Date());
                   const hol = holidays[dayKeyLocal(d)] ?? null;
+                  // Weekday derived from the actual date (Mon..Sun), so it stays
+                  // correct for any range length, not just a single week.
+                  const wd = WEEKDAY[(d.getDay() + 6) % 7];
+                  const isMonthStart = d.getDate() === 1 || i === 0;
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                   return (
                     <button
                       key={i}
@@ -1688,11 +1737,18 @@ export default function Scheduler() {
                       className={cn(
                         "px-2 py-2 text-center border-l border-border cursor-pointer transition-colors hover:bg-accent",
                         isToday && "bg-primary/5",
+                        isWeekend && !isToday && !hol && "bg-muted/40",
                         hol && "bg-rose-100/70",
+                        isMonthStart && "border-l-2 border-l-primary/40",
                       )}
                     >
+                      {isMonthStart && (
+                        <div className="text-[9px] font-semibold uppercase tracking-wide text-primary truncate">
+                          {d.toLocaleDateString(undefined, { month: "short" })}
+                        </div>
+                      )}
                       <div className="text-[11px] uppercase text-muted-foreground">
-                        {WEEKDAY[i]}
+                        {wd}
                       </div>
                       <div
                         className={cn(

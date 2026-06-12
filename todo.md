@@ -531,3 +531,8 @@
 
 ## Day view crew per phase
 - [x] Show assigned workers per phase (Prep/Setup/Pickup) per project, one row per phase
+
+## Scheduler year range
+- [x] Add range selector (1W/2W/Month/Quarter/Year) to Week view for horizontal scroll across a year
+- [x] Dynamic grid columns + real dates with month/holiday markers
+- [x] Keep Day view selector fixed to a 7-day week
