@@ -15,12 +15,19 @@ import {
   Truck as TruckIcon,
   X,
   GripVertical,
+  Megaphone,
+  MonitorSmartphone,
+  Sunrise,
+  Sunset,
+  CheckCircle2,
 } from "lucide-react";
 import {
   durationCategory,
   categoryHeaderClasses,
 } from "@/lib/jobDuration";
 import { isCancelledJob } from "@shared/jobStatus";
+import { subStatusColor, subStatusLegend } from "@shared/subStatusColors";
+import { needsArrowboard, needsMessageBoard } from "@shared/equipmentSignals";
 
 /* --------------------------- status categories --------------------------- */
 
@@ -47,21 +54,19 @@ function statusMeta(key: StatusKey) {
   return STATUS_FILTERS.find((s) => s.key === key)!;
 }
 
-/* ---------------------- per-project column shading ----------------------- */
-// A soft, distinct background tint per project column so adjacent projects are
-// easy to tell apart. Cycled by the project's position in the day view.
-const COLUMN_SHADES: { header: string; cell: string }[] = [
-  { header: "bg-sky-50", cell: "bg-sky-50/40" },
-  { header: "bg-violet-50", cell: "bg-violet-50/40" },
-  { header: "bg-amber-50", cell: "bg-amber-50/40" },
-  { header: "bg-emerald-50", cell: "bg-emerald-50/40" },
-  { header: "bg-rose-50", cell: "bg-rose-50/40" },
-  { header: "bg-cyan-50", cell: "bg-cyan-50/40" },
-  { header: "bg-fuchsia-50", cell: "bg-fuchsia-50/40" },
-  { header: "bg-lime-50", cell: "bg-lime-50/40" },
-];
-function columnShade(index: number) {
-  return COLUMN_SHADES[index % COLUMN_SHADES.length];
+/* ------------------------- per-column color tint ------------------------- */
+// Each project column is tinted by its Airtable "Sub-Status Field Operations"
+// color so the board mirrors the classification colors used in Airtable.
+
+/** Convert a #rrggbb hex to an rgba() string at the given alpha. */
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 /* ----------------------------- date helpers ----------------------------- */
@@ -132,6 +137,39 @@ const KIND_ICON: Record<Kind, typeof Users> = {
   truck: TruckIcon,
 };
 
+function SummaryBox({
+  icon: Icon,
+  label,
+  value,
+  accent,
+  secondary,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: number | null;
+  accent: string;
+  secondary?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
+      <div className={`shrink-0 ${accent}`}>
+        <Icon className="size-5" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-xl font-bold leading-none">
+          {value === null ? <span className="text-muted-foreground">—</span> : value}
+        </div>
+        <div className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+          {label}
+        </div>
+        {secondary && (
+          <div className="mt-0.5 text-[10px] text-muted-foreground">{secondary}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DayTimeline() {
   const [, navigate] = useLocation();
   const params = new URLSearchParams(window.location.search);
@@ -139,6 +177,7 @@ export default function DayTimeline() {
   const [date, setDate] = useState(initialDate);
   const [range, setRange] = useState<"day" | "night" | "all">("all");
   const [search, setSearch] = useState("");
+  const [showLegend, setShowLegend] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Record<StatusKey, boolean>>({
     submitted: true,
     approved: true,
@@ -186,6 +225,33 @@ export default function DayTimeline() {
     () => allProjects.filter((p) => statusFilter[statusKeyOf(p)]),
     [allProjects, statusFilter],
   );
+
+  // Daily summary totals (computed over the currently visible/filtered projects).
+  // Arrowboards / message boards come from the Job Address signals.
+  // before/at/after 9AM + finished/picked up come from the Street Use Permit
+  // PDF analysis returned by the backend (permitSummary), when available.
+  const summary = useMemo(() => {
+    let arrowboards = 0;
+    let messageBoards = 0;
+    for (const p of projects) {
+      if (needsArrowboard(p.jobAddress)) arrowboards++;
+      if (needsMessageBoard(p.jobAddress)) messageBoards++;
+    }
+    return { arrowboards, messageBoards };
+  }, [projects]);
+
+  const permitSummary = (
+    timelineQuery.data as unknown as {
+      permitSummary?: {
+        before9: number;
+        at9: number;
+        after9: number;
+        finished: number;
+        analyzed: number;
+        total: number;
+      };
+    }
+  )?.permitSummary;
 
   // Visible hour range based on the Day/Night toggle.
   const visibleHours = useMemo(() => {
@@ -339,6 +405,52 @@ export default function DayTimeline() {
         </div>
       </div>
 
+      {/* Daily summary boxes */}
+      <div className="grid grid-cols-2 gap-2 border-b border-border bg-muted/20 px-5 py-3 sm:grid-cols-3 lg:grid-cols-5">
+        <SummaryBox
+          icon={Sunrise}
+          label="Jobs before 9 AM"
+          value={permitSummary ? permitSummary.before9 : null}
+          accent="text-amber-600"
+        />
+        <SummaryBox
+          icon={Clock}
+          label="Jobs at 9 AM"
+          value={permitSummary ? permitSummary.at9 : null}
+          accent="text-blue-600"
+        />
+        <SummaryBox
+          icon={Sunset}
+          label="Jobs after 9 AM"
+          value={permitSummary ? permitSummary.after9 : null}
+          accent="text-indigo-600"
+        />
+        <SummaryBox
+          icon={CheckCircle2}
+          label="Finished / picked up"
+          value={permitSummary ? permitSummary.finished : null}
+          accent="text-emerald-600"
+        />
+        <SummaryBox
+          icon={Megaphone}
+          label="Arrowboards"
+          value={summary.arrowboards}
+          accent="text-orange-600"
+          secondary={
+            <span className="inline-flex items-center gap-0.5">
+              <MonitorSmartphone className="size-3" /> {summary.messageBoards} msg board
+              {summary.messageBoards === 1 ? "" : "s"}
+            </span>
+          }
+        />
+      </div>
+      {permitSummary && permitSummary.analyzed < permitSummary.total && (
+        <div className="border-b border-border bg-amber-50 px-5 py-1 text-[11px] text-amber-700">
+          Permit times read from {permitSummary.analyzed} of {permitSummary.total} Street Use
+          Permits ({permitSummary.total - permitSummary.analyzed} missing a readable permit PDF).
+        </div>
+      )}
+
       {/* Category filter row */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card/60 px-5 py-2">
         <span className="text-xs font-medium text-muted-foreground mr-1">
@@ -367,7 +479,32 @@ export default function DayTimeline() {
             </button>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setShowLegend((v) => !v)}
+          className="ml-auto text-xs font-medium text-muted-foreground underline-offset-2 hover:underline"
+        >
+          {showLegend ? "Hide sub-status colors" : "Sub-status colors"}
+        </button>
       </div>
+
+      {/* Sub-status color legend (mirrors Airtable option colors) */}
+      {showLegend && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-muted/30 px-5 py-2">
+          <span className="text-xs font-medium text-muted-foreground mr-1">
+            Sub-Status Field Operations:
+          </span>
+          {subStatusLegend().map((l) => (
+            <span
+              key={l.label}
+              className="inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
+              style={{ backgroundColor: l.color.bg, color: l.color.text }}
+            >
+              {l.label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1">
         {/* Resource panel */}
@@ -457,13 +594,19 @@ export default function DayTimeline() {
               {projects.map((p, idx) => {
                 const cat = durationCategory(p.setupDuration);
                 const h = categoryHeaderClasses(cat);
-                const shade = columnShade(idx);
+                const ssc = subStatusColor(p.subStatus);
                 return (
                   <div
                     key={p.id}
-                    className={`sticky top-0 z-20 border-b border-r border-border ${shade.header}`}
+                    className="sticky top-0 z-20 border-b border-r border-border"
+                    style={{ backgroundColor: hexToRgba(ssc.bg, 0.16) }}
                   >
-                    <div className={`h-1 w-full ${h.bar}`} />
+                    {/* Top bar colored by Airtable Sub-Status Field Operations */}
+                    <div
+                      className="h-1.5 w-full"
+                      style={{ backgroundColor: ssc.bg }}
+                      title={p.subStatus ?? undefined}
+                    />
                     <div className="px-2 py-2">
                       <div className="flex items-center gap-1.5">
                         {p.emoji && <span>{p.emoji}</span>}
@@ -522,7 +665,11 @@ export default function DayTimeline() {
                           );
                         })()}
                         {p.subStatus && (
-                          <span className="inline-block rounded-full border border-border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <span
+                            className="inline-block rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                            style={{ backgroundColor: ssc.bg, color: ssc.text }}
+                            title="Sub-Status Field Operations"
+                          >
                             {p.subStatus}
                           </span>
                         )}
@@ -696,12 +843,12 @@ function HourRow({
       <div className="sticky left-0 z-10 flex h-14 items-start justify-end border-b border-r border-border bg-card pr-2 pt-1 text-[11px] text-muted-foreground">
         {label12(hour)}
       </div>
-      {projects.map((p, idx) => {
+      {projects.map((p) => {
         const blocks = p.blocks.filter((b) => {
           const start = b.startTime ? parseInt(b.startTime.slice(0, 2), 10) : null;
           return start === hour;
         });
-        const shade = columnShade(idx);
+        const ssc = subStatusColor(p.subStatus);
         return (
           <div
             key={p.id}
@@ -710,7 +857,8 @@ function HourRow({
               e.dataTransfer.dropEffect = "move";
             }}
             onDrop={() => onDropCell(p.id, hour)}
-            className={`relative h-14 border-b border-r border-border p-1 ${shade.cell} transition-colors hover:bg-accent/40`}
+            className="relative h-14 border-b border-r border-border p-1 transition-colors hover:bg-accent/40"
+            style={{ backgroundColor: hexToRgba(ssc.bg, 0.1) }}
           >
             <div className="flex flex-wrap gap-1">
               {blocks.map((b) => (

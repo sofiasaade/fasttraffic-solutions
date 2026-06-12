@@ -438,3 +438,32 @@
 - [x] Show each job's status/category on its column header
 - [x] Filter hides non-matching project columns; empty state when none match
 - [x] TypeScript clean + tests pass
+
+## Feature 51: Color jobs by Airtable Sub-Status Field Operations (Day Timeline)
+- [x] Map each Sub-Status option to its exact Airtable single-select color (hex)
+- [x] Color each Day Timeline job (top bar + column tint) by its Sub-Status color
+- [x] Legend showing sub-status -> color
+- [x] TypeScript clean + tests pass
+
+## Feature 52: Day summary boxes (5 totals) in Day Timeline
+- [x] Arrowboards = Job Address contains tire emoji/word
+- [x] Message boards = Job Address contains TV emoji
+- [x] Render summary boxes row above the day timeline (5 boxes)
+- [ ] Jobs before 9AM / at 9AM / after 9AM from Street Use Permit PDF (match date, newest if multiple)
+- [ ] Jobs finished or picked up that day from Street Use Permit PDF
+- [ ] Render summary boxes above the day timeline
+- [ ] TypeScript clean + tests pass
+
+## Feature 53: Update official technician roster
+- [x] Replace TECHNICIANS with official 26 workers (18 FULL + 8 A FEW DAYS)
+- [x] Seed technicians into the database
+- [x] Remove stale technicians not in official list (kept Juanito/Adrian: have assignments)
+- [x] TypeScript clean + tests pass
+
+## Feature 54: Dashboard day view with date filter
+- [x] Backend query: for a given date, group jobs into Starting today (Start Date == day), Ongoing daily (range covers day, excludes start/end day), Pick up today (End Date == day)
+- [x] Dashboard: date picker (defaults to today) to choose the day to view
+- [x] Three sections with job cards (emoji, company, address, dates)
+- [x] Shared classifier + unit tests; TypeScript clean + tests pass
+- [x] Dashboard: three sections (Starting today / Ongoing / Pick up today) with job cards (emoji, company, address, dates)
+- [x] TypeScript clean + tests pass

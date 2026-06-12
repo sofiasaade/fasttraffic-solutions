@@ -5,6 +5,7 @@ import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import WeatherCard from "@/components/WeatherCard";
 import ActiveWorks from "@/components/ActiveWorks";
+import DashboardDay from "@/components/DashboardDay";
 import {
   Cone,
   ClipboardCheck,
@@ -175,6 +176,9 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      {/* Day view: jobs starting / ongoing / pickup for a selectable date */}
+      <DashboardDay />
 
       {/* Active works: map / list toggle */}
       <ActiveWorks />

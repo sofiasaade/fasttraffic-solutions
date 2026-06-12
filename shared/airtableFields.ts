@@ -76,21 +76,37 @@ export const SETUP_DURATION_OPTIONS = [
   "Nightly Set Up (9:00 PM - 5:00 AM) (Several Nights)",
 ] as const;
 
-// The canonical roster of technicians (union of all three phase fields).
+// The canonical roster of technicians — official workers list.
+// FULL = full-time; A FEW DAYS = part-time availability.
 export const TECHNICIANS = [
-  "Juan Camilo Monroy",
-  "Hector Chaparro",
-  "Hugo Lopez",
-  "Ryley Brisbois",
-  "Alejandro Galindez",
-  "Camilo Galindez",
+  // FULL
+  "Camilo Galindez Navia",
   "Salvador Galindez",
-  "Julian Montoya",
-  "Wilmar Cepeda",
-  "Zion Holiday",
-  "Juanito",
-  "Jose Galindez",
-  "Adrian ", // note: Airtable stores this with a trailing space
+  "Juan Montoya",
+  "Ryley Brisbois",
+  "Zion Holliday",
+  "Julian Montoya Quintero",
+  "Wilmar Cepeda Basto",
+  "Julieth Vigoya Sarmiento",
+  "Nair Saade",
+  "Daniel Hoglo",
+  "Alvaro Lora",
+  "Jonathan Blanco",
+  "Haider David Campos",
+  "Valery De Jesus",
+  "Wol Wol",
+  "Cullen C Ogbuke",
+  "Chikeluba Ogbuke",
+  "Duogles Gibson",
+  // A FEW DAYS
+  "Kevin Rodriguez",
+  "Alejandro Galindez",
+  "Antonio Nicoletti",
+  "Santiago Lopez",
+  "Juan Esteban Cuenca",
+  "Dylan Alexander",
+  "Jhon Parra",
+  "Giuseppe Hidalgo",
 ] as const;
 
 export type TechnicianName = (typeof TECHNICIANS)[number];

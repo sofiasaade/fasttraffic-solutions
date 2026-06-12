@@ -4,6 +4,7 @@ import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
 import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
+import { classifyJobForDay } from "../../shared/dashboardDay";
 import { deriveAssignmentState } from "../../shared/jobStatus";
 import {
   recommendWorkers as computeRecommendations,
@@ -253,6 +254,61 @@ export const coordinatorRouter = router({
       ),
     );
   }),
+
+  // Dashboard day view: classify jobs for a given date into
+  //  - startingToday: Start Date == date
+  //  - ongoing: multi-day jobs whose [start, end] window covers the date but
+  //    do NOT start or end on it (so they don't double-count)
+  //  - pickup: End Date == date (End Date represents the pickup day)
+  // A single job may appear in startingToday and pickup if it is a one-day job
+  // (start == end == date); it will then show in both starting and pickup.
+  dashboardDay: adminProcedure
+    .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .query(async ({ input }) => {
+      const date = input.date;
+      const jobs = await fetchMapJobs();
+      const ids = jobs.map((j) => j.id);
+      const [assignMap, overrideMap, statusMap] = await Promise.all([
+        getAssignmentsMap(ids),
+        getJobOverridesMap(ids),
+        getAssignmentStatusMap(ids),
+      ]);
+
+      const merged = jobs.map((j) =>
+        withAssignmentState(
+          mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)),
+          statusMap.get(j.id),
+        ),
+      );
+
+      const startingToday = [];
+      const ongoing = [];
+      const pickup = [];
+      for (const j of merged) {
+        const b = classifyJobForDay(j.startDate, j.endDate, date);
+        if (b.startingToday) startingToday.push(j);
+        if (b.pickup) pickup.push(j);
+        if (b.ongoing) ongoing.push(j);
+      }
+
+      const byCompany = (a: { company: string | null }, b: { company: string | null }) =>
+        (a.company || "").localeCompare(b.company || "");
+      startingToday.sort(byCompany);
+      ongoing.sort(byCompany);
+      pickup.sort(byCompany);
+
+      return {
+        date,
+        startingToday,
+        ongoing,
+        pickup,
+        counts: {
+          startingToday: startingToday.length,
+          ongoing: ongoing.length,
+          pickup: pickup.length,
+        },
+      };
+    }),
 
   // Jobs for the coordinator map view, with local overrides applied.
   mapJobs: adminProcedure.query(async () => {
