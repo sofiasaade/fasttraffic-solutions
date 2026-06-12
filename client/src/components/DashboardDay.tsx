@@ -49,8 +49,26 @@ type DayJob = {
   endDate: string | null;
   status: string | null;
   subStatus: string | null;
+  setupDuration?: string | null;
   assignmentState?: string;
 };
+
+function durationLabel(setup: string | null | undefined): {
+  text: string;
+  cls: string;
+} | null {
+  const v = (setup ?? "").toLowerCase();
+  if (!v) return null;
+  if (/24\s*hour/.test(v))
+    return { text: "24h", cls: "bg-purple-100 text-purple-700" };
+  if (/several\s+(days|nights)|daily set|nightly set/.test(v))
+    return { text: "Daily", cls: "bg-blue-100 text-blue-700" };
+  if (/night/.test(v))
+    return { text: "Night", cls: "bg-indigo-100 text-indigo-700" };
+  if (/daytime|day\s*time/.test(v))
+    return { text: "Daytime", cls: "bg-amber-100 text-amber-700" };
+  return null;
+}
 
 function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
   return (
@@ -72,10 +90,18 @@ function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
               <span className="truncate">{job.jobAddress}</span>
             </div>
           )}
-          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
             <span>
               {shortDate(job.startDate)} → {shortDate(job.endDate)}
             </span>
+            {(() => {
+              const dl = durationLabel(job.setupDuration);
+              return dl ? (
+                <span className={cn("rounded px-1.5 py-0.5 font-medium", dl.cls)}>
+                  {dl.text}
+                </span>
+              ) : null;
+            })()}
             {job.subStatus && (
               <span className="truncate rounded bg-muted px-1.5 py-0.5">
                 {job.subStatus}

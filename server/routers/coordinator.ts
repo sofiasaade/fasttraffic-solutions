@@ -285,7 +285,7 @@ export const coordinatorRouter = router({
       const ongoing = [];
       const pickup = [];
       for (const j of merged) {
-        const b = classifyJobForDay(j.startDate, j.endDate, date);
+        const b = classifyJobForDay(j.startDate, j.endDate, date, j.setupDuration);
         if (b.startingToday) startingToday.push(j);
         if (b.pickup) pickup.push(j);
         if (b.ongoing) ongoing.push(j);

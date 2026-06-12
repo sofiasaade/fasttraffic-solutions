@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { classifyJobForDay, dayKey } from "../shared/dashboardDay";
+import {
+  classifyJobForDay,
+  dayKey,
+  isRecurringDailySetup,
+} from "../shared/dashboardDay";
 
 describe("dayKey", () => {
   it("trims ISO timestamps to YYYY-MM-DD", () => {
@@ -29,11 +33,64 @@ describe("classifyJobForDay", () => {
     expect(b.ongoing).toBe(false);
   });
 
-  it("flags a multi-day job that strictly covers the day as ongoing only", () => {
-    const b = classifyJobForDay("2026-06-09", "2026-06-14", DAY);
+  it("flags a recurring multi-day (Several Days) job covering the day as ongoing only", () => {
+    const b = classifyJobForDay(
+      "2026-06-09",
+      "2026-06-14",
+      DAY,
+      "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    );
     expect(b.ongoing).toBe(true);
     expect(b.startingToday).toBe(false);
     expect(b.pickup).toBe(false);
+  });
+
+  it("does NOT mark a 24-hour job as ongoing on in-between days", () => {
+    const b = classifyJobForDay(
+      "2026-06-09",
+      "2026-06-14",
+      DAY,
+      "24 Hours Set Up",
+    );
+    expect(b.ongoing).toBe(false);
+    expect(b.startingToday).toBe(false);
+    expect(b.pickup).toBe(false);
+  });
+
+  it("still shows a 24-hour job on the day it starts", () => {
+    const b = classifyJobForDay(
+      "2026-06-11",
+      "2026-06-14",
+      DAY,
+      "24 Hours Set Up",
+    );
+    expect(b.startingToday).toBe(true);
+    expect(b.ongoing).toBe(false);
+  });
+
+  it("does NOT mark a single-day Daytime job as ongoing (no setup duration recurring)", () => {
+    const b = classifyJobForDay(
+      "2026-06-09",
+      "2026-06-14",
+      DAY,
+      "Daytime Work (9:00 AM - 3:00 PM)",
+    );
+    expect(b.ongoing).toBe(false);
+  });
+
+  it("treats a nightly recurring (Several Nights) job as ongoing", () => {
+    const b = classifyJobForDay(
+      "2026-06-09",
+      "2026-06-14",
+      DAY,
+      "Nightly Set Up (9:00 PM - 5:00 AM) (Several Nights)",
+    );
+    expect(b.ongoing).toBe(true);
+  });
+
+  it("defaults to not-ongoing when setup duration is unknown/missing", () => {
+    const b = classifyJobForDay("2026-06-09", "2026-06-14", DAY);
+    expect(b.ongoing).toBe(false);
   });
 
   it("treats a one-day job (start == end == day) as both starting and pickup, not ongoing", () => {
@@ -72,5 +129,36 @@ describe("classifyJobForDay", () => {
     expect(b.startingToday).toBe(false);
     expect(b.ongoing).toBe(false);
     expect(b.pickup).toBe(false);
+  });
+});
+
+describe("isRecurringDailySetup", () => {
+  it("returns true for Several Days / Several Nights setups", () => {
+    expect(
+      isRecurringDailySetup("Daily Set Up (9:00 AM - 3:00) (Several Days)"),
+    ).toBe(true);
+    expect(
+      isRecurringDailySetup(
+        "Nightly Set Up (9:00 PM - 5:00 AM) (Several Nights)",
+      ),
+    ).toBe(true);
+  });
+
+  it("returns false for 24-hour setups", () => {
+    expect(isRecurringDailySetup("24 Hours Set Up")).toBe(false);
+  });
+
+  it("returns false for single-day daytime/night work", () => {
+    expect(isRecurringDailySetup("Daytime Work (9:00 AM - 3:00 PM)")).toBe(
+      false,
+    );
+    expect(isRecurringDailySetup("Nightime Work (9:00 PM - 5:00 AM)")).toBe(
+      false,
+    );
+  });
+
+  it("returns false for missing values", () => {
+    expect(isRecurringDailySetup(null)).toBe(false);
+    expect(isRecurringDailySetup(undefined)).toBe(false);
   });
 });
