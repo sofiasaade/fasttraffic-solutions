@@ -17,6 +17,7 @@ import {
   type ExperienceLevel,
 } from "../../shared/workerRecommendation";
 import { describeWeatherCode, DEFAULT_WEATHER_LOCATION } from "../../shared/weather";
+import { parseSignCount, sumSignTallies } from "../../shared/signCount";
 import { invokeLLM } from "../_core/llm";
 import {
   acknowledgeChanges,
@@ -314,12 +315,28 @@ export const coordinatorRouter = router({
       const permitMap = await getPermitSchedulesForJobs(
         startingToday.map((j) => ({ id: j.id, planFile: (j as any).planFile ?? [] })),
       );
+      // Count how many active (non-cancelled) starting-today jobs have no
+      // readable permit, so the UI can warn coordinators to verify the time.
+      let missingPermit = 0;
       for (const j of startingToday) {
         const sched = permitMap.get(j.id);
         const permitStartTime = sched?.validFromTime ?? null;
         (j as any).permitStartTime = permitStartTime;
         (j as any).nineAmBucket = classifyNineAm(permitStartTime);
+        // hasPermit: did we find any SU/SUP permit schedule for this job?
+        const hasPermit = !!sched && (!!sched.validFromTime || !!sched.validFromDate);
+        (j as any).hasPermit = hasPermit;
+        if (!(j as any).isCancelled && !hasPermit) missingPermit += 1;
       }
+
+      // Aggregate equipment needs (Custom Signs / Arrow Boards / Message Boards)
+      // from the Airtable "Signs Count" field across the active starting-today
+      // jobs. Cancelled jobs are excluded so the widget reflects real work.
+      const signTally = sumSignTallies(
+        startingToday
+          .filter((j) => !(j as any).isCancelled)
+          .map((j) => parseSignCount((j as any).signsCount ?? null)),
+      );
 
       const byCompany = (a: { company: string | null }, b: { company: string | null }) =>
         (a.company || "").localeCompare(b.company || "");
@@ -337,6 +354,8 @@ export const coordinatorRouter = router({
           ongoing: ongoing.length,
           pickup: pickup.length,
         },
+        signTally,
+        missingPermit,
       };
     }),
 

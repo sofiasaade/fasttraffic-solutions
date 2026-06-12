@@ -496,3 +496,14 @@
 ## Feature 57: Prepared tag + crew ordered by phase (Day view)
 - [x] Show "Prepared" tag on job card when a tech is assigned to Preparation phase
 - [x] List assigned crew ordered Preparation -> Setup -> Pickup with phase labels
+
+## Feature 58: Day-filtered Dashboard + Sign Count widget + multi-format permits
+- [x] Map Airtable "Signs Count" field into JobRecord
+- [x] Deterministic Signs Count parser (Option A: custom signs only) + tests
+- [x] Generalize permit file detection to SU (Calgary) AND SUP (Cochrane/others)
+- [x] Generalize LLM extraction prompt for non-Calgary permit layouts (long dates, 12h times)
+- [x] Remove Start/End-date time fallback; show "permit info not available" when NO permit attached
+- [x] Aggregate Custom Signs / Arrow Boards / Message Boards over Starting-today jobs in dashboardDay
+- [ ] Ensure entire Dashboard (widgets/weather) filters by the selected day
+- [ ] Add sign-count widget AFTER the weather widget
+- [ ] Tests pass + TypeScript clean

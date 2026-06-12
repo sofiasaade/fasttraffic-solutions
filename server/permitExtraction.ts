@@ -69,12 +69,20 @@ const PERMIT_SCHEMA = {
 } as const;
 
 const SYSTEM_PROMPT =
-  "You read City of Calgary STREET USE PERMIT PDFs and extract the work schedule. " +
-  "Find the 'Permit Valid From' and 'Permit Valid To' rows, each with a Date, " +
-  "a Time (24 hrs) and a Day Of Week. Return dates as YYYY-MM-DD and times as " +
-  "HH:MM 24-hour (e.g. 09:00, 22:00). Also extract the Permit Number (e.g. " +
-  "SU-26-672264) and the Number Of Days if present. If a value is missing, " +
-  "return null for it. Return JSON only.";
+  "You read STREET USE PERMIT PDFs from Alberta municipalities and extract the " +
+  "work schedule. Permits come in two layouts: \n" +
+  "1) City of Calgary: rows labeled 'Permit Valid From' and 'Permit Valid To', " +
+  "each with a Date, a Time (24 hrs) and a Day Of Week. Permit Number looks like " +
+  "SU-26-672264.\n" +
+  "2) Town of Cochrane / other towns (Schedule D): boxes labeled 'PERMIT FROM:' " +
+  "and 'PERMIT TO:', each with a Date (often long form like 'June 12, 2026') and " +
+  "a Time (often 12-hour like '7:00 AM'). Permit Number may look like '2026-15'. " +
+  "A 'SETUP INFORMATION' block on the plan page may also show START/END times.\n\n" +
+  "Always NORMALIZE the output: dates as YYYY-MM-DD, times as HH:MM 24-hour " +
+  "(e.g. '7:00 AM' -> 07:00, '6:00 PM' -> 18:00, '9:00 PM' -> 21:00). " +
+  "validFrom = work START; validTo = work END / pickup. Extract the Permit " +
+  "Number and Number Of Days when present. If a value is missing, return null " +
+  "for it. Return JSON only.";
 
 /** Extract one SU permit PDF via the LLM. Returns parsed schedule. */
 async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null> {
@@ -102,11 +110,35 @@ async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null>
   });
   const raw = resp.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(typeof raw === "string" ? raw : "{}");
-  const normDate = (v: unknown) =>
-    typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
-  const normTime = (v: unknown) => {
+  const MONTHS: Record<string, string> = {
+    jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+    jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+  };
+  const normDate = (v: unknown): string | null => {
     if (typeof v !== "string") return null;
-    const m = v.trim().match(/^(\d{1,2}):(\d{2})/);
+    const s = v.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    // Long form fallback e.g. "June 12, 2026" (in case the LLM didn't normalize).
+    const m = s.match(/([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+    if (m) {
+      const mon = MONTHS[m[1].slice(0, 3).toLowerCase()];
+      if (mon) return `${m[3]}-${mon}-${m[2].padStart(2, "0")}`;
+    }
+    return null;
+  };
+  const normTime = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const s = v.trim();
+    // 12-hour fallback e.g. "7:00 AM", "6:00 PM" (in case the LLM didn't normalize).
+    const ampm = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (ampm) {
+      let h = Number(ampm[1]);
+      const ap = ampm[3].toUpperCase();
+      if (ap === "PM" && h !== 12) h += 12;
+      if (ap === "AM" && h === 12) h = 0;
+      return `${String(h).padStart(2, "0")}:${ampm[2]}`;
+    }
+    const m = s.match(/^(\d{1,2}):(\d{2})/);
     if (!m) return null;
     return `${m[1].padStart(2, "0")}:${m[2]}`;
   };

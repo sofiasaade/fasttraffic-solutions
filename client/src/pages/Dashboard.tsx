@@ -5,7 +5,8 @@ import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import WeatherCard from "@/components/WeatherCard";
 import ActiveWorks from "@/components/ActiveWorks";
-import DashboardDay from "@/components/DashboardDay";
+import DashboardDay, { dayKey } from "@/components/DashboardDay";
+import EquipmentNeeded from "@/components/EquipmentNeeded";
 import {
   Cone,
   ClipboardCheck,
@@ -84,6 +85,9 @@ export default function Dashboard() {
   });
   const pendingCount = pending.data?.count ?? 0;
 
+  // Shared selected day for the whole dashboard (weather/equipment + day view).
+  const [date, setDate] = useState(() => dayKey(new Date()));
+
   const utils = trpc.useUtils();
   const [refreshing, setRefreshing] = useState(false);
   const refreshAll = async () => {
@@ -142,7 +146,7 @@ export default function Dashboard() {
         <div className="lg:col-span-1">
           <WeatherCard />
         </div>
-        <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
           <Stat
             icon={Cone}
             label="Active works"
@@ -177,8 +181,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Day view: jobs starting / ongoing / pickup for a selectable date */}
-      <DashboardDay />
+      {/* Equipment needed for the selected day (after weather). */}
+      <EquipmentNeeded date={date} />
+
+      {/* Day view: jobs starting / ongoing / pickup for the selected date */}
+      <DashboardDay date={date} setDate={setDate} />
 
       {/* Active works: map / list toggle */}
       <ActiveWorks />

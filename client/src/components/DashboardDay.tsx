@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import DayViewMap, { type DayMarker } from "@/components/DayViewMap";
 import { useLocation } from "wouter";
@@ -27,6 +27,8 @@ function toKey(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+export { toKey as dayKey };
 
 function addDays(key: string, delta: number): string {
   const [y, m, d] = key.split("-").map(Number);
@@ -338,9 +340,14 @@ function StartingTodaySection({
   );
 }
 
-export default function DashboardDay() {
+export default function DashboardDay({
+  date,
+  setDate,
+}: {
+  date: string;
+  setDate: (updater: string | ((d: string) => string)) => void;
+}) {
   const [, navigate] = useLocation();
-  const [date, setDate] = useState(() => toKey(new Date()));
   const { data, isLoading } = trpc.coordinator.dashboardDay.useQuery({ date });
 
   const isToday = date === toKey(new Date());

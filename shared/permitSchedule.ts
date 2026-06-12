@@ -24,17 +24,21 @@ export interface PermitSchedule {
 
 /**
  * Returns true when the attachment looks like a Street Use Permit PDF.
- * Rule (from operations): the filename starts with "SU" (e.g. SU-26-672264-...).
+ * Rule (from operations):
+ *   - Calgary permits start with "SU"  (e.g. SU-26-672264-...).
+ *   - Town of Cochrane / other municipalities start with "SUP" (e.g. SUP2026-...).
+ * We treat any PDF whose filename starts with SU / SUP (optionally followed by a
+ * digit or a separator) as a permit candidate. Avoid matching e.g. "Summary".
  */
 export function isStreetUsePermitFile(att: AttachmentLike): boolean {
   const name = (att.filename ?? "").trim();
   if (!name) return false;
-  // Must be a PDF and start with "SU" (case-insensitive), optionally followed
-  // by a separator like "-" or "_" or a digit. Avoid matching e.g. "Summary".
+  // Must be a PDF and start with "SU"/"SUP" (case-insensitive).
   const isPdf =
     /\.pdf$/i.test(name) || (att.type ?? "").toLowerCase().includes("pdf");
   if (!isPdf) return false;
-  return /^su[\s_-]?\d/i.test(name) || /^su[\s_-]/i.test(name);
+  // SUP followed by a digit/sep (Cochrane), or SU followed by a digit/sep (Calgary).
+  return /^sup[\s_-]?\d/i.test(name) || /^su[\s_-]?\d/i.test(name) || /^su[\s_-]/i.test(name);
 }
 
 /** All SU permit attachments from a plan-file list. */
@@ -130,4 +134,67 @@ export function startsOnDate(
 ): boolean {
   if (!schedule?.validFromDate) return false;
   return schedule.validFromDate === date;
+}
+
+// ---------------------------------------------------------------------------
+// Fallback: when a job has no readable SU permit, use the project's own
+// Start Date / End Date (Airtable). Those ISO values carry a time component
+// (e.g. "2026-04-28T09:00:00.000Z"), and the Setup Duration label also encodes
+// a window like "Daytime Work (9:00 AM - 3:00 PM)".
+// ---------------------------------------------------------------------------
+
+/** Extract "HH:MM" (24h, UTC) from an ISO timestamp. Null if absent/midnight-only. */
+export function timeFromIso(iso: string | null | undefined): string | null {
+  if (!iso || typeof iso !== "string") return null;
+  // Match the time portion of an ISO 8601 string in UTC (Airtable stores Z).
+  const m = iso.match(/T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  return `${m[1]}:${m[2]}`;
+}
+
+/** Extract the "YYYY-MM-DD" date portion from an ISO timestamp. */
+export function dateFromIso(iso: string | null | undefined): string | null {
+  if (!iso || typeof iso !== "string") return null;
+  const m = iso.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Parse the leading start time out of a Setup Duration label such as
+ * "Daytime Work (9:00 AM - 3:00 PM)" or "Nightime Work (9:00 PM - 5:00 AM)".
+ * Returns "HH:MM" 24h, or null when the label has no explicit window.
+ */
+export function timeFromDurationLabel(label: string | null | undefined): string | null {
+  if (!label || typeof label !== "string") return null;
+  const m = label.match(/\(\s*(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!m) return null;
+  let h = Number(m[1]);
+  const mm = m[2];
+  const ap = m[3].toUpperCase();
+  if (ap === "PM" && h !== 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${mm}`;
+}
+
+export interface ProjectScheduleInput {
+  startDateIso?: string | null;
+  endDateIso?: string | null;
+  setupDuration?: string | null;
+}
+
+/**
+ * Resolve the effective START TIME for 9 AM bucketing.
+ *
+ * IMPORTANT (per operations, updated rule): the time MUST come from a permit
+ * (Calgary SU or non-Calgary SUP). We deliberately do NOT fall back to the
+ * project's Start Date / Setup Duration time — when no permit schedule is
+ * available the caller should treat the time as "not available" so coordinators
+ * can verify, rather than showing an inferred (possibly wrong) time.
+ *
+ * Returns "HH:MM" 24h from the permit, or null when no permit time is known.
+ */
+export function resolveStartTime(
+  schedule: PermitSchedule | null | undefined,
+): string | null {
+  return schedule?.validFromTime ?? null;
 }

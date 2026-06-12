@@ -7,6 +7,10 @@ import {
   parseMinutes,
   isPickupOnDate,
   startsOnDate,
+  timeFromIso,
+  dateFromIso,
+  timeFromDurationLabel,
+  resolveStartTime,
   type AttachmentLike,
   type PermitSchedule,
 } from "../shared/permitSchedule";
@@ -22,6 +26,13 @@ describe("isStreetUsePermitFile", () => {
     expect(isStreetUsePermitFile(su("SU-26-672264-45STSW.PDF"))).toBe(true);
     expect(isStreetUsePermitFile(su("su_26_672264.pdf"))).toBe(true);
     expect(isStreetUsePermitFile(su("SU 26 672264.pdf"))).toBe(true);
+  });
+
+  it("matches non-Calgary SUP permits (Cochrane etc.)", () => {
+    expect(
+      isStreetUsePermitFile(su("SUP2026-15525RiverHeightsDrive.pdf")),
+    ).toBe(true);
+    expect(isStreetUsePermitFile(su("SUP-2026-15.PDF"))).toBe(true);
   });
 
   it("rejects non-SU or non-PDF files", () => {
@@ -117,5 +128,32 @@ describe("isPickupOnDate / startsOnDate", () => {
   it("starts matches validFromDate", () => {
     expect(startsOnDate(sched, "2026-05-16")).toBe(true);
     expect(startsOnDate(sched, "2026-05-18")).toBe(false);
+  });
+});
+
+describe("ISO + duration helpers", () => {
+  it("timeFromIso extracts HH:MM", () => {
+    expect(timeFromIso("2026-04-28T09:00:00.000Z")).toBe("09:00");
+    expect(timeFromIso("2026-04-28")).toBeNull();
+    expect(timeFromIso(null)).toBeNull();
+  });
+  it("dateFromIso extracts YYYY-MM-DD", () => {
+    expect(dateFromIso("2026-04-28T09:00:00.000Z")).toBe("2026-04-28");
+    expect(dateFromIso("bad")).toBeNull();
+  });
+  it("timeFromDurationLabel parses 12h windows", () => {
+    expect(timeFromDurationLabel("Daytime Work (9:00 AM - 3:00 PM)")).toBe("09:00");
+    expect(timeFromDurationLabel("Nightime Work (9:00 PM - 5:00 AM)")).toBe("21:00");
+    expect(timeFromDurationLabel("24 Hours Set Up")).toBeNull();
+  });
+});
+
+describe("resolveStartTime (permit-only, no Start-date fallback)", () => {
+  it("uses permit validFromTime when present", () => {
+    expect(resolveStartTime({ validFromTime: "07:00" })).toBe("07:00");
+  });
+  it("returns null when no permit schedule (missing-info)", () => {
+    expect(resolveStartTime(null)).toBeNull();
+    expect(resolveStartTime({})).toBeNull();
   });
 });

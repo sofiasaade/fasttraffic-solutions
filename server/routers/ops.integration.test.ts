@@ -100,6 +100,7 @@ function makeJob(over: Partial<any> = {}) {
     planFile: [],
     fieldPhotos: [],
     fieldComments: null,
+    signsCount: null,
     ...over,
   };
 }
@@ -1554,5 +1555,52 @@ describe("Dashboard day view (dashboardDay)", () => {
     ];
     const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
     expect(res.startingToday.map((j: any) => j.id)).not.toContain("recCANCEL2");
+  });
+
+  it("aggregates sign counts for active starting-today jobs (cancelled excluded)", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recS1",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+        signsCount: "CUSTOM SIGN 2\nARROW BOARD 1\nVMB-Message Board 1",
+      }),
+      makeJob({
+        id: "recS2",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-16",
+        signsCount: "CUSTOM SIGN 3\nARROW BOARD 2",
+      }),
+      makeJob({
+        id: "recSC",
+        status: "Cancelled",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+        signsCount: "CUSTOM SIGN 99",
+      }),
+    ];
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    expect(res.signTally).toEqual({ customSigns: 5, arrowBoards: 3, messageBoards: 1 });
+  });
+
+  it("reports missingPermit count for active starting-today jobs with no permit", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recNP",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+        planFile: [],
+      }),
+    ];
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    expect(res.missingPermit).toBe(1);
+    const job = res.startingToday.find((j: any) => j.id === "recNP");
+    expect(job.hasPermit).toBe(false);
+    expect(job.permitStartTime).toBeNull();
   });
 });

@@ -27,6 +27,7 @@ export const AF = {
   closureType: "Closure Type",
   impact: "Impact Category",
   calendarInfo: "Calendar info",
+  signsCount: "Signs Count",
   clientMessage: "Client message",
 } as const;
 
@@ -162,6 +163,8 @@ export interface JobRecord {
   emoji: string | null;
   /** Free-text "Client message" (read-only). May contain non-working-day notes. */
   clientMessage: string | null;
+  /** Raw free-text "Signs Count" field (device/sign tallies, may include phases). */
+  signsCount: string | null;
 }
 
 // Hazard Assessment checklist items (traffic control field work).

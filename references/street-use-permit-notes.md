@@ -31,3 +31,43 @@ The summary boxes needed (Feature 52 remaining):
 - Call `invokeLLM` with `file_url` (mime `application/pdf`) + JSON schema to extract:
   `{ permitNumber, validFromDate, validFromTime, validFromDay, validToDate, validToTime, validToDay }`
 - Cache by (jobId + filename) to avoid re-analyzing the same PDF.
+
+---
+
+## Non-Calgary permits (e.g. Town of Cochrane)
+
+Example: `SUP2026-15525RiverHeightsDriveEntranceRepairs.pdf`
+
+These have a DIFFERENT layout from Calgary SU permits, but still contain the
+schedule. The extractor must handle both. Key fields seen on the Cochrane
+"Schedule D" Street Use Permit (page 1):
+
+- Title: **STREET USE PERMIT** with **Permit #** (e.g. `2026-15`) and Year/Month/Day boxes.
+- **PERMIT FROM:** Date (e.g. `June 12, 2026`) + Time (e.g. `7:00 AM`)  ← work START.
+- **PERMIT TO:** Date (e.g. `June 19, 2026`) + Time (e.g. `6:00 PM`)   ← work END / pickup.
+- Dates may be written in long form ("June 12, 2026") rather than ISO.
+- Times may be 12h ("7:00 AM") rather than 24h.
+
+The traffic-control plan pages may also carry a "SETUP INFORMATION" block
+(e.g. "START: FRIDAY 07:00 JUNE 12 / FRIDAY 18:00 JUNE 19 / 24 HOURS SET UP").
+
+### Filename rule (generalized)
+- Calgary: starts with `SU` (e.g. `SU-26-...`).
+- Cochrane / others: starts with `SUP` (e.g. `SUP2026-...`).
+- General rule: treat any PDF whose filename starts with `SU` / `SUP` (optionally
+  followed by digits/sep) as a permit candidate. Pick the most current by the
+  PERMIT FROM date.
+
+## Missing-info rule (updated — supersedes earlier Start/End-date fallback)
+- ALWAYS try to read the permit (Calgary SU or non-Calgary SUP).
+- If the project has **no permit attachment at all**, DO NOT infer the time from
+  the project's Start/End Date. Instead surface an explicit **"permit info not
+  available"** state so coordinators can verify. (Per user: "si no tiene ningún
+  permiso el proyecto es mejor que diga que no está esa información".)
+
+### LLM extraction (generalized prompt)
+- Accept Calgary and non-Calgary permits. Ask for:
+  `{ permitNumber, validFromDate (YYYY-MM-DD), validFromTime (HH:MM 24h),
+     validFromDay, validToDate, validToTime, validToDay, numberOfDays }`
+- Normalize long-form dates ("June 12, 2026" → 2026-06-12) and 12h times
+  ("7:00 AM" → 07:00) inside the LLM (instruct it to output normalized values).
