@@ -92,21 +92,55 @@ const FORGE_BASE_URL =
   "https://forge.butterfly-effect.dev";
 const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
-function loadMapScript() {
-  return new Promise(resolve => {
+// Module-level singleton: the Google Maps JS API must only be injected ONCE
+// per page. Loading it multiple times (e.g. when several <MapView> instances
+// mount, or when navigating between map pages) triggers the warning:
+// "You have included the Google Maps JavaScript API multiple times".
+let mapsLoaderPromise: Promise<void> | null = null;
+
+function loadMapScript(): Promise<void> {
+  // Already fully loaded.
+  if (typeof window !== "undefined" && window.google?.maps) {
+    return Promise.resolve();
+  }
+  // A load is already in-flight (or done) — reuse the same promise.
+  if (mapsLoaderPromise) return mapsLoaderPromise;
+
+  mapsLoaderPromise = new Promise<void>((resolve, reject) => {
+    // Reuse an existing tag if one is already on the page.
+    const existing = document.querySelector<HTMLScriptElement>(
+      "script[data-google-maps-loader]",
+    );
+    if (existing) {
+      if (window.google?.maps) {
+        resolve();
+      } else {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener(
+          "error",
+          () => reject(new Error("Failed to load Google Maps script")),
+          { once: true },
+        );
+      }
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
     script.crossOrigin = "anonymous";
-    script.onload = () => {
-      resolve(null);
-      script.remove(); // Clean up immediately
-    };
+    script.dataset.googleMapsLoader = "true";
+    script.onload = () => resolve();
     script.onerror = () => {
+      // Allow a future retry if this load failed.
+      mapsLoaderPromise = null;
       console.error("Failed to load Google Maps script");
+      reject(new Error("Failed to load Google Maps script"));
     };
     document.head.appendChild(script);
   });
+
+  return mapsLoaderPromise;
 }
 
 interface MapViewProps {
