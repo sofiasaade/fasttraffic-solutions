@@ -1611,4 +1611,35 @@ describe("Dashboard day view (dashboardDay)", () => {
     expect(job.hasPermit).toBe(false);
     expect(job.permitStartTime).toBeNull();
   });
+
+  it("annotates pickup jobs with the permit end time (validToTime)", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recPICK",
+        status: "Field",
+        startDate: "2026-06-12",
+        endDate: "2026-06-15",
+        planFile: [
+          { url: "https://x/SU-26-9.PDF", filename: "SU-26-9.PDF", type: "application/pdf" },
+        ],
+      }),
+    ];
+    state.permitExtractions = [
+      {
+        id: 1,
+        airtableJobId: "recPICK",
+        filename: "SU-26-9.PDF",
+        parseStatus: "ok",
+        validFromDate: "2026-06-12",
+        validFromTime: "07:00",
+        validToDate: "2026-06-15",
+        validToTime: "15:30",
+      },
+    ];
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const pj = res.pickup.find((j: any) => j.id === "recPICK");
+    expect(pj).toBeDefined();
+    expect(pj.permitEndTime).toBe("15:30");
+  });
 });

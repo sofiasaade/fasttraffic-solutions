@@ -522,3 +522,6 @@
 
 ## Scheduler: assignment time
 - [x] Show assignment time next to worker name in Scheduler chips (created-at timestamp, local 12h)
+
+## Day view pickup time
+- [x] Pick up column shows pickup time (permit end time) on each card

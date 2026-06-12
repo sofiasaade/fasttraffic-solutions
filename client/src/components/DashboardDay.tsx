@@ -61,6 +61,7 @@ type DayJob = {
   setupDuration?: string | null;
   assignmentState?: string;
   permitStartTime?: string | null;
+  permitEndTime?: string | null;
   nineAmBucket?: "before9" | "at9" | "after9" | "unknown";
   isCancelled?: boolean;
   techPrep?: string[];
@@ -163,6 +164,14 @@ function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
             {prettyTime(job.permitStartTime) && (
               <span className="inline-flex items-center gap-0.5 rounded bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700">
                 <Clock className="size-3" /> {prettyTime(job.permitStartTime)}
+              </span>
+            )}
+            {prettyTime(job.permitEndTime) && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded bg-green-50 px-1.5 py-0.5 font-medium text-green-700"
+                title="Scheduled pickup time (permit end time)"
+              >
+                <Clock className="size-3" /> Pickup {prettyTime(job.permitEndTime)}
               </span>
             )}
             {job.subStatus && (

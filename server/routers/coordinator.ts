@@ -315,7 +315,7 @@ export const coordinatorRouter = router({
       // as the Day Timeline summary. We de-duplicate by id since a one-day job
       // can appear in more than one column.
       const permitLookupJobs = new Map<string, any>();
-      for (const j of [...startingToday, ...ongoing]) {
+      for (const j of [...startingToday, ...ongoing, ...pickup]) {
         if (!permitLookupJobs.has(j.id)) permitLookupJobs.set(j.id, j);
       }
       const permitMap = await getPermitSchedulesForJobs(
@@ -357,6 +357,13 @@ export const coordinatorRouter = router({
           .filter((j) => !(j as any).isCancelled)
           .map((j) => parseSignCount((j as any).signsCount ?? null)),
       );
+
+      // Annotate pickup jobs with the permit END time (validToTime) so the
+      // Pick up column can show the scheduled pickup time on each card.
+      for (const j of pickup) {
+        const sched = permitMap.get(j.id);
+        (j as any).permitEndTime = sched?.validToTime ?? null;
+      }
 
       const byCompany = (a: { company: string | null }, b: { company: string | null }) =>
         (a.company || "").localeCompare(b.company || "");
