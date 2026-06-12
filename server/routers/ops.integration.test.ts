@@ -34,6 +34,7 @@ const state = {
     scheduledDate: string;
     startTime: string | null;
     endTime: string | null;
+    createdAt: Date;
   }[],
   scheduledSeq: 0,
   // Equipment catalog + day-pinned equipment placements (local).
@@ -298,6 +299,7 @@ vi.mock("../opsDb", () => ({
       scheduledDate: input.scheduledDate,
       startTime: input.startTime ?? null,
       endTime: input.endTime ?? null,
+      createdAt: new Date(),
     });
     return id;
   }),
@@ -532,6 +534,7 @@ vi.mock("../opsDb", () => ({
         scheduledDate: input.scheduledDate,
         startTime: input.startTime,
         endTime: input.endTime,
+        createdAt: new Date(),
       });
       return id;
     }
@@ -852,6 +855,10 @@ describe("Day & time scheduler (local, no Airtable write)", () => {
     expect(week[0].technicianName).toBe("Hector");
     expect(week[0].scheduledDate).toBe("2026-06-16");
     expect(week[0].startTime).toBe("08:00");
+    // The assignment time (createdAt) is surfaced so the Scheduler chip can
+    // show "@ <time>" next to the worker name.
+    expect(typeof week[0].assignedAt).toBe("number");
+    expect(week[0].assignedAt).toBeGreaterThan(0);
   });
 
   it("blocks scheduling a worker already booked that day on another job unless forced", async () => {
@@ -864,6 +871,7 @@ describe("Day & time scheduler (local, no Airtable write)", () => {
       scheduledDate: "2026-06-16",
       startTime: null,
       endTime: null,
+      createdAt: new Date(),
     });
     const caller = appRouter.createCaller(adminCtx());
     const blocked = await caller.coordinator.setScheduled({

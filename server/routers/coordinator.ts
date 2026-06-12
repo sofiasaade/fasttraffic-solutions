@@ -309,12 +309,32 @@ export const coordinatorRouter = router({
         if (b.ongoing) ongoing.push(j);
       }
 
-      // Enrich the "Starting today" jobs with their Street Use Permit start
-      // time so the UI can split them into before / at / after 9 AM sections.
-      // Uses the same cached SU extraction as the Day Timeline summary.
+      // Enrich the "Starting today" AND "Ongoing (daily)" jobs with their
+      // Street Use Permit start time so the UI can split them into
+      // before / at / after 9 AM sections. Uses the same cached SU extraction
+      // as the Day Timeline summary. We de-duplicate by id since a one-day job
+      // can appear in more than one column.
+      const permitLookupJobs = new Map<string, any>();
+      for (const j of [...startingToday, ...ongoing]) {
+        if (!permitLookupJobs.has(j.id)) permitLookupJobs.set(j.id, j);
+      }
       const permitMap = await getPermitSchedulesForJobs(
-        startingToday.map((j) => ({ id: j.id, planFile: (j as any).planFile ?? [] })),
+        Array.from(permitLookupJobs.values()).map((j) => ({
+          id: j.id,
+          planFile: (j as any).planFile ?? [],
+        })),
       );
+
+      // Annotate ongoing (daily) jobs with their permit start time + 9 AM bucket
+      // so the Ongoing column can be split the same way as Starting today.
+      for (const j of ongoing) {
+        const sched = permitMap.get(j.id);
+        const permitStartTime = sched?.validFromTime ?? null;
+        (j as any).permitStartTime = permitStartTime;
+        (j as any).nineAmBucket = classifyNineAm(permitStartTime);
+        (j as any).hasPermit =
+          !!sched && (!!sched.validFromTime || !!sched.validFromDate);
+      }
       // Count how many active (non-cancelled) starting-today jobs have no
       // readable permit, so the UI can warn coordinators to verify the time.
       let missingPermit = 0;
@@ -725,6 +745,9 @@ export const coordinatorRouter = router({
         scheduledDate: r.scheduledDate,
         startTime: r.startTime,
         endTime: r.endTime,
+        // When the assignment was created (assigned), as a UTC epoch ms so the
+        // client can render it in the coordinator's local timezone.
+        assignedAt: r.createdAt ? new Date(r.createdAt).getTime() : null,
         status: (r.status === "confirmed" ? "confirmed" : "tentative") as
           | "tentative"
           | "confirmed",

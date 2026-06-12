@@ -257,17 +257,22 @@ function Section({
   );
 }
 
-/** A "Starting today" column split into before / at / after 9 AM sub-groups. */
-function StartingTodaySection({
+/** A column split into before / at / after 9 AM sub-groups by permit start time. */
+function BucketedSection({
+  title,
+  accent,
+  icon: HeaderIcon,
   jobs,
   isLoading,
   onJob,
 }: {
+  title: string;
+  accent: string;
+  icon: React.ComponentType<{ className?: string }>;
   jobs: DayJob[];
   isLoading: boolean;
   onJob: (id: string) => void;
 }) {
-  const accent = "#ea580c";
   const groups: {
     key: "before9" | "at9" | "after9" | "unknown";
     label: string;
@@ -289,9 +294,9 @@ function StartingTodaySection({
           className="flex items-center justify-center size-7 rounded-lg shrink-0"
           style={{ background: `${accent}1a`, color: accent }}
         >
-          <CalendarPlus className="size-4" />
+          <HeaderIcon className="size-4" />
         </div>
-        <h3 className="font-bold text-sm">Starting today</h3>
+        <h3 className="font-bold text-sm">{title}</h3>
         <span className="ml-auto text-sm font-extrabold" style={{ color: accent }}>
           {isLoading ? "…" : jobs.length}
         </span>
@@ -426,15 +431,18 @@ export default function DashboardDay({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StartingTodaySection
+        <BucketedSection
+          title="Starting today"
+          accent="#ea580c"
+          icon={CalendarPlus}
           jobs={(data?.startingToday as DayJob[]) ?? []}
           isLoading={isLoading}
           onJob={onJob}
         />
-        <Section
-          icon={CalendarRange}
+        <BucketedSection
           title="Ongoing (daily)"
           accent="#2563eb"
+          icon={CalendarRange}
           jobs={(data?.ongoing as DayJob[]) ?? []}
           isLoading={isLoading}
           onJob={onJob}

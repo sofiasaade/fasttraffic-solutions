@@ -515,3 +515,10 @@
 
 ## Scheduler: sticky section headers
 - [x] Week-view section headers (Permit Approved/Field/etc.) stay pinned left during horizontal scroll
+
+## Dashboard Day view: Ongoing 9AM sections
+- [x] Backend: add nineAmBucket to ongoing jobs in dashboardDay
+- [x] Frontend: split Ongoing (daily) column into before/at/after 9AM
+
+## Scheduler: assignment time
+- [x] Show assignment time next to worker name in Scheduler chips (created-at timestamp, local 12h)

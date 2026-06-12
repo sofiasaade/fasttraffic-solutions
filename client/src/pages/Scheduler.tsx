@@ -221,8 +221,19 @@ type ScheduledRow = {
   scheduledDate: string | null;
   startTime: string | null;
   endTime: string | null;
+  /** UTC epoch ms of when this worker was assigned (createdAt). */
+  assignedAt?: number | null;
   status?: "tentative" | "confirmed";
 };
+
+/** Format an assignment timestamp (UTC ms) into a short local clock time. */
+function formatAssignedAt(ms: number | null | undefined): string | null {
+  if (!ms) return null;
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 type EquipmentRow = {
   id: number;
@@ -294,13 +305,16 @@ function WorkerChip({
   onRemove: () => void;
 }) {
   const confirmed = row.status === "confirmed";
+  const assignedAt = formatAssignedAt(row.assignedAt);
   return (
     <div
       draggable={draggable}
       onDragStart={onDragStart}
       title={`${row.technicianName} • ${row.phase}${
         row.startTime ? ` • ${row.startTime}-${row.endTime ?? ""}` : ""
-      } — ${confirmed ? "confirmed" : "tentative"}`}
+      }${assignedAt ? ` • assigned ${assignedAt}` : ""} — ${
+        confirmed ? "confirmed" : "tentative"
+      }`}
       className={cn(
         "group rounded border flex items-center gap-1",
         compact
@@ -316,6 +330,11 @@ function WorkerChip({
       ) : null}
       <span className="min-w-0 flex-1 whitespace-normal break-words">
         {row.technicianName}
+        {assignedAt && (
+          <span className="ml-1 font-normal opacity-60 whitespace-nowrap">
+            @ {assignedAt}
+          </span>
+        )}
       </span>
       <button
         type="button"
