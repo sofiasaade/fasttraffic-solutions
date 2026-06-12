@@ -70,11 +70,25 @@ export default function DayViewMap({
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
   const [unlocated, setUnlocated] = useState(0);
 
+  // Visible bucket filters (toggles). All on by default.
+  const [visible, setVisible] = useState<Record<DayMarker["bucket"], boolean>>({
+    starting: true,
+    ongoing: true,
+    pickup: true,
+  });
+  const toggle = (k: DayMarker["bucket"]) =>
+    setVisible((v) => ({ ...v, [k]: !v[k] }));
+
   const counts = useMemo(() => {
     const c = { starting: 0, ongoing: 0, pickup: 0 };
     for (const m of markers) c[m.bucket]++;
     return c;
   }, [markers]);
+
+  const filteredMarkers = useMemo(
+    () => markers.filter((m) => visible[m.bucket]),
+    [markers, visible],
+  );
 
   const infoHtml = (j: DayMarker) => {
     const t = BUCKET_THEME[j.bucket];
@@ -164,16 +178,17 @@ export default function DayViewMap({
   const onMapReady = useCallback(
     (map: google.maps.Map) => {
       mapRef.current = map;
-      placeMarkers(map, markers);
+      placeMarkers(map, filteredMarkers);
     },
-    [markers, placeMarkers],
+    [filteredMarkers, placeMarkers],
   );
 
   useEffect(() => {
-    if (mapRef.current) placeMarkers(mapRef.current, markers);
-  }, [markers, placeMarkers]);
+    if (mapRef.current) placeMarkers(mapRef.current, filteredMarkers);
+  }, [filteredMarkers, placeMarkers]);
 
   const total = counts.starting + counts.ongoing + counts.pickup;
+  const visibleTotal = filteredMarkers.length;
 
   return (
     <div className="rounded-2xl border border-border bg-card/50 overflow-hidden">
@@ -188,19 +203,30 @@ export default function DayViewMap({
           <h3 className="font-bold text-sm">Day map</h3>
         </div>
         <div className="flex flex-wrap items-center gap-2 ml-auto">
-          {(Object.keys(BUCKET_THEME) as DayMarker["bucket"][]).map((k) => (
-            <span
-              key={k}
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
-            >
-              <span
-                className="size-2.5 rounded-full ring-2 ring-white shadow"
-                style={{ background: BUCKET_THEME[k].dot }}
-              />
-              {BUCKET_THEME[k].label}
-              <span className="text-muted-foreground/70">({counts[k]})</span>
-            </span>
-          ))}
+          {(Object.keys(BUCKET_THEME) as DayMarker["bucket"][]).map((k) => {
+            const on = visible[k];
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => toggle(k)}
+                aria-pressed={on}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all active:scale-[0.97]",
+                  on
+                    ? "border-border bg-card text-foreground"
+                    : "border-dashed border-border bg-transparent text-muted-foreground opacity-60",
+                )}
+              >
+                <span
+                  className="size-2.5 rounded-full ring-2 ring-white shadow"
+                  style={{ background: BUCKET_THEME[k].dot }}
+                />
+                {BUCKET_THEME[k].label}
+                <span className="text-muted-foreground/70">({counts[k]})</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -221,12 +247,19 @@ export default function DayViewMap({
             No jobs on this day.
           </div>
         ) : (
-          <MapView
-            className={cn("w-full h-full")}
-            initialCenter={DEFAULT_CENTER}
-            initialZoom={10}
-            onMapReady={onMapReady}
-          />
+          <>
+            <MapView
+              className={cn("w-full h-full")}
+              initialCenter={DEFAULT_CENTER}
+              initialZoom={10}
+              onMapReady={onMapReady}
+            />
+            {visibleTotal === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground pointer-events-none">
+                No jobs match the selected filters.
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

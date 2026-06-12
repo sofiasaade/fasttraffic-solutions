@@ -449,10 +449,10 @@
 - [x] Arrowboards = Job Address contains tire emoji/word
 - [x] Message boards = Job Address contains TV emoji
 - [x] Render summary boxes row above the day timeline (5 boxes)
-- [ ] Jobs before 9AM / at 9AM / after 9AM from Street Use Permit PDF (match date, newest if multiple)
-- [ ] Jobs finished or picked up that day from Street Use Permit PDF
-- [ ] Render summary boxes above the day timeline
-- [ ] TypeScript clean + tests pass
+- [x] Jobs before 9AM / at 9AM / after 9AM from Street Use Permit PDF (match date, newest if multiple)
+- [x] Jobs finished or picked up that day from Street Use Permit PDF
+- [x] Render summary boxes above the day timeline
+- [x] TypeScript clean + tests pass
 
 ## Feature 53: Update official technician roster
 - [x] Replace TECHNICIANS with official 26 workers (18 FULL + 8 A FEW DAYS)
