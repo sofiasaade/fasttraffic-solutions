@@ -58,6 +58,7 @@ type DayJob = {
   assignmentState?: string;
   permitStartTime?: string | null;
   nineAmBucket?: "before9" | "at9" | "after9" | "unknown";
+  isCancelled?: boolean;
 };
 
 /** Format an HH:MM (24h) permit time into a friendly 12h label. */
@@ -91,18 +92,43 @@ function durationLabel(setup: string | null | undefined): {
 }
 
 function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
+  const cancelled = !!job.isCancelled;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left rounded-xl border border-border bg-card p-3 hover:border-orange-300 hover:shadow-sm transition-all active:scale-[0.99]"
+      className={cn(
+        "w-full text-left rounded-xl border p-3 transition-all active:scale-[0.99]",
+        cancelled
+          ? "border-red-200 bg-red-50/60 hover:border-red-300"
+          : "border-border bg-card hover:border-orange-300 hover:shadow-sm",
+      )}
     >
       <div className="flex items-start gap-2.5">
-        <div className="text-xl leading-none shrink-0">{job.emoji || "📍"}</div>
+        <div
+          className={cn(
+            "text-xl leading-none shrink-0",
+            cancelled && "grayscale opacity-70",
+          )}
+        >
+          {job.emoji || "📍"}
+        </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 font-semibold text-sm truncate">
+          <div
+            className={cn(
+              "flex items-center gap-1.5 font-semibold text-sm truncate",
+              cancelled && "line-through text-muted-foreground",
+            )}
+          >
             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
             <span className="truncate">{job.company || "—"}</span>
+            {cancelled && (
+              <span className="ml-1 shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 no-underline">
+                {(job.status || "Cancelled").includes("Declin")
+                  ? "Declined"
+                  : "Cancelled"}
+              </span>
+            )}
           </div>
           {job.jobAddress && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 truncate">
@@ -283,7 +309,9 @@ export default function DashboardDay() {
   // in both startingToday and pickup; DayViewMap de-dupes by id for the map.
   const mapMarkers = useMemo<DayMarker[]>(() => {
     const mk = (list: DayJob[] | undefined, bucket: DayMarker["bucket"]) =>
-      ((list as any[]) ?? []).map((j) => ({ ...j, bucket }));
+      ((list as any[]) ?? [])
+        .filter((j) => !j.isCancelled)
+        .map((j) => ({ ...j, bucket }));
     return [
       ...mk(data?.startingToday as DayJob[] | undefined, "starting"),
       ...mk(data?.ongoing as DayJob[] | undefined, "ongoing"),

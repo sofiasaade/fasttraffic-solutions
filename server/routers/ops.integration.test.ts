@@ -1508,3 +1508,51 @@ describe("coordinator.dayTimeline", () => {
     expect(res2.permitSummary.at9).toBe(0);
   });
 });
+
+describe("Dashboard day view (dashboardDay)", () => {
+  it("shows cancelled jobs that were supposed to start that day ONLY in startingToday", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recACTIVE",
+        company: "Active Co",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+      }),
+      makeJob({
+        id: "recCANCEL",
+        company: "Cancelled Co",
+        status: "Cancelled",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+      }),
+    ];
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const startingIds = res.startingToday.map((j: any) => j.id);
+    expect(startingIds).toContain("recACTIVE");
+    expect(startingIds).toContain("recCANCEL");
+    // The cancelled one is flagged...
+    const cancelled = res.startingToday.find((j: any) => j.id === "recCANCEL");
+    expect(cancelled.isCancelled).toBe(true);
+    // ...and must NOT leak into pickup/ongoing even though it's a one-day job.
+    expect(res.pickup.map((j: any) => j.id)).not.toContain("recCANCEL");
+    expect(res.ongoing.map((j: any) => j.id)).not.toContain("recCANCEL");
+    // The active one-day job still shows in pickup.
+    expect(res.pickup.map((j: any) => j.id)).toContain("recACTIVE");
+  });
+
+  it("excludes a cancelled job whose start date is a different day", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recCANCEL2",
+        status: "Permit Declined",
+        startDate: "2026-06-10",
+        endDate: "2026-06-10",
+      }),
+    ];
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    expect(res.startingToday.map((j: any) => j.id)).not.toContain("recCANCEL2");
+  });
+});

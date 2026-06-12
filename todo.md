@@ -486,3 +486,9 @@
 - [x] Single-day jobs (start == end) appear in BOTH startingToday and pickup (already in classifyJobForDay)
 - [x] DashboardDay: split Starting today into before 9 AM / at 9 AM / after 9 AM sections
 - [x] Tests for bucketing + single-day duplication (covered in permitSchedule.test + dashboardDay.test)
+
+## Feature 56: Cancelled jobs in Day view
+- [x] dashboardDay surfaces Cancelled/Declined jobs ONLY in Starting today (when start==day)
+- [x] Cancelled jobs flagged (isCancelled) + styled (strikethrough, red badge) on cards
+- [x] Cancelled jobs excluded from map markers and from ongoing/pickup
+- [x] Tests for cancelled-in-startingToday behavior

@@ -292,6 +292,17 @@ export const coordinatorRouter = router({
       const pickup: any[] = [];
       for (const j of merged) {
         const b = classifyJobForDay(j.startDate, j.endDate, date, j.setupDuration);
+        // Cancelled / declined jobs are surfaced ONLY in the "Starting today"
+        // column (when they were supposed to start that day), so coordinators
+        // can see what fell off. They never count as ongoing or pickup work.
+        const status = (j.status || "").toLowerCase();
+        const isCancelled =
+          status.includes("cancel") || status.includes("declin");
+        (j as any).isCancelled = isCancelled;
+        if (isCancelled) {
+          if (b.startingToday) startingToday.push(j);
+          continue;
+        }
         if (b.startingToday) startingToday.push(j);
         if (b.pickup) pickup.push(j);
         if (b.ongoing) ongoing.push(j);
