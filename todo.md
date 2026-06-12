@@ -528,3 +528,6 @@
 
 ## Scheduler worker phase label
 - [x] Worker chip shows phase (Prep/Setup/Pick up) with color
+
+## Day view crew per phase
+- [x] Show assigned workers per phase (Prep/Setup/Pickup) per project, one row per phase

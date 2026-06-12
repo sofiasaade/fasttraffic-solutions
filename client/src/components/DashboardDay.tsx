@@ -199,22 +199,34 @@ function CrewByPhase({ job }: { job: DayJob }) {
   ];
   const hasAny = phases.some((p) => p.names.length > 0);
   if (!hasAny) return null;
+  // One row per phase so the coordinator can read, per project, exactly who is
+  // assigned to Prep, Setup and Pickup. Empty phases show a muted dash.
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-      <Users className="size-3 text-muted-foreground shrink-0" />
-      {phases.flatMap((p) =>
-        p.names.map((name, i) => (
+    <div className="mt-2 space-y-1 border-t border-dashed border-border pt-1.5">
+      {phases.map((p) => (
+        <div key={p.key} className="flex items-start gap-1.5 text-[11px]">
           <span
-            key={`${p.key}-${i}-${name}`}
-            className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium"
+            className={cn(
+              "mt-0.5 shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wide",
+              p.cls,
+            )}
           >
-            <span className={cn("rounded px-1 font-bold uppercase tracking-wide", p.cls)}>
-              {p.label}
-            </span>
-            <span className="text-foreground">{name}</span>
+            {p.label}
           </span>
-        )),
-      )}
+          {p.names.length > 0 ? (
+            <span className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-foreground">
+              {p.names.map((name, i) => (
+                <span key={`${p.key}-${i}-${name}`} className="whitespace-nowrap">
+                  {name}
+                  {i < p.names.length - 1 ? "," : ""}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/60">—</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
