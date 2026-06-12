@@ -17,6 +17,8 @@ import {
   Clock,
   Sunset,
   HelpCircle,
+  CheckCircle2,
+  Users,
 } from "lucide-react";
 
 function toKey(d: Date): string {
@@ -59,6 +61,9 @@ type DayJob = {
   permitStartTime?: string | null;
   nineAmBucket?: "before9" | "at9" | "after9" | "unknown";
   isCancelled?: boolean;
+  techPrep?: string[];
+  techSetup?: string[];
+  techPickup?: string[];
 };
 
 /** Format an HH:MM (24h) permit time into a friendly 12h label. */
@@ -129,6 +134,11 @@ function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
                   : "Cancelled"}
               </span>
             )}
+            {!cancelled && (job.techPrep?.length ?? 0) > 0 && (
+              <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                <CheckCircle2 className="size-3" /> Prepared
+              </span>
+            )}
           </div>
           {job.jobAddress && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 truncate">
@@ -159,9 +169,42 @@ function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
               </span>
             )}
           </div>
+          <CrewByPhase job={job} />
         </div>
       </div>
     </button>
+  );
+}
+
+/**
+ * Renders the technicians assigned to a job, grouped and ORDERED by phase:
+ * Preparation → Setup → Pickup. Each name carries its phase label.
+ */
+function CrewByPhase({ job }: { job: DayJob }) {
+  const phases: { key: string; label: string; cls: string; names: string[] }[] = [
+    { key: "prep", label: "Prep", cls: "bg-emerald-100 text-emerald-700", names: job.techPrep ?? [] },
+    { key: "setup", label: "Setup", cls: "bg-blue-100 text-blue-700", names: job.techSetup ?? [] },
+    { key: "pickup", label: "Pickup", cls: "bg-green-100 text-green-700", names: job.techPickup ?? [] },
+  ];
+  const hasAny = phases.some((p) => p.names.length > 0);
+  if (!hasAny) return null;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      <Users className="size-3 text-muted-foreground shrink-0" />
+      {phases.flatMap((p) =>
+        p.names.map((name, i) => (
+          <span
+            key={`${p.key}-${i}-${name}`}
+            className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium"
+          >
+            <span className={cn("rounded px-1 font-bold uppercase tracking-wide", p.cls)}>
+              {p.label}
+            </span>
+            <span className="text-foreground">{name}</span>
+          </span>
+        )),
+      )}
+    </div>
   );
 }
 

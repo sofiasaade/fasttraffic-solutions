@@ -492,3 +492,7 @@
 - [x] Cancelled jobs flagged (isCancelled) + styled (strikethrough, red badge) on cards
 - [x] Cancelled jobs excluded from map markers and from ongoing/pickup
 - [x] Tests for cancelled-in-startingToday behavior
+
+## Feature 57: Prepared tag + crew ordered by phase (Day view)
+- [x] Show "Prepared" tag on job card when a tech is assigned to Preparation phase
+- [x] List assigned crew ordered Preparation -> Setup -> Pickup with phase labels
