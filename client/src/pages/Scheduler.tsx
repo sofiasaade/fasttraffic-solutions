@@ -226,6 +226,18 @@ type ScheduledRow = {
   status?: "tentative" | "confirmed";
 };
 
+/** Phase label + colors for a worker chip (Prep / Setup / Pick up). */
+function phaseBadge(
+  phase: string | null | undefined,
+): { label: string; bg: string; text: string } | null {
+  const p = (phase ?? "").toLowerCase();
+  if (p.startsWith("prep")) return { label: "Prep", bg: "#dbeafe", text: "#1e40af" };
+  if (p.startsWith("setup") || p.startsWith("set up") || p.startsWith("set-up"))
+    return { label: "Setup", bg: "#ffedd5", text: "#9a3412" };
+  if (p.startsWith("pick")) return { label: "Pick up", bg: "#dcfce7", text: "#166534" };
+  return null;
+}
+
 /** Format an assignment timestamp (UTC ms) into a short local clock time. */
 function formatAssignedAt(ms: number | null | undefined): string | null {
   if (!ms) return null;
@@ -306,6 +318,7 @@ function WorkerChip({
 }) {
   const confirmed = row.status === "confirmed";
   const assignedAt = formatAssignedAt(row.assignedAt);
+  const phase = phaseBadge(row.phase);
   return (
     <div
       draggable={draggable}
@@ -328,6 +341,14 @@ function WorkerChip({
       {confirmed ? (
         <Check className="size-3 shrink-0 text-emerald-600" />
       ) : null}
+      {phase && (
+        <span
+          className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wide"
+          style={{ background: phase.bg, color: phase.text }}
+        >
+          {phase.label}
+        </span>
+      )}
       <span className="min-w-0 flex-1 whitespace-normal break-words">
         {row.technicianName}
         {assignedAt && (

@@ -525,3 +525,6 @@
 
 ## Day view pickup time
 - [x] Pick up column shows pickup time (permit end time) on each card
+
+## Scheduler worker phase label
+- [x] Worker chip shows phase (Prep/Setup/Pick up) with color
