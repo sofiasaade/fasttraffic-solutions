@@ -512,3 +512,6 @@
 - [x] Split-color pin (starting + pickup) for jobs that begin and are picked up the same day
 - [x] Filter-aware: pin shows only colors of active buckets; info window lists both labels
 - [x] Legend hint for split pin; tests pass + TypeScript clean
+
+## Scheduler: sticky section headers
+- [x] Week-view section headers (Permit Approved/Field/etc.) stay pinned left during horizontal scroll

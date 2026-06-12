@@ -1684,7 +1684,9 @@ export default function Scheduler() {
                   const isCollapsed = collapsed[section.key];
                   return (
                     <div key={section.key}>
-                      {/* Section header */}
+                      {/* Section header — full-width band so it covers the
+                          whole row, with the label pinned to the left edge so
+                          it stays visible during horizontal scroll. */}
                       <button
                         type="button"
                         onClick={() =>
@@ -1694,26 +1696,28 @@ export default function Scheduler() {
                           }))
                         }
                         className={cn(
-                          "flex items-center gap-2 px-4 py-2 bg-muted/60 border-b border-border text-left sticky top-[41px] left-0 w-[calc(100vw-22rem)] max-w-[1500px]",
+                          "block w-full bg-muted/60 border-b border-border text-left sticky top-[41px]",
                           "z-[15]",
                         )}
                       >
-                        <ChevronDown
-                          className={cn(
-                            "size-4 transition-transform",
-                            isCollapsed && "-rotate-90",
-                          )}
-                        />
-                        <span
-                          className="size-2.5 rounded-full"
-                          style={{ backgroundColor: section.dot }}
-                        />
-                        <span className="font-semibold text-sm">
-                          {section.title}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          ({sectionJobs.length})
-                        </span>
+                        <div className="sticky left-0 inline-flex items-center gap-2 px-4 py-2">
+                          <ChevronDown
+                            className={cn(
+                              "size-4 transition-transform",
+                              isCollapsed && "-rotate-90",
+                            )}
+                          />
+                          <span
+                            className="size-2.5 rounded-full"
+                            style={{ backgroundColor: section.dot }}
+                          />
+                          <span className="font-semibold text-sm">
+                            {section.title}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({sectionJobs.length})
+                          </span>
+                        </div>
                       </button>
                       {!isCollapsed && sectionJobs.map(renderJobRow)}
                     </div>
