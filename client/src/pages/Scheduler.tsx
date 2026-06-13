@@ -1791,7 +1791,6 @@ export default function Scheduler() {
               ) : (
                 STATUS_SECTIONS.map((section) => {
                   const sectionJobs = grouped[section.key];
-                  if (sectionJobs.length === 0) return null;
                   const isCollapsed = collapsed[section.key];
                   return (
                     <div key={section.key}>
@@ -1830,7 +1829,14 @@ export default function Scheduler() {
                           </span>
                         </div>
                       </button>
-                      {!isCollapsed && sectionJobs.map(renderJobRow)}
+                      {!isCollapsed &&
+                        (sectionJobs.length === 0 ? (
+                          <div className="sticky left-0 inline-block px-4 py-3 text-xs text-muted-foreground italic">
+                            No jobs in this category for this range.
+                          </div>
+                        ) : (
+                          sectionJobs.map(renderJobRow)
+                        ))}
                     </div>
                   );
                 })

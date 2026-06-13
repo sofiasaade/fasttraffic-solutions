@@ -539,3 +539,5 @@
 
 ## Scheduler filter colors
 - [x] Recolor Scheduler filter/section dots with Airtable Field Operations sub-status colors (Option A)
+
+- [x] Scheduler Week: always show all status sections/filters even when count is 0
