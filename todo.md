@@ -536,3 +536,6 @@
 - [x] Add range selector (1W/2W/Month/Quarter/Year) to Week view for horizontal scroll across a year
 - [x] Dynamic grid columns + real dates with month/holiday markers
 - [x] Keep Day view selector fixed to a 7-day week
+
+## Scheduler filter colors
+- [x] Recolor Scheduler filter/section dots with Airtable Field Operations sub-status colors (Option A)

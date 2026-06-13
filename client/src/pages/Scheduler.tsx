@@ -60,6 +60,7 @@ import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
+import { subStatusColor } from "@shared/subStatusColors";
 
 type Phase = "Preparation" | "Setup" | "Pickup";
 const PHASES: Phase[] = ["Preparation", "Setup", "Pickup"];
@@ -175,16 +176,30 @@ const STATUS_SECTIONS: {
     key: "submitted",
     status: "Permit Request Submitted",
     title: "Permit Request Submitted",
-    dot: "#2563eb",
+    // Match Airtable sub-status "Permit Request Submitted(Field)"
+    dot: subStatusColor("Permit Request Submitted(Field)").bg,
   },
   {
     key: "approved",
     status: "Permit Approved",
     title: "Permit Approved",
-    dot: "#ea580c",
+    // Match Airtable sub-status "Permit Approved(Field)"
+    dot: subStatusColor("Permit Approved(Field)").bg,
   },
-  { key: "field", status: "Field", title: "Field", dot: "#16a34a" },
-  { key: "cancelled", status: "Cancelled", title: "Cancelled", dot: "#dc2626" },
+  {
+    key: "field",
+    status: "Field",
+    title: "Field",
+    // Match Airtable sub-status "Daily Setup (Field)"
+    dot: subStatusColor("Daily Setup (Field)").bg,
+  },
+  {
+    key: "cancelled",
+    status: "Cancelled",
+    title: "Cancelled",
+    // Match Airtable sub-status "Cancelled (Field)"
+    dot: subStatusColor("Cancelled (Field)").bg,
+  },
 ];
 
 // ---- date helpers (local, no tz drift for day keys) ----
