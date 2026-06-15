@@ -1,5 +1,5 @@
-import { useMemo, useState, useCallback } from "react";
-import { useLocation } from "wouter";
+import { useMemo, useState, useCallback, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,7 @@ import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
 import { subStatusColor } from "@shared/subStatusColors";
+import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 
 type Phase = "Preparation" | "Setup" | "Pickup";
 const PHASES: Phase[] = ["Preparation", "Setup", "Pickup"];
@@ -446,6 +447,8 @@ export default function Scheduler() {
   const techQuery = trpc.coordinator.technicians.useQuery();
   const equipmentCatalogQuery = trpc.coordinator.equipmentCatalog.useQuery();
   const utils = trpc.useUtils();
+  // Central helper: refresh every job-related window after any change here.
+  const invalidateJobData = useInvalidateJobData();
   const setScheduled = trpc.coordinator.setScheduled.useMutation();
   const removeScheduled = trpc.coordinator.removeScheduled.useMutation();
   const confirmAssignment = trpc.coordinator.confirmAssignment.useMutation();
@@ -627,22 +630,68 @@ export default function Scheduler() {
       return next;
     });
 
+  // ---- Global search focus ----
+  // When arriving from the global project search (`/scheduler?project=<id>`),
+  // focus that project: filter the week list to it, expand it, and show a
+  // banner to clear the focus. This keeps the search consistent app-wide.
+  const searchString = useSearch();
+  const focusedProjectId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("project");
+  }, [searchString]);
+  // Free-text job filter for the week grid (client/address). Pre-filled when a
+  // project is focused so the coordinator immediately sees only that project.
+  const [jobFilter, setJobFilter] = useState("");
+  const focusedJob = useMemo(() => {
+    if (!focusedProjectId) return null;
+    return (
+      ((jobsQuery.data ?? []) as Job[]).find((j) => j.id === focusedProjectId) ??
+      null
+    );
+  }, [jobsQuery.data, focusedProjectId]);
+  // On focus: expand the targeted job and jump the week to its start date so it
+  // is visible in the grid.
+  useEffect(() => {
+    if (!focusedProjectId) return;
+    setExpandedJobs((prev) => new Set(prev).add(focusedProjectId));
+    if (focusedJob?.startDate) {
+      const s = parseDayKey(focusedJob.startDate);
+      if (s) {
+        const [y, m, d] = s.split("-").map(Number);
+        if (y && m && d) setWeekStart(startOfWeek(new Date(y, m - 1, d)));
+      }
+    }
+  }, [focusedProjectId, focusedJob]);
+  const clearFocus = () => {
+    setJobFilter("");
+    navigate("/scheduler");
+  };
+
   // Jobs that overlap the visible week (start..end intersects the week).
   const weekJobs = useMemo(() => {
     const list = (jobsQuery.data ?? []) as Job[];
     const weekFirst = rangeFirst;
     const weekLast = rangeLast;
+    const q = jobFilter.trim().toLowerCase();
     return list
       .filter((j) => {
+        // When a specific project is focused, show ONLY that project.
+        if (focusedProjectId) return j.id === focusedProjectId;
         const s = parseDayKey(j.startDate);
         const e = parseDayKey(j.endDate) || s;
         if (!s) return false;
-        return s <= weekLast && e >= weekFirst;
+        if (!(s <= weekLast && e >= weekFirst)) return false;
+        // Free-text filter on company / address.
+        if (q) {
+          const hay = `${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
       })
       .sort((a, b) =>
         parseDayKey(a.startDate).localeCompare(parseDayKey(b.startDate)),
       );
-  }, [jobsQuery.data, dayKeys]);
+  }, [jobsQuery.data, dayKeys, focusedProjectId, jobFilter]);
 
   // Group jobs by status section (like the dispatch board).
   const grouped = useMemo(() => {
@@ -874,13 +923,13 @@ export default function Scheduler() {
         });
         if (force.ok) {
           toast.success(`${payload.label} moved to ${dk} (over a day conflict).`);
-          utils.coordinator.scheduledAssignments.invalidate();
+          invalidateJobData();
         }
       }
       return;
     }
     toast.success(`${payload.label} moved to ${dk}.`);
-    utils.coordinator.scheduledAssignments.invalidate();
+    invalidateJobData();
   };
 
   const doMoveEquipment = async (
@@ -894,7 +943,7 @@ export default function Scheduler() {
     }
     await moveEquipment.mutateAsync({ id: payload.id, scheduledDate: dk });
     toast.success(`${payload.label} moved to ${dk}.`);
-    utils.coordinator.equipmentAssignments.invalidate();
+    invalidateJobData();
   };
 
   const doMoveTruck = async (
@@ -908,7 +957,7 @@ export default function Scheduler() {
     }
     await moveTruck.mutateAsync({ id: payload.id, scheduledDate: dk });
     toast.success(`${payload.label} moved to ${dk}.`);
-    utils.coordinator.truckAssignments.invalidate();
+    invalidateJobData();
   };
 
   const doSchedule = async (force: boolean) => {
@@ -929,7 +978,7 @@ export default function Scheduler() {
     toast.success(`${drop.techDisplay} scheduled for ${phase} on ${drop.dayKey}.`);
     setDrop(null);
     setPendingForce(null);
-    utils.coordinator.scheduledAssignments.invalidate();
+    invalidateJobData();
   };
 
   const doScheduleEquipment = async () => {
@@ -946,13 +995,13 @@ export default function Scheduler() {
       `${equipQty}× ${equipDrop.equipmentName} scheduled on ${equipDrop.dayKey}.`,
     );
     setEquipDrop(null);
-    utils.coordinator.equipmentAssignments.invalidate();
+    invalidateJobData();
   };
 
   const removeChip = async (row: ScheduledRow) => {
     await removeScheduled.mutateAsync({ id: row.id });
     toast.success(`Removed ${row.technicianName} from ${row.scheduledDate}.`);
-    utils.coordinator.scheduledAssignments.invalidate();
+    invalidateJobData();
   };
 
   // Toggle a single chip between tentative and confirmed. Confirming sends the
@@ -965,9 +1014,7 @@ export default function Scheduler() {
         ? `Confirmed ${row.technicianName} — technician notified.`
         : `Reverted ${row.technicianName} to tentative.`,
     );
-    utils.coordinator.scheduledAssignments.invalidate();
-    utils.coordinator.boardJobs.invalidate();
-    utils.coordinator.pendingJobs.invalidate();
+    invalidateJobData();
   };
 
   // Confirm every assignment (phase + day chips) of a job at once.
@@ -983,15 +1030,13 @@ export default function Scheduler() {
         ? `Confirmed ${jobLabel} — notified ${n} technician${n === 1 ? "" : "s"}.`
         : `Confirmed ${jobLabel}.`,
     );
-    utils.coordinator.scheduledAssignments.invalidate();
-    utils.coordinator.boardJobs.invalidate();
-    utils.coordinator.pendingJobs.invalidate();
+    invalidateJobData();
   };
 
   const removeEquipChip = async (row: EquipmentRow) => {
     await removeEquipment.mutateAsync({ id: row.id });
     toast.success(`Removed ${row.equipmentName} from ${row.scheduledDate}.`);
-    utils.coordinator.equipmentAssignments.invalidate();
+    invalidateJobData();
   };
 
   const doScheduleTruck = async () => {
@@ -1007,13 +1052,13 @@ export default function Scheduler() {
       `${truckDrop.truckName} scheduled on ${truckDrop.dayKey}.`,
     );
     setTruckDrop(null);
-    utils.coordinator.truckAssignments.invalidate();
+    invalidateJobData();
   };
 
   const removeTruckChip = async (row: TruckRow) => {
     await removeTruck.mutateAsync({ id: row.id });
     toast.success(`Removed ${row.truckName} from ${row.scheduledDate}.`);
-    utils.coordinator.truckAssignments.invalidate();
+    invalidateJobData();
   };
 
   const weekLabel = `${days[0].toLocaleDateString(undefined, {
@@ -1609,6 +1654,55 @@ export default function Scheduler() {
       <div className="flex-1 flex min-h-0">
         {/* Timeline */}
         <div className="flex-1 overflow-auto">
+          {/* Global-search focus banner: shown when arriving from the project
+              search. Lets the coordinator clear the focus to see all jobs. */}
+          {focusedProjectId && (
+            <div className="flex items-center gap-2 border-b border-orange-200 bg-orange-50 px-4 py-2 text-sm text-orange-800">
+              <Search className="size-4 shrink-0" />
+              <span className="min-w-0 truncate">
+                Showing only{" "}
+                <strong>{focusedJob?.company ?? "selected project"}</strong>
+                {focusedJob?.jobAddress ? ` · ${focusedJob.jobAddress}` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={clearFocus}
+                className="ml-auto inline-flex items-center gap-1 rounded-md border border-orange-300 bg-white px-2 py-1 text-xs font-medium text-orange-700 hover:bg-orange-100"
+              >
+                <X className="size-3" /> Clear filter
+              </button>
+            </div>
+          )}
+          {/* Week-grid job search (client / address). Hidden while a single
+              project is focused (the banner already scopes the view). */}
+          {!focusedProjectId && viewMode === "week" && (
+            <div className="flex items-center gap-2 border-b border-border bg-card/60 px-4 py-2">
+              <div className="relative w-full max-w-sm">
+                <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={jobFilter}
+                  onChange={(e) => setJobFilter(e.target.value)}
+                  placeholder="Filter jobs by client or address…"
+                  className="pl-8 h-9"
+                />
+                {jobFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setJobFilter("")}
+                    aria-label="Clear job filter"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                )}
+              </div>
+              {jobFilter && (
+                <span className="text-xs text-muted-foreground">
+                  {weekJobs.length} match{weekJobs.length === 1 ? "" : "es"}
+                </span>
+              )}
+            </div>
+          )}
           {loading ? (
             <div className="flex justify-center py-20">
               <Loader2 className="size-6 animate-spin text-muted-foreground" />

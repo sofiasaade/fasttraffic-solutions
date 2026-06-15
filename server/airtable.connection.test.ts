@@ -23,5 +23,5 @@ describe("airtable connection", () => {
       expect(j.id).toBeTruthy();
       expect(["Field", "Permit Approved"]).toContain(j.status);
     }
-  }, 30000);
+  }, 60000);
 });

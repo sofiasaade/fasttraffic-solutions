@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { SUB_STATUS_OPTIONS } from "@shared/airtableFields";
 import { fmtDateTime } from "@/lib/format";
+import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 
 interface Job {
   id: string;
@@ -48,6 +49,7 @@ export default function JobModifyDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const utils = trpc.useUtils();
+  const invalidateJobData = useInvalidateJobData();
   const [endDate, setEndDate] = useState("");
   const [subStatus, setSubStatus] = useState<string>("");
   const [reason, setReason] = useState("");
@@ -70,10 +72,8 @@ export default function JobModifyDialog({
   const modify = trpc.coordinator.modifyJob.useMutation({
     onSuccess: () => {
       toast.success("Job updated");
-      utils.coordinator.dispatchJobs.invalidate();
-      utils.coordinator.boardJobs.invalidate();
-      utils.coordinator.jobDetail.invalidate();
-      utils.coordinator.changeHistory.invalidate();
+      // Refresh every job-related window so the edit shows everywhere.
+      invalidateJobData();
       historyQuery.refetch();
     },
     onError: (e) => toast.error(e.message),

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDate } from "@/lib/format";
+import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 
 type Phase = "Preparation" | "Setup" | "Pickup";
 const PHASES: Phase[] = ["Preparation", "Setup", "Pickup"];
@@ -43,7 +44,7 @@ export default function AssignmentDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const utils = trpc.useUtils();
+  const invalidateJobData = useInvalidateJobData();
   const techQuery = trpc.coordinator.technicians.useQuery(undefined, {
     enabled: open,
   });
@@ -73,9 +74,8 @@ export default function AssignmentDialog({
       }
       toast.success(`${phase} assignment saved`);
       setPendingConflicts(null);
-      utils.coordinator.dispatchJobs.invalidate();
-      utils.coordinator.boardJobs.invalidate();
-      utils.coordinator.jobDetail.invalidate();
+      // Refresh every job-related window so the new crew shows everywhere.
+      invalidateJobData();
     },
     onError: (e) => toast.error(e.message),
   });

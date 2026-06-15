@@ -549,3 +549,7 @@
 - [x] Day View: add "Prep work" column listing jobs with a Preparation-phase tech assigned whose start date is upcoming (prep before starting day)
 
 - [x] Dashboard: remove "Active works" and "Jobs in window" stat cards
+
+- [x] Part A: Global project search in CoordinatorShell (all windows) -> find project, navigate to Scheduler with highlight/filter
+- [x] Part A: Consistent local search/filter on Scheduler, Pending, Permit Map
+- [x] Part B: Cross-view live sync (invalidate related queries after mutations)

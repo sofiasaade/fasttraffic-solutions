@@ -2,7 +2,8 @@ import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { MapView } from "@/components/Map";
 import { trpc } from "@/lib/trpc";
 import { fmtDate, fmtTimeRange } from "@/lib/format";
-import { Loader2, MapPin, AlertTriangle, Building2 } from "lucide-react";
+import { Loader2, MapPin, AlertTriangle, Building2, Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 type MapJob = {
@@ -82,6 +83,10 @@ export default function PermitMap() {
   const [unlocated, setUnlocated] = useState<MapJob[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Free-text project search (client / address / city). Filters both the
+  // side list and the map markers so the two stay in sync.
+  const [search, setSearch] = useState("");
+
   // Visible status filters (toggles). All on by default.
   const [visible, setVisible] = useState<Record<StatusKey, boolean>>({
     field: true,
@@ -97,13 +102,16 @@ export default function PermitMap() {
     return c;
   }, [jobs]);
 
-  const filteredJobs = useMemo(
-    () =>
-      ((jobs as MapJob[] | undefined) ?? []).filter(
-        (j) => visible[statusKey(j.status)],
-      ),
-    [jobs, visible],
-  );
+  const filteredJobs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return ((jobs as MapJob[] | undefined) ?? []).filter((j) => {
+      if (!visible[statusKey(j.status)]) return false;
+      if (!q) return true;
+      return `${j.company ?? ""} ${j.jobAddress ?? ""} ${j.municipality ?? ""}`
+        .toLowerCase()
+        .includes(q);
+    });
+  }, [jobs, visible, search]);
 
   const infoHtml = (j: MapJob) => {
     const t = STATUS_THEME[statusKey(j.status)];
@@ -298,13 +306,37 @@ export default function PermitMap() {
       <div className="flex-1 flex min-h-0 flex-col lg:flex-row">
         {/* Side list */}
         <div className="lg:w-80 border-b lg:border-b-0 lg:border-r border-border overflow-y-auto bg-card/40 max-h-48 lg:max-h-none">
+          {/* Project search: filters the list and the map markers together. */}
+          <div className="sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur-sm p-2.5">
+            <div className="relative">
+              <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search projects on map…"
+                className="pl-8 h-9"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+          </div>
           {isLoading ? (
             <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
               <Loader2 className="size-4 animate-spin" /> Loading jobs…
             </div>
           ) : filteredJobs.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              No jobs match the selected statuses.
+              {search.trim()
+                ? `No jobs match “${search.trim()}”.`
+                : "No jobs match the selected statuses."}
             </div>
           ) : (
             <ul className="divide-y divide-border">

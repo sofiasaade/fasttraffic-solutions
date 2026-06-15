@@ -1,6 +1,8 @@
 import { useLocation } from "wouter";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   AlertTriangle,
   Building2,
@@ -9,6 +11,8 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
+  Search,
+  X,
 } from "lucide-react";
 
 function formatDate(value: string | null): string {
@@ -28,7 +32,17 @@ export default function PendingJobs() {
     refetchInterval: 60_000,
   });
 
-  const jobs = pending.data?.jobs ?? [];
+  const allJobs = pending.data?.jobs ?? [];
+  const [search, setSearch] = useState("");
+  const jobs = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allJobs;
+    return allJobs.filter((j) =>
+      `${j.company ?? ""} ${j.jobAddress ?? ""} ${j.municipality ?? ""}`
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [allJobs, search]);
   const count = pending.data?.count ?? 0;
 
   return (
@@ -62,9 +76,35 @@ export default function PendingJobs() {
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="text-sm font-medium text-rose-600">
-            {count} job{count === 1 ? "" : "s"} need a technician
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-medium text-rose-600">
+              {count} job{count === 1 ? "" : "s"} need a technician
+            </div>
+            <div className="relative w-full max-w-xs">
+              <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search pending jobs…"
+                className="pl-8 h-9"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
           </div>
+          {jobs.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border bg-card py-10 text-center text-sm text-muted-foreground">
+              No pending jobs match “{search.trim()}”.
+            </div>
+          )}
           {jobs.map((job) => (
             <div
               key={job.id}
@@ -116,7 +156,9 @@ export default function PendingJobs() {
                 size="sm"
                 variant="outline"
                 className="shrink-0 border-rose-300 text-rose-700 hover:bg-rose-50"
-                onClick={() => navigate("/scheduler")}
+                onClick={() =>
+                  navigate(`/scheduler?project=${encodeURIComponent(job.id)}`)
+                }
               >
                 Assign
                 <ArrowRight className="size-4" />

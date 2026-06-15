@@ -19,6 +19,7 @@ import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import GlobalProjectSearch from "@/components/GlobalProjectSearch";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
@@ -122,8 +123,12 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
         </div>
       </aside>
 
-      {/* Mobile top bar for coordinator */}
+      {/* Main area with a persistent top bar holding the global project search */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Desktop top bar: global project search available on every window */}
+        <header className="hidden md:flex items-center gap-4 h-16 px-6 border-b border-border bg-card/60 backdrop-blur-sm">
+          <GlobalProjectSearch className="w-full max-w-md" />
+        </header>
         <header className="md:hidden flex items-center justify-between h-14 px-4 bg-sidebar text-sidebar-foreground">
           <div className="flex items-center gap-2 font-bold">
             <img
@@ -137,6 +142,10 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
             <LogOut className="size-5" />
           </button>
         </header>
+        {/* Mobile global project search bar */}
+        <div className="md:hidden px-3 py-2 border-b border-border bg-card">
+          <GlobalProjectSearch />
+        </div>
         <nav className="md:hidden flex border-b border-border bg-card overflow-x-auto">
           {NAV.map((item) => {
             const active = location === item.href;

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -194,7 +195,13 @@ export default function DayTimeline() {
   const equipQuery = trpc.coordinator.equipmentCatalog.useQuery();
   const truckQuery = trpc.coordinator.truckCatalog.useQuery();
 
-  const refresh = () => utils.coordinator.dayTimeline.invalidate({ date });
+  const invalidateJobData = useInvalidateJobData();
+  // Refresh the date-scoped timeline AND all other job-related windows so the
+  // schedule stays consistent everywhere after a change here.
+  const refresh = () => {
+    utils.coordinator.dayTimeline.invalidate({ date });
+    invalidateJobData();
+  };
 
   const addBlock = trpc.coordinator.addTimelineBlock.useMutation({
     onSuccess: refresh,
