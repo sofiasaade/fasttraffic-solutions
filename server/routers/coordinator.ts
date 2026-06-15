@@ -36,6 +36,7 @@ import {
   appendChangeHistory,
   createNotification,
   getAssignmentsMap,
+  getAssignmentsMapForDay,
   getAssignmentStatusMap,
   setAssignmentStatus,
   setJobAssignmentsStatus,
@@ -275,8 +276,11 @@ export const coordinatorRouter = router({
       const date = input.date;
       const jobs = await fetchMapJobs();
       const ids = jobs.map((j) => j.id);
+      // For the Day View we want the crew the coordinator scheduled for THIS
+      // day (Scheduler day-pinned rows) merged with any generic assignments,
+      // so what is assigned in the Scheduler shows up on the dashboard cards.
       const [assignMap, overrideMap, statusMap] = await Promise.all([
-        getAssignmentsMap(ids),
+        getAssignmentsMapForDay(ids, date),
         getJobOverridesMap(ids),
         getAssignmentStatusMap(ids),
       ]);

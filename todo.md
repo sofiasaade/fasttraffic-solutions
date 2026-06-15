@@ -541,3 +541,5 @@
 - [x] Recolor Scheduler filter/section dots with Airtable Field Operations sub-status colors (Option A)
 
 - [x] Scheduler Week: always show all status sections/filters even when count is 0
+
+- [x] Day View cards: show crew assigned for the SELECTED DAY (merge generic + day-pinned job_assignments) so Scheduler assignments reflect on Dashboard

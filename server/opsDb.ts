@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   appSettings,
@@ -616,6 +616,47 @@ export async function getAssignmentsMap(jobIds: string[]) {
     const entry = map.get(r.airtableJobId)!;
     if ((PHASES as readonly string[]).includes(r.phase)) {
       entry[r.phase as Phase].push(r.technicianName);
+    }
+  }
+  return map;
+}
+
+/**
+ * Crew per job for a SPECIFIC calendar day, grouped by phase.
+ *
+ * The single `job_assignments` table holds two kinds of rows:
+ *   - generic phase assignments (scheduledDate IS NULL)
+ *   - day-pinned scheduler assignments (scheduledDate = a specific day)
+ *
+ * The Dashboard Day View must reflect what the coordinator scheduled in the
+ * Scheduler for that day, so we MERGE both: every generic assignment plus any
+ * row pinned to `date`. Names are de-duplicated per phase so a worker pinned to
+ * the day that also has a generic row is not listed twice.
+ */
+export async function getAssignmentsMapForDay(jobIds: string[], date: string) {
+  const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        inArray(jobAssignments.airtableJobId, jobIds),
+        or(
+          isNull(jobAssignments.scheduledDate),
+          eq(jobAssignments.scheduledDate, date),
+        ),
+      ),
+    );
+  for (const r of rows) {
+    if (!map.has(r.airtableJobId)) {
+      map.set(r.airtableJobId, { Preparation: [], Setup: [], Pickup: [] });
+    }
+    const entry = map.get(r.airtableJobId)!;
+    if ((PHASES as readonly string[]).includes(r.phase)) {
+      const list = entry[r.phase as Phase];
+      if (!list.includes(r.technicianName)) list.push(r.technicianName);
     }
   }
   return map;

@@ -190,6 +190,24 @@ vi.mock("../opsDb", () => ({
     }
     return map;
   }),
+  // Day-aware crew = generic assignments (no date) + day-pinned scheduler rows
+  // for the requested date, de-duplicated per phase.
+  getAssignmentsMapForDay: vi.fn(async (ids: string[], date: string) => {
+    const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();
+    const push = (jobId: string, phase: string, name: string) => {
+      if (!ids.includes(jobId)) return;
+      if (!map.has(jobId))
+        map.set(jobId, { Preparation: [], Setup: [], Pickup: [] });
+      const entry = map.get(jobId) as any;
+      if (!entry[phase]) return;
+      if (!entry[phase].includes(name)) entry[phase].push(name);
+    };
+    for (const a of state.assignments) push(a.airtableJobId, a.phase, a.technicianName);
+    for (const s of state.scheduled) {
+      if (s.scheduledDate === date) push(s.airtableJobId, s.phase, s.technicianName);
+    }
+    return map;
+  }),
   setPhaseAssignments: vi.fn(
     async (jobId: string, phase: string, techs: string[]) => {
       const old = state.assignments
@@ -1641,5 +1659,65 @@ describe("Dashboard day view (dashboardDay)", () => {
     const pj = res.pickup.find((j: any) => j.id === "recPICK");
     expect(pj).toBeDefined();
     expect(pj.permitEndTime).toBe("15:30");
+  });
+
+  it("shows crew scheduled in the Scheduler for the selected day on the day-view card", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recCREW",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+      }),
+    ];
+    // Day-pinned (Scheduler) assignment for THIS day — must appear on the card.
+    state.scheduled.push({
+      id: ++state.scheduledSeq,
+      airtableJobId: "recCREW",
+      phase: "Setup",
+      technicianName: "Hector",
+      scheduledDate: "2026-06-15",
+      startTime: "09:00",
+      endTime: "15:00",
+      createdAt: new Date(),
+    });
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const job = res.startingToday.find((j: any) => j.id === "recCREW");
+    expect(job).toBeDefined();
+    expect(job.techSetup).toContain("Hector");
+  });
+
+  it("does NOT show crew pinned to a different day, but keeps generic assignments", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recCREW2",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+      }),
+    ];
+    // Generic (no date) assignment — always shown.
+    state.assignments.push({
+      airtableJobId: "recCREW2",
+      phase: "Preparation",
+      technicianName: "Generic Guy",
+    });
+    // Pinned to ANOTHER day — must NOT leak into 2026-06-15.
+    state.scheduled.push({
+      id: ++state.scheduledSeq,
+      airtableJobId: "recCREW2",
+      phase: "Pickup",
+      technicianName: "Other Day Guy",
+      scheduledDate: "2026-06-20",
+      startTime: null,
+      endTime: null,
+      createdAt: new Date(),
+    });
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const job = res.startingToday.find((j: any) => j.id === "recCREW2");
+    expect(job.techPrep).toContain("Generic Guy");
+    expect(job.techPickup).not.toContain("Other Day Guy");
   });
 });
