@@ -8,8 +8,6 @@ import ActiveWorks from "@/components/ActiveWorks";
 import DashboardDay, { dayKey } from "@/components/DashboardDay";
 import EquipmentNeeded from "@/components/EquipmentNeeded";
 import {
-  Cone,
-  ClipboardCheck,
   BellRing,
   Activity,
   AlertTriangle,
@@ -20,11 +18,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 type MapJob = { status: string | null };
-
-function isActive(status: string | null): boolean {
-  const s = (status ?? "").toLowerCase();
-  return !(s.includes("cancel") || s.includes("declin"));
-}
 
 function Stat({
   icon: Icon,
@@ -109,9 +102,8 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const list = (jobs as MapJob[] | undefined) ?? [];
-    const active = list.filter((j) => isActive(j.status));
-    const field = active.filter((j) => (j.status ?? "").toLowerCase() === "field").length;
-    return { total: list.length, active: active.length, field };
+    const field = list.filter((j) => (j.status ?? "").toLowerCase() === "field").length;
+    return { field };
   }, [jobs]);
 
   const alertCount = badges.data
@@ -148,12 +140,6 @@ export default function Dashboard() {
         </div>
         <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-3 gap-4 content-start">
           <Stat
-            icon={Cone}
-            label="Active works"
-            value={stats.active}
-            accent="#ea580c"
-          />
-          <Stat
             icon={Activity}
             label="In the field"
             value={stats.field}
@@ -171,12 +157,6 @@ export default function Dashboard() {
             label="Unseen change alerts"
             value={alertCount}
             accent="#dc2626"
-          />
-          <Stat
-            icon={ClipboardCheck}
-            label="Jobs in window"
-            value={stats.total}
-            accent="#2563eb"
           />
         </div>
       </div>

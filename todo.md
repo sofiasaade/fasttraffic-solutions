@@ -547,3 +547,5 @@
 - [x] Scheduler job cells: client name on its own line (no truncation by tags); move tags (Impact/Change/Assignment/Billing) to a row below in order (week + day views)
 
 - [x] Day View: add "Prep work" column listing jobs with a Preparation-phase tech assigned whose start date is upcoming (prep before starting day)
+
+- [x] Dashboard: remove "Active works" and "Jobs in window" stat cards
