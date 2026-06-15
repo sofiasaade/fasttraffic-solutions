@@ -545,3 +545,5 @@
 - [x] Day View cards: show crew assigned for the SELECTED DAY (merge generic + day-pinned job_assignments) so Scheduler assignments reflect on Dashboard
 
 - [x] Scheduler job cells: client name on its own line (no truncation by tags); move tags (Impact/Change/Assignment/Billing) to a row below in order (week + day views)
+
+- [x] Day View: add "Prep work" column listing jobs with a Preparation-phase tech assigned whose start date is upcoming (prep before starting day)

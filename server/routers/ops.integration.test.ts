@@ -1688,6 +1688,48 @@ describe("Dashboard day view (dashboardDay)", () => {
     expect(job.techSetup).toContain("Hector");
   });
 
+  it("lists jobs with a prep tech assigned and an upcoming start in the Prep work bucket", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recPREP",
+        company: "Prep Co",
+        status: "Field",
+        startDate: "2026-06-20", // starts AFTER the selected day
+        endDate: "2026-06-21",
+      }),
+    ];
+    // Generic prep assignment (no date) for this job.
+    state.assignments.push({
+      airtableJobId: "recPREP",
+      phase: "Preparation",
+      technicianName: "Prep Guy",
+    });
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const ids = res.prepWork.map((j: any) => j.id);
+    expect(ids).toContain("recPREP");
+    expect(res.counts.prepWork).toBeGreaterThanOrEqual(1);
+  });
+
+  it("excludes from Prep work jobs without a prep tech or that already started", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      // No prep tech assigned -> not prep work.
+      makeJob({ id: "recNOPREP", status: "Field", startDate: "2026-06-20", endDate: "2026-06-21" }),
+      // Prep tech but starts on/before the selected day -> not prep work.
+      makeJob({ id: "recPAST", status: "Field", startDate: "2026-06-15", endDate: "2026-06-15" }),
+    ];
+    state.assignments.push({
+      airtableJobId: "recPAST",
+      phase: "Preparation",
+      technicianName: "Prep Guy",
+    });
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const ids = res.prepWork.map((j: any) => j.id);
+    expect(ids).not.toContain("recNOPREP");
+    expect(ids).not.toContain("recPAST");
+  });
+
   it("does NOT show crew pinned to a different day, but keeps generic assignments", async () => {
     const caller = appRouter.createCaller(adminCtx());
     state.mapJobs = [

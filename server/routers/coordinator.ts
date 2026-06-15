@@ -295,6 +295,11 @@ export const coordinatorRouter = router({
       const startingToday: any[] = [];
       const ongoing: any[] = [];
       const pickup: any[] = [];
+      // Prep work column: jobs that have a Preparation-phase technician assigned
+      // and whose start date is still upcoming (prep is done BEFORE the starting
+      // day). We surface them on the selected day so coordinators see what needs
+      // to be prepared ahead of time. Cancelled/declined jobs are excluded.
+      const prepWork: any[] = [];
       for (const j of merged) {
         const b = classifyJobForDay(j.startDate, j.endDate, date, j.setupDuration);
         // Cancelled / declined jobs are surfaced ONLY in the "Starting today"
@@ -311,6 +316,14 @@ export const coordinatorRouter = router({
         if (b.startingToday) startingToday.push(j);
         if (b.pickup) pickup.push(j);
         if (b.ongoing) ongoing.push(j);
+        // Prep work: has at least one Preparation-phase tech assigned AND the
+        // job's start date is after the selected day (the prep happens before
+        // the starting day). startDate is an ISO string; compare the date part.
+        const hasPrep = Array.isArray((j as any).techPrep) && (j as any).techPrep.length > 0;
+        const startKey = (j.startDate || "").slice(0, 10);
+        if (hasPrep && startKey && startKey > date) {
+          prepWork.push(j);
+        }
       }
 
       // Enrich the "Starting today" AND "Ongoing (daily)" jobs with their
@@ -374,16 +387,26 @@ export const coordinatorRouter = router({
       startingToday.sort(byCompany);
       ongoing.sort(byCompany);
       pickup.sort(byCompany);
+      // Prep work is sorted by the soonest start date first, then company, so
+      // the most urgent prep is at the top of the column.
+      prepWork.sort((a, b) => {
+        const sa = (a.startDate || "").slice(0, 10);
+        const sb = (b.startDate || "").slice(0, 10);
+        if (sa !== sb) return sa < sb ? -1 : 1;
+        return byCompany(a, b);
+      });
 
       return {
         date,
         startingToday,
         ongoing,
         pickup,
+        prepWork,
         counts: {
           startingToday: startingToday.length,
           ongoing: ongoing.length,
           pickup: pickup.length,
+          prepWork: prepWork.length,
         },
         signTally,
         missingPermit,

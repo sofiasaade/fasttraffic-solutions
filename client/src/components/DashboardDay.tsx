@@ -19,6 +19,7 @@ import {
   HelpCircle,
   CheckCircle2,
   Users,
+  Wrench,
 } from "lucide-react";
 
 function toKey(d: Date): string {
@@ -99,7 +100,15 @@ function durationLabel(setup: string | null | undefined): {
   return null;
 }
 
-function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
+function JobCard({
+  job,
+  onClick,
+  showStartDate,
+}: {
+  job: DayJob;
+  onClick: () => void;
+  showStartDate?: boolean;
+}) {
   const cancelled = !!job.isCancelled;
   return (
     <button
@@ -143,6 +152,11 @@ function JobCard({ job, onClick }: { job: DayJob; onClick: () => void }) {
               </span>
             )}
           </div>
+          {showStartDate && (
+            <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-purple-50 px-1.5 py-0.5 text-[11px] font-semibold text-purple-700">
+              <CalendarPlus className="size-3" /> Starts {shortDate(job.startDate)}
+            </div>
+          )}
           {job.jobAddress && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 truncate">
               <MapPin className="size-3 shrink-0" />
@@ -238,6 +252,7 @@ function Section({
   jobs,
   isLoading,
   onJob,
+  showStartDate,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
@@ -245,6 +260,7 @@ function Section({
   jobs: DayJob[];
   isLoading: boolean;
   onJob: (id: string) => void;
+  showStartDate?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card/50 p-4 flex flex-col min-h-[140px]">
@@ -271,7 +287,14 @@ function Section({
             No jobs
           </div>
         ) : (
-          jobs.map((j) => <JobCard key={j.id} job={j} onClick={() => onJob(j.id)} />)
+          jobs.map((j) => (
+            <JobCard
+              key={j.id}
+              job={j}
+              onClick={() => onJob(j.id)}
+              showStartDate={showStartDate}
+            />
+          ))
         )}
       </div>
     </div>
@@ -451,7 +474,16 @@ export default function DashboardDay({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <Section
+          icon={Wrench}
+          title="Prep work"
+          accent="#7c3aed"
+          jobs={(data?.prepWork as DayJob[]) ?? []}
+          isLoading={isLoading}
+          onJob={onJob}
+          showStartDate
+        />
         <BucketedSection
           title="Starting today"
           accent="#ea580c"
