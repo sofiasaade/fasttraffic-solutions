@@ -1060,30 +1060,36 @@ export default function Scheduler() {
             )}
           />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Client name on its own line so tags never truncate it */}
+            <div className="flex items-start gap-1.5">
               {job.emoji ? (
-                <span className="text-base shrink-0 leading-none" title={job.calendarInfo ?? undefined}>
+                <span className="text-base shrink-0 leading-tight" title={job.calendarInfo ?? undefined}>
                   {job.emoji}
                 </span>
               ) : (
-                <Building2 className="size-4 text-muted-foreground shrink-0" />
+                <Building2 className="size-4 text-muted-foreground shrink-0 mt-0.5" />
               )}
-              <span className="font-semibold text-sm group-hover/card:text-primary">
-                {job.company ?? "\u2014"}
+              <span className="font-semibold text-sm leading-tight break-words group-hover/card:text-primary">
+                {job.company ?? "—"}
               </span>
-              {job.impact && (
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border",
-                    impactBadgeClass(job.impact),
-                  )}
-                  title={`Impact: ${job.impact}`}
-                >
-                  {impactLabel(job.impact)}
-                </span>
-              )}
-              <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
             </div>
+            {/* Tags moved below the name, in order, wrapping as needed */}
+            {(job.impact || (changeBadgesMap[job.id]?.length ?? 0) > 0) && (
+              <div className="flex flex-wrap items-center gap-1 mt-1">
+                {job.impact && (
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border",
+                      impactBadgeClass(job.impact),
+                    )}
+                    title={`Impact: ${job.impact}`}
+                  >
+                    {impactLabel(job.impact)}
+                  </span>
+                )}
+                <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
+              </div>
+            )}
             <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
               <MapPin className="size-3 shrink-0" />
               <span className="truncate">{job.jobAddress ?? "No address"}</span>
@@ -1238,40 +1244,49 @@ export default function Scheduler() {
           )}
         />
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
+          {/* Client name on its own line so tags never truncate it */}
+          <div className="flex items-start gap-1.5">
             {job.emoji ? (
-              <span className="text-sm shrink-0 leading-none" title={job.calendarInfo ?? undefined}>
+              <span className="text-sm shrink-0 leading-tight" title={job.calendarInfo ?? undefined}>
                 {job.emoji}
               </span>
             ) : (
-              <Building2 className="size-3.5 text-muted-foreground shrink-0" />
+              <Building2 className="size-3.5 text-muted-foreground shrink-0 mt-0.5" />
             )}
-            <span className="font-medium text-sm truncate group-hover/jobcell:text-primary">
+            <span className="font-medium text-sm leading-tight break-words group-hover/jobcell:text-primary">
               {job.company ?? "—"}
             </span>
-            {job.impact && (
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border",
-                  impactBadgeClass(job.impact),
-                )}
-                title={`Impact: ${job.impact}`}
-              >
-                {impactLabel(job.impact)}
-              </span>
-            )}
-            <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
-            <AssignmentStateBadge job={job} />
-            {(billingCountsMap[job.id] ?? 0) > 0 && (
-              <span
-                className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-amber-300 bg-amber-50 text-amber-700"
-                title={`${billingCountsMap[job.id]} billing note(s)`}
-              >
-                <Receipt className="size-2.5" />
-                {billingCountsMap[job.id]}
-              </span>
-            )}
           </div>
+          {/* Tags moved below the name, in order, wrapping as needed */}
+          {(job.impact ||
+            (changeBadgesMap[job.id]?.length ?? 0) > 0 ||
+            (job.assignmentState && job.assignmentState !== "cancelled") ||
+            (billingCountsMap[job.id] ?? 0) > 0) && (
+            <div className="flex flex-wrap items-center gap-1 mt-1">
+              {job.impact && (
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border",
+                    impactBadgeClass(job.impact),
+                  )}
+                  title={`Impact: ${job.impact}`}
+                >
+                  {impactLabel(job.impact)}
+                </span>
+              )}
+              <ChangeBadge changes={changeBadgesMap[job.id] ?? []} className="shrink-0" />
+              <AssignmentStateBadge job={job} />
+              {(billingCountsMap[job.id] ?? 0) > 0 && (
+                <span
+                  className="shrink-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide border border-amber-300 bg-amber-50 text-amber-700"
+                  title={`${billingCountsMap[job.id]} billing note(s)`}
+                >
+                  <Receipt className="size-2.5" />
+                  {billingCountsMap[job.id]}
+                </span>
+              )}
+            </div>
+          )}
           {job.assignmentState === "tentative" && (
             <span
               role="button"

@@ -543,3 +543,5 @@
 - [x] Scheduler Week: always show all status sections/filters even when count is 0
 
 - [x] Day View cards: show crew assigned for the SELECTED DAY (merge generic + day-pinned job_assignments) so Scheduler assignments reflect on Dashboard
+
+- [x] Scheduler job cells: client name on its own line (no truncation by tags); move tags (Impact/Change/Assignment/Billing) to a row below in order (week + day views)
