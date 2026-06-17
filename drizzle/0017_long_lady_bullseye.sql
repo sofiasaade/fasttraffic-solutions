@@ -1,0 +1,1 @@
+ALTER TABLE `equipment_catalog` ADD `code` varchar(64);

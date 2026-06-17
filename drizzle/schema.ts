@@ -367,6 +367,8 @@ export const equipmentCatalog = mysqlTable("equipment_catalog", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 128 }).notNull().unique(),
   category: varchar("category", { length: 64 }),
+  /** VIN / serial / unit identifier shown beside the name. */
+  code: varchar("code", { length: 64 }),
   /** Hex color used for the chip in the timeline. */
   color: varchar("color", { length: 16 }),
   active: boolean("active").default(true).notNull(),

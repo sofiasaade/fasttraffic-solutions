@@ -14,8 +14,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
+import {
+  WorkersDayTimeline,
+  type DayAssignment,
+} from "@/components/WorkersDayTimeline";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const FULL_DAY_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 /** Format a Date as YYYY-MM-DD in local time. */
 function ymd(d: Date) {
@@ -102,7 +115,14 @@ function FlaggingWeekSummary({
 }
 
 export default function WorkersCalendar() {
+  const [view, setView] = useState<"week" | "day">("week");
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  // Selected day for the per-hour Day view (defaults to today).
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
   const [filter, setFilter] = useState("");
 
   const days = useMemo(() => {
@@ -113,8 +133,10 @@ export default function WorkersCalendar() {
     });
   }, [weekStart]);
 
-  const startDate = ymd(days[0]);
-  const endDate = ymd(days[6]);
+  // Query range depends on the active view: the full week for the week grid,
+  // or just the selected day for the per-hour timeline.
+  const startDate = view === "week" ? ymd(days[0]) : ymd(selectedDay);
+  const endDate = view === "week" ? ymd(days[6]) : ymd(selectedDay);
 
   const { data, isLoading } = trpc.coordinator.workerWeek.useQuery({
     startDate,
@@ -171,6 +193,20 @@ export default function WorkersCalendar() {
     return false; // available by default
   }
 
+  // Day view: assignments for the selected day, indexed by technician name.
+  const dayAssignmentsByTech = useMemo(() => {
+    const m = new Map<string, DayAssignment[]>();
+    if (!data) return m;
+    const dayStr = ymd(selectedDay);
+    for (const a of data.assignments) {
+      if (a.scheduledDate !== dayStr) continue;
+      const arr = m.get(a.technicianName) ?? [];
+      arr.push(a as DayAssignment);
+      m.set(a.technicianName, arr);
+    }
+    return m;
+  }, [data, selectedDay]);
+
   const technicians = useMemo(() => {
     if (!data) return [];
     const f = filter.trim().toLowerCase();
@@ -198,6 +234,20 @@ export default function WorkersCalendar() {
       return startOfWeek(n);
     });
   }
+
+  function shiftDay(delta: number) {
+    setSelectedDay((prev) => {
+      const n = new Date(prev);
+      n.setDate(n.getDate() + delta);
+      n.setHours(0, 0, 0, 0);
+      return n;
+    });
+  }
+
+  const dayLabel = `${FULL_DAY_LABELS[selectedDay.getDay()]}, ${selectedDay.toLocaleDateString(
+    undefined,
+    { month: "short", day: "numeric", year: "numeric" },
+  )}`;
 
   function levelBadgeCls(level: string) {
     return level === "senior"
@@ -227,6 +277,25 @@ export default function WorkersCalendar() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Week / Day view toggle */}
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            <Button
+              variant={view === "week" ? "default" : "ghost"}
+              size="sm"
+              className="h-8 px-3"
+              onClick={() => setView("week")}
+            >
+              Week
+            </Button>
+            <Button
+              variant={view === "day" ? "default" : "ghost"}
+              size="sm"
+              className="h-8 px-3"
+              onClick={() => setView("day")}
+            >
+              Day
+            </Button>
+          </div>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
             <Input
@@ -236,25 +305,49 @@ export default function WorkersCalendar() {
               className="pl-7 w-44 h-9"
             />
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" onClick={() => shiftWeek(-7)}>
-              <ChevronLeft className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setWeekStart(startOfWeek(new Date()))}
-            >
-              Today
-            </Button>
-            <Button variant="outline" size="icon" onClick={() => shiftWeek(7)}>
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
+          {view === "week" ? (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" onClick={() => shiftWeek(-7)}>
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setWeekStart(startOfWeek(new Date()))}
+              >
+                Today
+              </Button>
+              <Button variant="outline" size="icon" onClick={() => shiftWeek(7)}>
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" onClick={() => shiftDay(-1)}>
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const d = new Date();
+                  d.setHours(0, 0, 0, 0);
+                  setSelectedDay(d);
+                }}
+              >
+                Today
+              </Button>
+              <Button variant="outline" size="icon" onClick={() => shiftDay(1)}>
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="text-sm font-medium text-muted-foreground">{weekLabel}</div>
+      <div className="text-sm font-medium text-muted-foreground">
+        {view === "week" ? weekLabel : dayLabel}
+      </div>
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
@@ -276,7 +369,9 @@ export default function WorkersCalendar() {
         </span>
       </div>
 
-      <FlaggingWeekSummary startDate={startDate} endDate={endDate} />
+      {view === "week" && (
+        <FlaggingWeekSummary startDate={startDate} endDate={endDate} />
+      )}
 
       {isLoading ? (
         <div className="py-16 flex justify-center">
@@ -286,6 +381,17 @@ export default function WorkersCalendar() {
         <div className="py-16 text-center text-sm text-muted-foreground">
           No workers found.
         </div>
+      ) : view === "day" ? (
+        <WorkersDayTimeline
+          technicians={technicians.map((t) => ({
+            airtableName: t.airtableName,
+            displayName: t.displayName,
+            experienceLevel: t.experienceLevel,
+            certificateCount: t.certificateCount,
+          }))}
+          assignmentsByTech={dayAssignmentsByTech}
+          isUnavailable={(name) => isUnavailable(name, selectedDay)}
+        />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <div className="min-w-[900px]">

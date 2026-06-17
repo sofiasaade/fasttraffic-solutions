@@ -277,6 +277,7 @@ type EquipmentItem = {
   id: number;
   name: string;
   category: string | null;
+  code: string | null;
   color: string | null;
 };
 
@@ -791,7 +792,8 @@ export default function Scheduler() {
     return catalog.filter(
       (e) =>
         e.name.toLowerCase().includes(q) ||
-        (e.category ?? "").toLowerCase().includes(q),
+        (e.category ?? "").toLowerCase().includes(q) ||
+        (e.code ?? "").toLowerCase().includes(q),
     );
   }, [catalog, search]);
 
@@ -2137,9 +2139,13 @@ export default function Scheduler() {
                           <div className="text-sm font-medium truncate">
                             {eq.name}
                           </div>
-                          {eq.category && (
+                          {(eq.category || eq.code) && (
                             <div className="text-[11px] text-muted-foreground truncate">
                               {eq.category}
+                              {eq.category && eq.code ? " · " : ""}
+                              {eq.code && (
+                                <span className="font-mono">{eq.code}</span>
+                              )}
                             </div>
                           )}
                         </div>

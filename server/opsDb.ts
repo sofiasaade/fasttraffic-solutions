@@ -1133,16 +1133,42 @@ export async function getJobOverridesMap(jobIds: string[]) {
 const DEFAULT_EQUIPMENT: {
   name: string;
   category: string;
+  code: string;
   color: string;
 }[] = [
-  { name: "No Parking Signs", category: "Signage", color: "#dc2626" },
-  { name: "Barricades", category: "Barriers", color: "#ea580c" },
-  { name: "Arrow Board / Robot", category: "Electronic", color: "#2563eb" },
-  { name: "VMS Board", category: "Electronic", color: "#0ea5e9" },
-  { name: "Tables", category: "Equipment", color: "#7c3aed" },
-  { name: "Cones", category: "Signage", color: "#f59e0b" },
-  { name: "Crash Truck / TMA", category: "Vehicles", color: "#16a34a" },
-  { name: "Delineators", category: "Signage", color: "#db2777" },
+  // Arrow boards
+  { name: "Trailer #4 Arrow board", category: "Arrow Board", code: "1V9US111XMH223176", color: "#2563eb" },
+  { name: "Trailer #14 Arrow board", category: "Arrow Board", code: "5F11S1013C1002044", color: "#2563eb" },
+  // Message boards
+  { name: "Trailer #1 Message board", category: "Message Board", code: "1V9US2118LH223231", color: "#0ea5e9" },
+  { name: "Trailer #2 message board", category: "Message Board", code: "1V9US2114LH2232226", color: "#0ea5e9" },
+  { name: "Trailer #3 Message board big", category: "Message Board", code: "98231-0698", color: "#0ea5e9" },
+  { name: "#12 Message board", category: "Message Board", code: "2s9us3112gs132150", color: "#0ea5e9" },
+  { name: "Trailer #13 message", category: "Message Board", code: "1N9Mc1417hf272295", color: "#0ea5e9" },
+  { name: "#15 message board", category: "Message Board", code: "20220601vms1c005", color: "#0ea5e9" },
+  { name: "#16 mini message board", category: "Message Board", code: "20230701vms1A013", color: "#0ea5e9" },
+  { name: "#17 Small message board", category: "Message Board", code: "20230701vms1A011", color: "#0ea5e9" },
+  { name: "Trailer #18 message board", category: "Message Board", code: "2s9us3114js132612", color: "#0ea5e9" },
+  // Trailers
+  { name: "Trailer #5", category: "Trailer", code: "2s9us1117hs132263", color: "#7c3aed" },
+  { name: "Trailer #6", category: "Trailer", code: "5F11S1013H1001242", color: "#7c3aed" },
+  { name: "Trailer #7", category: "Trailer", code: "1k9BA0814FT244879", color: "#7c3aed" },
+  { name: "Trailer #8", category: "Trailer", code: "5F11s1015H1001243", color: "#7c3aed" },
+  { name: "Trailer #9", category: "Trailer", code: "us9us1115js132171", color: "#7c3aed" },
+  { name: "Trailer #10", category: "Trailer", code: "5F11S1013H1001239", color: "#7c3aed" },
+  { name: "Trailer #11", category: "Trailer", code: "2s9us1118ks132103", color: "#7c3aed" },
+];
+
+// Generic placeholder items from earlier seeds that should no longer appear.
+const RETIRED_EQUIPMENT = [
+  "No Parking Signs",
+  "Barricades",
+  "Arrow Board / Robot",
+  "VMS Board",
+  "Tables",
+  "Cones",
+  "Crash Truck / TMA",
+  "Delineators",
 ];
 
 export async function seedEquipmentCatalog() {
@@ -1154,13 +1180,26 @@ export async function seedEquipmentCatalog() {
       .values({
         name: item.name,
         category: item.category,
+        code: item.code,
         color: item.color,
         sortOrder: order++,
+        active: true,
       })
       .onDuplicateKeyUpdate({
-        set: { category: item.category, color: item.color },
+        set: {
+          category: item.category,
+          code: item.code,
+          color: item.color,
+          sortOrder: order,
+          active: true,
+        },
       });
   }
+  // Retire the old generic placeholder items so only the real fleet shows.
+  await d
+    .update(equipmentCatalog)
+    .set({ active: false })
+    .where(inArray(equipmentCatalog.name, RETIRED_EQUIPMENT));
 }
 
 export async function listEquipmentCatalog() {

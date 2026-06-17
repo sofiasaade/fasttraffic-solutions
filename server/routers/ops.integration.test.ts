@@ -361,8 +361,8 @@ vi.mock("../opsDb", () => ({
   // Equipment catalog + assignments (local)
   seedEquipmentCatalog: vi.fn(async () => {
     state.equipmentCatalog = [
-      { id: 1, name: "No Parking Signs", category: "Signs", color: "#ea580c", active: true },
-      { id: 2, name: "Barricades", category: "Barriers", color: "#2563eb", active: true },
+      { id: 1, name: "Trailer #4 Arrow board", category: "Arrow Board", code: "1V9US111XMH223176", color: "#2563eb", active: true },
+      { id: 2, name: "Trailer #1 Message board", category: "Message Board", code: "1V9US2118LH223231", color: "#0ea5e9", active: true },
     ];
   }),
   listEquipmentCatalog: vi.fn(async () => state.equipmentCatalog),
@@ -984,7 +984,7 @@ describe("Equipment scheduling (local, no Airtable write)", () => {
     const caller = appRouter.createCaller(adminCtx());
     const rows = await caller.coordinator.equipmentCatalog();
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.map((r: any) => r.name)).toContain("No Parking Signs");
+    expect(rows.map((r: any) => r.name)).toContain("Trailer #4 Arrow board");
     expect(state.airtableWriteCalls.length).toBe(0);
   });
 

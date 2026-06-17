@@ -553,3 +553,13 @@
 - [x] Part A: Global project search in CoordinatorShell (all windows) -> find project, navigate to Scheduler with highlight/filter
 - [x] Part A: Consistent local search/filter on Scheduler, Pending, Permit Map
 - [x] Part B: Cross-view live sync (invalidate related queries after mutations)
+
+- [x] Workers: add Week/Day view toggle
+- [x] Workers Day view: hourly timeline (tech x hours) showing busy blocks (job/phase/time) and free gaps for assigning more tasks
+- [x] Workers Day view: mark unavailable/off technicians; type-check + tests
+
+- [ ] Load 18 real technicians with experience level (Senior/Medium-Junior mapping)
+- [ ] Apply availability rules: most all-week; Zion Mon-Fri until 16:00; Daniel Mon-Sat; Dylan Mon-Fri; Jhon Fri/Sat/Sun + weeknight 18:00-06:00; Valery variable
+
+- [x] Equipment catalog: replaced generics with real fleet (2 arrow boards, 9 message boards, 7 trailers) + code/VIN column
+- [x] Surface VIN/code in Equipment list UI; pushed DB migration; tests green
