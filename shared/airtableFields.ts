@@ -108,6 +108,9 @@ export const TECHNICIANS = [
   "Dylan Alexander",
   "Jhon Parra",
   "Giuseppe Hidalgo",
+  // NEW (added directly in OS, not in Airtable)
+  "Mike",
+  "BK",
 ] as const;
 
 export type TechnicianName = (typeof TECHNICIANS)[number];

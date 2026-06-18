@@ -252,16 +252,20 @@ export default function WorkersCalendar() {
   function levelBadgeCls(level: string) {
     return level === "senior"
       ? "bg-blue-100 text-blue-700"
-      : level === "apprentice"
-        ? "bg-amber-100 text-amber-700"
-        : "bg-slate-100 text-slate-600";
+      : level === "medium"
+        ? "bg-emerald-100 text-emerald-700"
+        : level === "apprentice"
+          ? "bg-amber-100 text-amber-700"
+          : "bg-slate-100 text-slate-600";
   }
   function levelLabel(level: string) {
     return level === "senior"
       ? "Senior"
-      : level === "apprentice"
-        ? "Apprentice"
-        : "Junior";
+      : level === "medium"
+        ? "Medium"
+        : level === "apprentice"
+          ? "Apprentice"
+          : "Junior";
   }
 
   return (

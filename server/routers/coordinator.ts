@@ -37,6 +37,7 @@ import {
   createNotification,
   getAssignmentsMap,
   getAssignmentsMapForDay,
+  getPrepCrewMap,
   getAssignmentStatusMap,
   setAssignmentStatus,
   setJobAssignmentsStatus,
@@ -279,10 +280,11 @@ export const coordinatorRouter = router({
       // For the Day View we want the crew the coordinator scheduled for THIS
       // day (Scheduler day-pinned rows) merged with any generic assignments,
       // so what is assigned in the Scheduler shows up on the dashboard cards.
-      const [assignMap, overrideMap, statusMap] = await Promise.all([
+      const [assignMap, overrideMap, statusMap, prepCrewMap] = await Promise.all([
         getAssignmentsMapForDay(ids, date),
         getJobOverridesMap(ids),
         getAssignmentStatusMap(ids),
+        getPrepCrewMap(ids),
       ]);
 
       const merged = jobs.map((j) =>
@@ -384,6 +386,13 @@ export const coordinatorRouter = router({
 
       const byCompany = (a: { company: string | null }, b: { company: string | null }) =>
         (a.company || "").localeCompare(b.company || "");
+      // Carry-over: show WHO did the Preparation on the "Starting today" cards,
+      // even if the prep was performed on an earlier day. prepCrew is the full
+      // set of Preparation technicians for the job across all dates.
+      for (const j of startingToday) {
+        (j as any).prepCrew = prepCrewMap.get(j.id) ?? [];
+      }
+
       startingToday.sort(byCompany);
       ongoing.sort(byCompany);
       pickup.sort(byCompany);
@@ -470,7 +479,7 @@ export const coordinatorRouter = router({
     .input(
       z.object({
         airtableName: z.string(),
-        level: z.enum(["apprentice", "junior", "senior"]),
+        level: z.enum(["apprentice", "junior", "medium", "senior"]),
       }),
     )
     .mutation(async ({ input }) => {

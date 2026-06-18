@@ -27,7 +27,7 @@ describe("normalizeDifficulty", () => {
 
 describe("minLevelRankFor", () => {
   it("requires senior for high, junior for medium, any for low/unknown", () => {
-    expect(minLevelRankFor("high")).toBe(3);
+    expect(minLevelRankFor("high")).toBe(4); // senior rank (apprentice 1, junior 2, medium 3, senior 4)
     expect(minLevelRankFor("medium")).toBe(2);
     expect(minLevelRankFor("low")).toBe(1);
     expect(minLevelRankFor("unknown")).toBe(1);

@@ -60,6 +60,7 @@ import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
+import { classifyJobForDay } from "@shared/dashboardDay";
 import { subStatusColor } from "@shared/subStatusColors";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 
@@ -166,6 +167,18 @@ function setupDurationShade(value: string | null | undefined): {
 }
 
 // Status sections mirror the Dispatch board grouping.
+// ---- Phase grouping (mirrors the Dashboard Day View) ----
+// Jobs can be grouped either by permit STATUS (default) or by the Day-View
+// PHASE buckets: Prep work / Starting / Ongoing / Pick up. The phase grouping
+// reuses classifyJobForDay so it stays identical to the Dashboard.
+type PhaseKey = "prep" | "starting" | "ongoing" | "pickup";
+const PHASE_SECTIONS: { key: PhaseKey; title: string; dot: string }[] = [
+  { key: "prep", title: "Prep work", dot: "#2563eb" },
+  { key: "starting", title: "Starting", dot: "#16a34a" },
+  { key: "ongoing", title: "Ongoing", dot: "#d97706" },
+  { key: "pickup", title: "Pick up", dot: "#059669" },
+];
+
 type SectionKey = "submitted" | "approved" | "field" | "cancelled";
 const STATUS_SECTIONS: {
   key: SectionKey;
@@ -515,6 +528,8 @@ export default function Scheduler() {
   const [tab, setTab] = useState<PanelTab>("workers");
   // View mode: full week grid vs a single selected day (cards).
   const [viewMode, setViewMode] = useState<"week" | "day">("week");
+  // Grouping mode: by permit STATUS (default) or by Day-View PHASE buckets.
+  const [groupBy, setGroupBy] = useState<"status" | "phase">("status");
   // Index (0..6, Mon..Sun) of the selected day in the visible week.
   const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
     const todayIdx = (new Date().getDay() + 6) % 7;
@@ -526,6 +541,8 @@ export default function Scheduler() {
     field: false,
     cancelled: false,
   });
+  // Collapse state for the phase grouping (week grid), keyed by phase key.
+  const [phaseCollapsed, setPhaseCollapsed] = useState<Record<string, boolean>>({});
 
   const days = useMemo(
     () => Array.from({ length: rangeDays }, (_, i) => addDays(weekStart, i)),
@@ -763,6 +780,71 @@ export default function Scheduler() {
       ),
     [groupedDay, dayStatusFilter],
   );
+
+  // ---- Phase grouping (Day-View buckets) for the SELECTED DAY ----
+  // Uses the same classifyJobForDay logic as the Dashboard so the Scheduler's
+  // phase columns match the Dashboard exactly.
+  const groupedDayPhase = useMemo(() => {
+    const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], pickup: [] };
+    for (const j of weekJobs) {
+      const cancelled = isCancelledJob(j);
+      const b = classifyJobForDay(j.startDate, j.endDate, selectedDayKey, j.setupDuration);
+      if (cancelled) {
+        // Cancelled jobs only surface in "Starting" (when they were due to start).
+        if (b.startingToday) map.starting.push(j);
+        continue;
+      }
+      if (b.startingToday) map.starting.push(j);
+      if (b.pickup) map.pickup.push(j);
+      if (b.ongoing) map.ongoing.push(j);
+      // Prep work: has a Preparation tech AND the job starts AFTER the selected day.
+      const hasPrep = (j.techPrep?.length ?? 0) > 0;
+      const startKey = (j.startDate || "").slice(0, 10);
+      if (hasPrep && startKey && startKey > selectedDayKey) map.prep.push(j);
+    }
+    return map;
+  }, [weekJobs, selectedDayKey]);
+  const dayPhaseCount = useMemo(
+    () =>
+      groupedDayPhase.prep.length +
+      groupedDayPhase.starting.length +
+      groupedDayPhase.ongoing.length +
+      groupedDayPhase.pickup.length,
+    [groupedDayPhase],
+  );
+
+  // ---- Phase grouping for the WEEK range ----
+  // A job can appear in multiple phase columns across the visible week (e.g. it
+  // starts one day and is picked up another). We test every day in the range and
+  // place the job in a column if it matches that phase on ANY day of the range.
+  const groupedWeekPhase = useMemo(() => {
+    const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], pickup: [] };
+    const seen: Record<PhaseKey, Set<string>> = {
+      prep: new Set(), starting: new Set(), ongoing: new Set(), pickup: new Set(),
+    };
+    const add = (key: PhaseKey, j: Job) => {
+      if (seen[key].has(j.id)) return;
+      seen[key].add(j.id);
+      map[key].push(j);
+    };
+    for (const j of weekJobs) {
+      const cancelled = isCancelledJob(j);
+      const hasPrep = (j.techPrep?.length ?? 0) > 0;
+      const startKey = (j.startDate || "").slice(0, 10);
+      for (const dk of dayKeys) {
+        const b = classifyJobForDay(j.startDate, j.endDate, dk, j.setupDuration);
+        if (cancelled) {
+          if (b.startingToday) add("starting", j);
+          continue;
+        }
+        if (b.startingToday) add("starting", j);
+        if (b.pickup) add("pickup", j);
+        if (b.ongoing) add("ongoing", j);
+        if (hasPrep && startKey && startKey > dk) add("prep", j);
+      }
+    }
+    return map;
+  }, [weekJobs, dayKeys]);
 
   // Technicians already booked (day-pinned) per day this week.
   const bookedByDay = useMemo(() => {
@@ -1565,7 +1647,7 @@ export default function Scheduler() {
           <h1 className="text-2xl font-extrabold tracking-tight">Scheduler</h1>
           <p className="text-sm text-muted-foreground">
             Drag a worker or equipment onto a job/day to schedule it. Jobs
-            grouped by permit status.
+            grouped by {groupBy === "phase" ? "day phase (Prep / Starting / Ongoing / Pick up)" : "permit status"}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1594,6 +1676,35 @@ export default function Scheduler() {
               )}
             >
               Day
+            </button>
+          </div>
+          {/* Group by: permit Status vs Day-View Phase buckets */}
+          <div className="flex items-center p-0.5 bg-muted rounded-lg mr-1">
+            <button
+              type="button"
+              onClick={() => setGroupBy("status")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                groupBy === "status"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title="Group jobs by permit status"
+            >
+              Status
+            </button>
+            <button
+              type="button"
+              onClick={() => setGroupBy("phase")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                groupBy === "phase"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title="Group jobs by day phase (Prep / Starting / Ongoing / Pick up)"
+            >
+              Phase
             </button>
           </div>
           {/* Range selector — only relevant for the week grid. Lets the user
@@ -1767,7 +1878,8 @@ export default function Scheduler() {
                 })}
               </div>
 
-              {/* Category filter: toggle which job statuses are shown */}
+              {/* Category filter: toggle which job statuses are shown (status mode only) */}
+              {groupBy === "status" && (
               <div className="flex flex-wrap items-center gap-1.5 mb-4">
                 <span className="text-xs font-medium text-muted-foreground mr-1">
                   Filter:
@@ -1798,8 +1910,41 @@ export default function Scheduler() {
                   );
                 })}
               </div>
+              )}
 
-              {dayJobCount === 0 ? (
+              {groupBy === "phase" ? (
+                dayPhaseCount === 0 ? (
+                  <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                    No jobs on {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}.
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {PHASE_SECTIONS.map((section) => {
+                      const sectionJobs = groupedDayPhase[section.key];
+                      if (!sectionJobs || sectionJobs.length === 0) return null;
+                      return (
+                        <div key={section.key}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ backgroundColor: section.dot }}
+                            />
+                            <span className="font-semibold text-sm">
+                              {section.title}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ({sectionJobs.length})
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {sectionJobs.map(renderJobCard)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : dayJobCount === 0 ? (
                 <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
                   No jobs on {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}.
                 </div>
@@ -1900,9 +2045,32 @@ export default function Scheduler() {
                   No jobs scheduled in this week.
                 </div>
               ) : (
-                STATUS_SECTIONS.map((section) => {
-                  const sectionJobs = grouped[section.key];
-                  const isCollapsed = collapsed[section.key];
+                (groupBy === "phase"
+                  ? PHASE_SECTIONS.map((s) => ({
+                      key: s.key as string,
+                      title: s.title,
+                      dot: s.dot,
+                      jobs: groupedWeekPhase[s.key],
+                    }))
+                  : STATUS_SECTIONS.map((s) => ({
+                      key: s.key as string,
+                      title: s.title,
+                      dot: s.dot,
+                      jobs: grouped[s.key],
+                    }))
+                ).map((section) => {
+                  const sectionJobs = section.jobs;
+                  const isCollapsed =
+                    groupBy === "phase"
+                      ? !!phaseCollapsed[section.key]
+                      : collapsed[section.key as SectionKey];
+                  const toggleCollapse = () =>
+                    groupBy === "phase"
+                      ? setPhaseCollapsed((c) => ({ ...c, [section.key]: !c[section.key] }))
+                      : setCollapsed((c) => ({
+                          ...c,
+                          [section.key as SectionKey]: !c[section.key as SectionKey],
+                        }));
                   return (
                     <div key={section.key}>
                       {/* Section header — full-width band so it covers the
@@ -1910,12 +2078,7 @@ export default function Scheduler() {
                           it stays visible during horizontal scroll. */}
                       <button
                         type="button"
-                        onClick={() =>
-                          setCollapsed((c) => ({
-                            ...c,
-                            [section.key]: !c[section.key],
-                          }))
-                        }
+                        onClick={toggleCollapse}
                         className={cn(
                           "block w-full bg-muted/60 border-b border-border text-left sticky top-[41px]",
                           "z-[15]",
@@ -2059,16 +2222,20 @@ export default function Scheduler() {
                                 "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                                 w.experienceLevel === "senior"
                                   ? "bg-blue-100 text-blue-700"
-                                  : w.experienceLevel === "apprentice"
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-slate-100 text-slate-600",
+                                  : w.experienceLevel === "medium"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : w.experienceLevel === "apprentice"
+                                      ? "bg-amber-100 text-amber-700"
+                                      : "bg-slate-100 text-slate-600",
                               )}
                             >
                               {w.experienceLevel === "senior"
                                 ? "Senior"
-                                : w.experienceLevel === "apprentice"
-                                  ? "Apprentice"
-                                  : "Junior"}
+                                : w.experienceLevel === "medium"
+                                  ? "Medium"
+                                  : w.experienceLevel === "apprentice"
+                                    ? "Apprentice"
+                                    : "Junior"}
                             </span>
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate">
@@ -2088,15 +2255,17 @@ export default function Scheduler() {
                           />
                           <button
                             type="button"
-                            title="Cycle level: Apprentice → Junior → Senior"
+                            title="Cycle level: Apprentice → Junior → Medium → Senior"
                             onClick={(e) => {
                               e.stopPropagation();
                               const next =
                                 w.experienceLevel === "apprentice"
                                   ? "junior"
                                   : w.experienceLevel === "junior"
-                                    ? "senior"
-                                    : "apprentice";
+                                    ? "medium"
+                                    : w.experienceLevel === "medium"
+                                      ? "senior"
+                                      : "apprentice";
                               setLevelMutation.mutate({
                                 airtableName: w.airtableName,
                                 level: next,

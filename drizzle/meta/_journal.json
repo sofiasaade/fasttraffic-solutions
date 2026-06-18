@@ -127,6 +127,13 @@
       "when": 1781722486893,
       "tag": "0017_long_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1781799198843,
+      "tag": "0018_panoramic_cloak",
+      "breakpoints": true
     }
   ]
 }

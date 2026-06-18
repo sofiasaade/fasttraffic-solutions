@@ -14,7 +14,7 @@
  * coordinator can always override and pick anyone.
  */
 
-export type ExperienceLevel = "apprentice" | "junior" | "senior";
+export type ExperienceLevel = "apprentice" | "junior" | "medium" | "senior";
 export type Difficulty = "high" | "medium" | "low" | "unknown";
 
 export interface RecoTechnician {
@@ -49,7 +49,8 @@ export interface Recommendation {
 const LEVEL_RANK: Record<ExperienceLevel, number> = {
   apprentice: 1,
   junior: 2,
-  senior: 3,
+  medium: 3,
+  senior: 4,
 };
 
 /**
@@ -85,11 +86,16 @@ export function minLevelRankFor(difficulty: Difficulty): number {
 }
 
 export function levelLabel(level: ExperienceLevel): string {
-  return level === "senior"
-    ? "Senior"
-    : level === "apprentice"
-      ? "Apprentice"
-      : "Junior";
+  switch (level) {
+    case "senior":
+      return "Senior";
+    case "medium":
+      return "Medium";
+    case "apprentice":
+      return "Apprentice";
+    default:
+      return "Junior";
+  }
 }
 
 function difficultyLabel(d: Difficulty): string {

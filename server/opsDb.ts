@@ -90,10 +90,10 @@ export async function updateTechnician(
   await d.update(technicians).set(patch).where(eq(technicians.id, id));
 }
 
-/** Set a technician's experience level (apprentice | junior | senior). */
+/** Set a technician's experience level (apprentice | junior | medium | senior). */
 export async function setTechnicianLevel(
   airtableName: string,
-  level: "apprentice" | "junior" | "senior",
+  level: "apprentice" | "junior" | "medium" | "senior",
 ) {
   const d = await db();
   await d
@@ -658,6 +658,39 @@ export async function getAssignmentsMapForDay(jobIds: string[], date: string) {
       const list = entry[r.phase as Phase];
       if (!list.includes(r.technicianName)) list.push(r.technicianName);
     }
+  }
+  return map;
+}
+
+/**
+ * Prep crew per job across ALL dates (generic + any day-pinned row), ordered by
+ * scheduled day. Used so the Dashboard "Starting today" cards can show WHO did
+ * the Preparation, even when the prep was performed on an earlier day than the
+ * job's starting day. Returns a map of jobId -> de-duplicated technician names.
+ */
+export async function getPrepCrewMap(jobIds: string[]) {
+  const map = new Map<string, string[]>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        inArray(jobAssignments.airtableJobId, jobIds),
+        eq(jobAssignments.phase, "Preparation"),
+      ),
+    );
+  // Stable order: earliest scheduled day first, generic (null) rows last.
+  rows.sort((a, b) => {
+    const da = a.scheduledDate ?? "9999-99-99";
+    const db_ = b.scheduledDate ?? "9999-99-99";
+    return da < db_ ? -1 : da > db_ ? 1 : 0;
+  });
+  for (const r of rows) {
+    if (!map.has(r.airtableJobId)) map.set(r.airtableJobId, []);
+    const list = map.get(r.airtableJobId)!;
+    if (!list.includes(r.technicianName)) list.push(r.technicianName);
   }
   return map;
 }

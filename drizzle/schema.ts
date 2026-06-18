@@ -48,6 +48,7 @@ export const technicians = mysqlTable("technicians", {
   experienceLevel: mysqlEnum("experienceLevel", [
     "apprentice",
     "junior",
+    "medium",
     "senior",
   ])
     .default("junior")

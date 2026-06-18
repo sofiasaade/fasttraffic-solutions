@@ -563,3 +563,14 @@
 
 - [x] Equipment catalog: replaced generics with real fleet (2 arrow boards, 9 message boards, 7 trailers) + code/VIN column
 - [x] Surface VIN/code in Equipment list UI; pushed DB migration; tests green
+
+## Feature: Real technician roster (levels + availability)
+- [x] Add "medium" experience level (schema enum, types, UI labels/colors)
+- [x] Add new technicians Mike and BK to roster
+- [x] Apply experience levels to 18 techs (Senior/Medium/Junior per owner)
+- [x] Apply availability: Zion until 16:00, Jhon night, Valery variable, etc.
+
+## Feature: Prep tech carry-over + Scheduler day/week classification
+- [x] Dashboard Day View: in "Starting today", show who did the Prep (prep technician), even if prep was the prior day
+- [x] Scheduler: use the same Day View classification (Prep work / Starting / Ongoing / Pick up)
+- [x] Scheduler: support Day and Week views with that classification

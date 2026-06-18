@@ -26,11 +26,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Level = "apprentice" | "junior" | "senior";
+type Level = "apprentice" | "junior" | "medium" | "senior";
 
 const LEVEL_META: Record<Level, { label: string; cls: string }> = {
   apprentice: { label: "Apprentice", cls: "bg-amber-100 text-amber-700" },
   junior: { label: "Junior", cls: "bg-slate-100 text-slate-600" },
+  medium: { label: "Medium", cls: "bg-emerald-100 text-emerald-700" },
   senior: { label: "Senior", cls: "bg-blue-100 text-blue-700" },
 };
 
@@ -153,7 +154,7 @@ function ProfileBody({
           <ShieldCheck className="size-4 text-primary" /> Experience level
         </div>
         <div className="flex gap-2">
-          {(["apprentice", "junior", "senior"] as Level[]).map((lvl) => (
+          {(["apprentice", "junior", "medium", "senior"] as Level[]).map((lvl) => (
             <button
               key={lvl}
               type="button"

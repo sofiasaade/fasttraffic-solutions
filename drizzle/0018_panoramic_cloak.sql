@@ -1,0 +1,1 @@
+ALTER TABLE `technicians` MODIFY COLUMN `experienceLevel` enum('apprentice','junior','medium','senior') NOT NULL DEFAULT 'junior';

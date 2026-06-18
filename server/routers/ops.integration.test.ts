@@ -208,6 +208,21 @@ vi.mock("../opsDb", () => ({
     }
     return map;
   }),
+  // Prep crew across ALL dates (generic + any day-pinned row), de-duplicated.
+  getPrepCrewMap: vi.fn(async (ids: string[]) => {
+    const map = new Map<string, string[]>();
+    const add = (jobId: string, name: string) => {
+      if (!ids.includes(jobId)) return;
+      if (!map.has(jobId)) map.set(jobId, []);
+      const list = map.get(jobId)!;
+      if (!list.includes(name)) list.push(name);
+    };
+    for (const a of state.assignments)
+      if (a.phase === "Preparation") add(a.airtableJobId, a.technicianName);
+    for (const s of state.scheduled)
+      if (s.phase === "Preparation") add(s.airtableJobId, s.technicianName);
+    return map;
+  }),
   setPhaseAssignments: vi.fn(
     async (jobId: string, phase: string, techs: string[]) => {
       const old = state.assignments
@@ -1761,5 +1776,36 @@ describe("Dashboard day view (dashboardDay)", () => {
     const job = res.startingToday.find((j: any) => j.id === "recCREW2");
     expect(job.techPrep).toContain("Generic Guy");
     expect(job.techPickup).not.toContain("Other Day Guy");
+  });
+
+  it("carries the prep technician onto the Starting today card even if prep was on an earlier day", async () => {
+    const caller = appRouter.createCaller(adminCtx());
+    state.mapJobs = [
+      makeJob({
+        id: "recCARRY",
+        company: "Carry Co",
+        status: "Field",
+        startDate: "2026-06-15",
+        endDate: "2026-06-15",
+      }),
+    ];
+    // Prep was performed/pinned on an EARLIER day (not the start day).
+    state.scheduled.push({
+      id: ++state.scheduledSeq,
+      airtableJobId: "recCARRY",
+      phase: "Preparation",
+      technicianName: "Early Prep",
+      scheduledDate: "2026-06-13",
+      startTime: null,
+      endTime: null,
+      createdAt: new Date(),
+    });
+    const res: any = await caller.coordinator.dashboardDay({ date: "2026-06-15" });
+    const job = res.startingToday.find((j: any) => j.id === "recCARRY");
+    expect(job).toBeDefined();
+    // Not assigned for THIS day, so techPrep (day-scoped) is empty...
+    expect(job.techPrep).not.toContain("Early Prep");
+    // ...but prepCrew carries it over so the card can show who prepped it.
+    expect(job.prepCrew).toContain("Early Prep");
   });
 });

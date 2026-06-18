@@ -68,6 +68,8 @@ type DayJob = {
   techPrep?: string[];
   techSetup?: string[];
   techPickup?: string[];
+  /** Full set of Preparation technicians across all dates (carry-over). */
+  prepCrew?: string[];
 };
 
 /** Format an HH:MM (24h) permit time into a friendly 12h label. */
@@ -195,6 +197,7 @@ function JobCard({
             )}
           </div>
           <CrewByPhase job={job} />
+          <PrepCarryOver job={job} />
         </div>
       </div>
     </button>
@@ -241,6 +244,34 @@ function CrewByPhase({ job }: { job: DayJob }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * On "Starting today" cards, show WHO did the Preparation even when the prep
+ * happened on an earlier day (so the day-pinned techPrep for today is empty).
+ * We only render this if there is prep crew AND it isn't already shown in the
+ * per-day CrewByPhase (techPrep) block, to avoid duplication.
+ */
+function PrepCarryOver({ job }: { job: DayJob }) {
+  const crew = job.prepCrew ?? [];
+  if (crew.length === 0) return null;
+  // Already shown in CrewByPhase for this day -> skip to avoid duplicate.
+  if ((job.techPrep?.length ?? 0) > 0) return null;
+  return (
+    <div className="mt-1.5 flex items-start gap-1.5 text-[11px] border-t border-dashed border-border pt-1.5">
+      <span className="mt-0.5 shrink-0 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wide text-emerald-700">
+        Prep by
+      </span>
+      <span className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-foreground">
+        {crew.map((name, i) => (
+          <span key={`prepcrew-${i}-${name}`} className="whitespace-nowrap">
+            {name}
+            {i < crew.length - 1 ? "," : ""}
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
