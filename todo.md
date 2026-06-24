@@ -605,13 +605,13 @@
 
 ## Coordinator feedback batch 2 (Jun 2026)
 
-- [ ] Scheduler: drag an already-assigned worker chip to a different day/job (move assignment)
-- [ ] Scheduler: expand task/phase options on assignment — add "No Parking", "Set up aside (continue next day)", keep "Pick up" only when the job truly ends, and a "Flagger" role slot
-- [ ] Scheduler day notes: quick-check toggles (Job cancelled, Postponed, Missing signs) in addition to the free-text note
-- [ ] Scheduler: clicking an equipment/truck chip should NOT auto-delete — open edit options (edit, move to another day/job) instead
-- [ ] Scheduler: equipment/truck chips draggable to another day or job
-- [ ] Scheduler jobs column: classify rows like the Airtable Field-Operations view
-- [ ] TypeScript clean + full tests passing
+- [x] Scheduler: drag an already-assigned worker chip to a different day/job (move assignment)
+- [x] Scheduler: expand task/phase options on assignment — add "No Parking", "Set up aside (continue next day)", keep "Pick up" only when the job truly ends, and a "Flagger" role slot
+- [x] Scheduler day notes: quick-check toggles (Job cancelled, Postponed, Missing signs) in addition to the free-text note
+- [x] Scheduler: clicking an equipment/truck chip should NOT auto-delete — open edit options (edit, move to another day/job) instead
+- [x] Scheduler: equipment/truck chips draggable to another day or job
+- [x] Scheduler jobs column: classify rows like the Airtable Field-Operations view
+- [x] TypeScript clean + full tests passing
 
 
 ## Batch 2 status (2026-06-24) — all complete
