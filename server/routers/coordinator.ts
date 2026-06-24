@@ -37,6 +37,7 @@ import {
   createNotification,
   getAssignmentsMap,
   getAssignmentsMapForDay,
+  getDayPinnedAssignmentsMap,
   getPrepCrewMap,
   getAssignmentStatusMap,
   setAssignmentStatus,
@@ -61,6 +62,10 @@ import {
   removeAssignment,
   moveScheduledAssignment,
   listBookedTechniciansOnDate,
+  listSchedulerDayNotesInRange,
+  getSchedulerDayNote,
+  setSchedulerDayNote,
+  updateScheduledAssignment,
   setSetting,
   sumHoursInPeriod,
   upsertJobOverride,
@@ -280,12 +285,14 @@ export const coordinatorRouter = router({
       // For the Day View we want the crew the coordinator scheduled for THIS
       // day (Scheduler day-pinned rows) merged with any generic assignments,
       // so what is assigned in the Scheduler shows up on the dashboard cards.
-      const [assignMap, overrideMap, statusMap, prepCrewMap] = await Promise.all([
-        getAssignmentsMapForDay(ids, date),
-        getJobOverridesMap(ids),
-        getAssignmentStatusMap(ids),
-        getPrepCrewMap(ids),
-      ]);
+      const [assignMap, overrideMap, statusMap, prepCrewMap, dayPinnedMap] =
+        await Promise.all([
+          getAssignmentsMapForDay(ids, date),
+          getJobOverridesMap(ids),
+          getAssignmentStatusMap(ids),
+          getPrepCrewMap(ids),
+          getDayPinnedAssignmentsMap(ids, date),
+        ]);
 
       const merged = jobs.map((j) =>
         withAssignmentState(
@@ -353,6 +360,16 @@ export const coordinatorRouter = router({
         (j as any).nineAmBucket = classifyNineAm(permitStartTime);
         (j as any).hasPermit =
           !!sched && (!!sched.validFromTime || !!sched.validFromDate);
+        // Ongoing jobs keep a per-day record of who works each day. When the
+        // coordinator pinned someone to THIS day in the Scheduler, show only
+        // that day's crew (not the generic carry-over assignments). The full
+        // history stays in job_assignments (one row per day).
+        const pinned = dayPinnedMap.get(j.id);
+        if (pinned && (pinned.Preparation.length || pinned.Setup.length || pinned.Pickup.length)) {
+          (j as any).techPrep = pinned.Preparation;
+          (j as any).techSetup = pinned.Setup;
+          (j as any).techPickup = pinned.Pickup;
+        }
       }
       // Count how many active (non-cancelled) starting-today jobs have no
       // readable permit, so the UI can warn coordinators to verify the time.
@@ -933,6 +950,102 @@ export const coordinatorRouter = router({
       const id = await moveScheduledAssignment({
         id: input.id,
         scheduledDate: input.scheduledDate,
+      });
+      return { ok: true as const, id };
+    }),
+
+  // Edit an existing day-pinned worker assignment: change its task (phase)
+  // and/or assigned time window. Clicking a worker chip in the Scheduler.
+  updateScheduled: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        phase: phaseSchema.optional(),
+        startTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .nullable()
+          .optional(),
+        endTime: z
+          .string()
+          .regex(/^\d{2}:\d{2}$/)
+          .nullable()
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const before = await getAssignmentById(input.id);
+      if (!before) return { ok: false as const, reason: "not_found" as const };
+
+      const updated = await updateScheduledAssignment({
+        id: input.id,
+        phase: input.phase,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      });
+
+      await appendChangeHistory({
+        airtableJobId: before.airtableJobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "edit_assignment",
+        fieldName: updated?.phase ?? before.phase,
+        oldValue: `${before.technicianName} ${before.startTime ?? ""}-${before.endTime ?? ""} (${before.phase})`,
+        newValue: `${updated?.technicianName ?? before.technicianName} ${updated?.startTime ?? ""}-${updated?.endTime ?? ""} (${updated?.phase ?? before.phase})`,
+        details: "Edited assigned time/task",
+      });
+
+      return { ok: true as const, assignment: updated };
+    }),
+
+  /* --------------------- Scheduler per-day job notes --------------------- */
+
+  // All per-day notes for a visible date range (Scheduler grid).
+  dayNotes: adminProcedure
+    .input(z.object({ startDate: z.string(), endDate: z.string() }))
+    .query(async ({ input }) => {
+      const rows = await listSchedulerDayNotesInRange(
+        input.startDate,
+        input.endDate,
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        jobId: r.airtableJobId,
+        date: r.noteDate,
+        note: r.note,
+        authorName: r.createdByName,
+        updatedAt: r.updatedAt ? new Date(r.updatedAt).getTime() : null,
+      }));
+    }),
+
+  // Upsert (or clear, when empty) the note on a job cell for a specific date.
+  setDayNote: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        note: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const id = await setSchedulerDayNote({
+        airtableJobId: input.jobId,
+        noteDate: input.date,
+        note: input.note,
+        actor: {
+          userId: ctx.user.id,
+          name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        },
+      });
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
+        action: "day_note",
+        fieldName: input.date,
+        oldValue: null,
+        newValue: input.note.trim() || null,
+        details: input.note.trim() ? "Day note set" : "Day note cleared",
       });
       return { ok: true as const, id };
     }),

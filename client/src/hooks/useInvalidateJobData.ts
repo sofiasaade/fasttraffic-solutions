@@ -30,6 +30,7 @@ export function useInvalidateJobData() {
     c.scheduledAssignments.invalidate();
     c.equipmentAssignments.invalidate();
     c.truckAssignments.invalidate();
+    c.dayNotes.invalidate();
     // Day-oriented views
     c.dashboardDay.invalidate();
     c.dayTimeline.invalidate();

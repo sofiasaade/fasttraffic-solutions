@@ -134,6 +134,13 @@
       "when": 1781799198843,
       "tag": "0018_panoramic_cloak",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1782270138728,
+      "tag": "0019_elite_old_lace",
+      "breakpoints": true
     }
   ]
 }

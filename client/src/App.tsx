@@ -18,6 +18,7 @@ import Scheduler from "./pages/Scheduler";
 import WorkersCalendar from "./pages/WorkersCalendar";
 import PendingJobs from "./pages/PendingJobs";
 import DayTimeline from "./pages/DayTimeline";
+import ProjectDetail from "./pages/ProjectDetail";
 import TechnicianApp from "./pages/TechnicianApp";
 
 function FullScreenLoader() {
@@ -65,6 +66,11 @@ function Router() {
           <Route path="/scheduler">
             <CoordinatorShell>
               <Scheduler />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/projects/:id">
+            <CoordinatorShell>
+              <ProjectDetail />
             </CoordinatorShell>
           </Route>
           <Route path="/workers">

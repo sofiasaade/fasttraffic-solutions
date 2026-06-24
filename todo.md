@@ -558,8 +558,8 @@
 - [x] Workers Day view: hourly timeline (tech x hours) showing busy blocks (job/phase/time) and free gaps for assigning more tasks
 - [x] Workers Day view: mark unavailable/off technicians; type-check + tests
 
-- [ ] Load 18 real technicians with experience level (Senior/Medium-Junior mapping)
-- [ ] Apply availability rules: most all-week; Zion Mon-Fri until 16:00; Daniel Mon-Sat; Dylan Mon-Fri; Jhon Fri/Sat/Sun + weeknight 18:00-06:00; Valery variable
+- [x] Load 18 real technicians with experience level (Senior/Medium-Junior mapping)
+- [x] Apply availability rules: most all-week; Zion Mon-Fri until 16:00; Daniel Mon-Sat; Dylan Mon-Fri; Jhon Fri/Sat/Sun + weeknight 18:00-06:00; Valery variable
 
 - [x] Equipment catalog: replaced generics with real fleet (2 arrow boards, 9 message boards, 7 trailers) + code/VIN column
 - [x] Surface VIN/code in Equipment list UI; pushed DB migration; tests green
@@ -574,3 +574,30 @@
 - [x] Dashboard Day View: in "Starting today", show who did the Prep (prep technician), even if prep was the prior day
 - [x] Scheduler: use the same Day View classification (Prep work / Starting / Ongoing / Pick up)
 - [x] Scheduler: support Day and Week views with that classification
+
+
+## Batch: Scheduler/Dashboard/Day View improvements (2026-06-23)
+- [ ] Scheduler: use the SAME filters as the Dispatch board (same set + colors)
+- [ ] Dashboard: Field tags use the same Airtable Field-Operations sub-status colors
+- [ ] Day View: clicking a job opens a FULL Project Detail view (not redirect to Scheduler)
+- [ ] Day View: in Starting today and ALL sections, show Prep technician + Setup + Pickup assignees, by phase
+- [ ] Day View: Ongoing jobs keep a per-day record of assigned workers, but only display the worker assigned for the selected day
+- [ ] Navigation: move Dispatch board below Workers in the sidebar
+- [ ] Scheduler: allow leaving a NOTE on a job day cell (e.g. job cancelled reason), viewable per day
+- [ ] Scheduler: click an assigned day/worker to edit the assigned TIME and the assigned TASK
+- [ ] TypeScript clean + full tests passing
+
+## Coordinator feedback batch (Jun 2026)
+
+- [x] Scheduler uses the same filters as Dispatch (Zone + Date jump + search)
+- [x] Dashboard/field sub-status tags use the exact Airtable colors (Scheduler inline tag aligned)
+- [x] Day View job click opens the full Project Detail page (not the Scheduler)
+- [x] Project Detail page at /projects/:id (job info, crew, history, photos, notes)
+- [x] Day View sections show Prep / Setup / Pickup technician names per phase
+- [x] "Starting today" shows who did the Prep even when prep happened earlier
+- [x] Ongoing jobs keep a per-day crew record; the card shows only that day's worker
+- [x] Dispatch Board moved below Workers in the sidebar
+- [x] Scheduler: per-day note on a job cell (cancellation reason / day-specific note)
+- [x] Scheduler: click an assigned worker/day to edit the assigned time and task (phase)
+- [x] Backend helpers + tRPC procedures (dayNotes, setDayNote, updateScheduled, getDayPinnedAssignmentsMap)
+- [x] Vitest coverage for day notes, assignment edit, strict day-pinned crew (215 passing)

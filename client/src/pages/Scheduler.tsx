@@ -48,6 +48,7 @@ import {
   Ban,
   Receipt,
   Check,
+  StickyNote,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -338,6 +339,7 @@ function WorkerChip({
   onDragStart,
   onToggleConfirm,
   onRemove,
+  onEdit,
 }: {
   row: ScheduledRow;
   compact?: boolean;
@@ -345,6 +347,7 @@ function WorkerChip({
   onDragStart?: (e: React.DragEvent) => void;
   onToggleConfirm: () => void;
   onRemove: () => void;
+  onEdit?: () => void;
 }) {
   const confirmed = row.status === "confirmed";
   const assignedAt = formatAssignedAt(row.assignedAt);
@@ -357,7 +360,7 @@ function WorkerChip({
         row.startTime ? ` • ${row.startTime}-${row.endTime ?? ""}` : ""
       }${assignedAt ? ` • assigned ${assignedAt}` : ""} — ${
         confirmed ? "confirmed" : "tentative"
-      }`}
+      }${onEdit ? " • click to edit task/time" : ""}`}
       className={cn(
         "group rounded border flex items-center gap-1",
         compact
@@ -379,14 +382,31 @@ function WorkerChip({
           {phase.label}
         </span>
       )}
-      <span className="min-w-0 flex-1 whitespace-normal break-words">
+      <button
+        type="button"
+        disabled={!onEdit}
+        onClick={(e) => {
+          if (!onEdit) return;
+          e.stopPropagation();
+          onEdit();
+        }}
+        className={cn(
+          "min-w-0 flex-1 whitespace-normal break-words text-left",
+          onEdit && "hover:underline cursor-pointer",
+        )}
+      >
         {row.technicianName}
+        {row.startTime && (
+          <span className="ml-1 font-medium whitespace-nowrap">
+            {row.startTime}–{row.endTime ?? ""}
+          </span>
+        )}
         {assignedAt && (
           <span className="ml-1 font-normal opacity-60 whitespace-nowrap">
             @ {assignedAt}
           </span>
         )}
-      </span>
+      </button>
       <button
         type="button"
         onClick={(e) => {
@@ -475,6 +495,8 @@ export default function Scheduler() {
   const moveScheduled = trpc.coordinator.moveScheduled.useMutation();
   const moveEquipment = trpc.coordinator.moveEquipment.useMutation();
   const moveTruck = trpc.coordinator.moveTruck.useMutation();
+  const updateScheduled = trpc.coordinator.updateScheduled.useMutation();
+  const setDayNote = trpc.coordinator.setDayNote.useMutation();
   const changeBadgesQuery = trpc.coordinator.changeBadges.useQuery(undefined, {
     refetchInterval: 60_000,
   });
@@ -577,6 +599,26 @@ export default function Scheduler() {
   });
   const scheduled = (schedQuery.data ?? []) as ScheduledRow[];
 
+  // Per-day notes for the visible range (one note per job+date).
+  const dayNotesQuery = trpc.coordinator.dayNotes.useQuery({
+    startDate: rangeFirst,
+    endDate: rangeLast,
+  });
+  type DayNoteRow = {
+    id: number;
+    jobId: string;
+    date: string;
+    note: string;
+    authorName: string | null;
+    updatedAt: number | null;
+  };
+  const dayNotes = (dayNotesQuery.data ?? []) as DayNoteRow[];
+  const dayNoteMap = useMemo(() => {
+    const m = new Map<string, DayNoteRow>();
+    for (const n of dayNotes) m.set(`${n.jobId}|${n.date}`, n);
+    return m;
+  }, [dayNotes]);
+
   // Equipment placements for the visible range.
   const equipQuery = trpc.coordinator.equipmentAssignments.useQuery({
     startDate: rangeFirst,
@@ -636,6 +678,22 @@ export default function Scheduler() {
   const [truckDriver, setTruckDriver] = useState<string>("none");
   const [truckNotes, setTruckNotes] = useState("");
 
+  // Edit-assignment dialog state (click a worker chip to edit task/time).
+  const [editChip, setEditChip] = useState<{
+    row: ScheduledRow;
+    job: Job;
+  } | null>(null);
+  const [editPhase, setEditPhase] = useState<Phase>("Setup");
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
+
+  // Per-day note dialog state (note on a job cell for a specific date).
+  const [noteDialog, setNoteDialog] = useState<{
+    job: Job;
+    dayKey: string;
+  } | null>(null);
+  const [noteText, setNoteText] = useState("");
+
   // Inline expanded job rows (accordion) — set of job ids
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(
     () => new Set(),
@@ -660,6 +718,25 @@ export default function Scheduler() {
   // Free-text job filter for the week grid (client/address). Pre-filled when a
   // project is focused so the coordinator immediately sees only that project.
   const [jobFilter, setJobFilter] = useState("");
+  // Zone filter (same control as the Dispatch board).
+  const [zoneFilter, setZoneFilter] = useState("all");
+  // Date filter (same control as the Dispatch board): picking a date jumps the
+  // visible week to it and selects that day in Day view.
+  const [dateFilter, setDateFilter] = useState("");
+  const jumpToDate = useCallback((value: string) => {
+    setDateFilter(value);
+    if (!value) return;
+    const [y, m, d] = value.split("-").map(Number);
+    if (!y || !m || !d) return;
+    const picked = new Date(y, m - 1, d);
+    setWeekStart(startOfWeek(picked));
+    setSelectedDayIdx((picked.getDay() + 6) % 7);
+  }, []);
+  const zones = useMemo(() => {
+    const set = new Set<string>();
+    ((jobsQuery.data ?? []) as Job[]).forEach((j) => j.zone && set.add(j.zone));
+    return Array.from(set).sort();
+  }, [jobsQuery.data]);
   const focusedJob = useMemo(() => {
     if (!focusedProjectId) return null;
     return (
@@ -699,6 +776,8 @@ export default function Scheduler() {
         const e = parseDayKey(j.endDate) || s;
         if (!s) return false;
         if (!(s <= weekLast && e >= weekFirst)) return false;
+        // Zone filter (same as Dispatch board).
+        if (zoneFilter !== "all" && j.zone !== zoneFilter) return false;
         // Free-text filter on company / address.
         if (q) {
           const hay = `${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase();
@@ -709,7 +788,7 @@ export default function Scheduler() {
       .sort((a, b) =>
         parseDayKey(a.startDate).localeCompare(parseDayKey(b.startDate)),
       );
-  }, [jobsQuery.data, dayKeys, focusedProjectId, jobFilter]);
+  }, [jobsQuery.data, dayKeys, focusedProjectId, jobFilter, zoneFilter]);
 
   // Group jobs by status section (like the dispatch board).
   const grouped = useMemo(() => {
@@ -1088,6 +1167,56 @@ export default function Scheduler() {
     invalidateJobData();
   };
 
+  // The day note (if any) on a (job, day) cell.
+  const noteFor = useCallback(
+    (jobId: string, dk: string) => dayNoteMap.get(`${jobId}|${dk}`) ?? null,
+    [dayNoteMap],
+  );
+
+  // Open the edit dialog for an assigned worker chip (task + time window).
+  const openEditChip = (row: ScheduledRow, job: Job) => {
+    setEditChip({ row, job });
+    const p = row.phase;
+    setEditPhase(
+      p === "Preparation" || p === "Setup" || p === "Pickup"
+        ? (p as Phase)
+        : "Setup",
+    );
+    setEditStart(row.startTime ?? "");
+    setEditEnd(row.endTime ?? "");
+  };
+
+  const doSaveEditChip = async () => {
+    if (!editChip) return;
+    await updateScheduled.mutateAsync({
+      id: editChip.row.id,
+      phase: editPhase,
+      startTime: editStart ? editStart : null,
+      endTime: editEnd ? editEnd : null,
+    });
+    toast.success(`Updated ${editChip.row.technicianName}.`);
+    setEditChip(null);
+    invalidateJobData();
+  };
+
+  // Open the per-day note dialog for a (job, day) cell.
+  const openNoteDialog = (job: Job, dk: string) => {
+    setNoteDialog({ job, dayKey: dk });
+    setNoteText(noteFor(job.id, dk)?.note ?? "");
+  };
+
+  const doSaveDayNote = async () => {
+    if (!noteDialog) return;
+    await setDayNote.mutateAsync({
+      jobId: noteDialog.job.id,
+      date: noteDialog.dayKey,
+      note: noteText,
+    });
+    toast.success(noteText.trim() ? "Note saved." : "Note cleared.");
+    setNoteDialog(null);
+    invalidateJobData();
+  };
+
   // Toggle a single chip between tentative and confirmed. Confirming sends the
   // technician one notification (server-side); reverting sends nothing.
   const toggleConfirmChip = async (row: ScheduledRow) => {
@@ -1248,9 +1377,41 @@ export default function Scheduler() {
 
         {/* Resource drop zone for the selected day */}
         <div className="px-4 pb-3 pt-1 border-t border-border/60">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1.5">
-            Assigned · {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Assigned · {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}
+            </span>
+            {(() => {
+              const dn = noteFor(job.id, dk);
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openNoteDialog(job, dk);
+                  }}
+                  title={dn ? `Note: ${dn.note}` : "Add a note for this day"}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+                    dn
+                      ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                      : "text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  <StickyNote className="size-3" />
+                  {dn ? "Note" : "Add note"}
+                </button>
+              );
+            })()}
           </div>
+          {(() => {
+            const dn = noteFor(job.id, dk);
+            return dn ? (
+              <div className="mb-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900 whitespace-pre-wrap">
+                {dn.note}
+              </div>
+            ) : null;
+          })()}
           {chips.length === 0 && equips.length === 0 && truckChips.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border px-3 py-3 text-center text-[11px] text-muted-foreground">
               Drag a worker, equipment or truck here
@@ -1263,6 +1424,7 @@ export default function Scheduler() {
                   row={c}
                   onToggleConfirm={() => toggleConfirmChip(c)}
                   onRemove={() => removeChip(c)}
+                  onEdit={() => openEditChip(c, job)}
                 />
               ))}
               {equips.map((eq) => {
@@ -1356,8 +1518,8 @@ export default function Scheduler() {
     const isExpanded = expandedJobs.has(job.id);
     const nwRule = parseNonWorkingDays(job.clientMessage);
     return (
-    <div key={job.id} className="border-b border-border">
-     <div className="grid items-stretch hover:bg-accent/20" style={{ gridTemplateColumns: gridTemplate }}>
+     <div key={job.id} className="border-b border-border">
+      <div className="group/row grid items-stretch hover:bg-accent/20" style={{ gridTemplateColumns: gridTemplate }}>
       {/* Job label — click to expand inline detail */}
       <button
         type="button"
@@ -1545,6 +1707,7 @@ export default function Scheduler() {
                   }}
                   onToggleConfirm={() => toggleConfirmChip(c)}
                   onRemove={() => removeChip(c)}
+                  onEdit={() => openEditChip(c, job)}
                 />
               ))}
               {equips.map((eq) => {
@@ -1621,6 +1784,31 @@ export default function Scheduler() {
                   </button>
                 );
               })}
+              {/* Per-day note on a covered cell (cancellation reason, etc.). */}
+              {covers && (() => {
+                const dn = noteFor(job.id, dk);
+                return (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openNoteDialog(job, dk);
+                    }}
+                    title={dn ? `Note: ${dn.note}` : "Add a note for this day"}
+                    className={cn(
+                      "w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start gap-1",
+                      dn
+                        ? "bg-amber-100 border-amber-300 text-amber-900"
+                        : "border-dashed border-border text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:opacity-100",
+                    )}
+                  >
+                    <StickyNote className="size-3 shrink-0 mt-px" />
+                    <span className="whitespace-normal break-words min-w-0">
+                      {dn ? dn.note : "Note"}
+                    </span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
         );
@@ -1786,10 +1974,11 @@ export default function Scheduler() {
               </button>
             </div>
           )}
-          {/* Week-grid job search (client / address). Hidden while a single
-              project is focused (the banner already scopes the view). */}
-          {!focusedProjectId && viewMode === "week" && (
-            <div className="flex items-center gap-2 border-b border-border bg-card/60 px-4 py-2">
+          {/* Job search (client / address) + Zone filter — same filters as the
+              Dispatch board. Hidden while a single project is focused (the
+              banner already scopes the view). */}
+          {!focusedProjectId && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card/60 px-4 py-2">
               <div className="relative w-full max-w-sm">
                 <Search className="size-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -1809,7 +1998,45 @@ export default function Scheduler() {
                   </button>
                 )}
               </div>
-              {jobFilter && (
+              <div className="w-44">
+                <Select value={zoneFilter} onValueChange={setZoneFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Zone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All zones</SelectItem>
+                    {zones.map((z) => (
+                      <SelectItem key={z} value={z}>
+                        {z}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Date filter — same as the Dispatch board. Jumps the visible
+                  week to the picked date and selects it in Day view. */}
+              <div className="w-44">
+                <Input
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => jumpToDate(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              {(jobFilter || zoneFilter !== "all" || dateFilter) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setJobFilter("");
+                    setZoneFilter("all");
+                    setDateFilter("");
+                  }}
+                >
+                  Clear
+                </Button>
+              )}
+              {(jobFilter || zoneFilter !== "all") && (
                 <span className="text-xs text-muted-foreground">
                   {weekJobs.length} match{weekJobs.length === 1 ? "" : "es"}
                 </span>
@@ -2660,6 +2887,142 @@ export default function Scheduler() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit an existing worker assignment: task (phase) + assigned time. */}
+      <Dialog
+        open={!!editChip}
+        onOpenChange={(v) => {
+          if (!v) setEditChip(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit assignment</DialogTitle>
+            <DialogDescription>
+              {editChip && (
+                <>
+                  Editing <strong>{editChip.row.technicianName}</strong> on{" "}
+                  <strong>{editChip.row.scheduledDate}</strong> for{" "}
+                  <strong>{editChip.job.company ?? "this job"}</strong>.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Task</label>
+              <Select
+                value={editPhase}
+                onValueChange={(v) => setEditPhase(v as Phase)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PHASES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="mt-2">
+                <span
+                  className={cn(
+                    "inline-block text-xs px-2 py-1 rounded border",
+                    PHASE_COLOR[editPhase],
+                  )}
+                >
+                  {editPhase}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Start time
+                </label>
+                <Input
+                  type="time"
+                  value={editStart}
+                  onChange={(e) => setEditStart(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  End time
+                </label>
+                <Input
+                  type="time"
+                  value={editEnd}
+                  onChange={(e) => setEditEnd(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setEditChip(null)}>
+              <X className="size-4 mr-1" />
+              Cancel
+            </Button>
+            <Button
+              onClick={doSaveEditChip}
+              disabled={updateScheduled.isPending}
+            >
+              {updateScheduled.isPending && (
+                <Loader2 className="size-4 mr-1 animate-spin" />
+              )}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Per-day note on a job cell (cancellation reason, day-specific notes). */}
+      <Dialog
+        open={!!noteDialog}
+        onOpenChange={(v) => {
+          if (!v) setNoteDialog(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Day note</DialogTitle>
+            <DialogDescription>
+              {noteDialog && (
+                <>
+                  Note for <strong>{noteDialog.job.company ?? "this job"}</strong>{" "}
+                  on <strong>{noteDialog.dayKey}</strong>. Use it to record a
+                  cancellation reason or any day-specific detail.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Textarea
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="e.g. Job cancelled by client — rain. Reschedule next week."
+            rows={4}
+          />
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setNoteDialog(null)}>
+              <X className="size-4 mr-1" />
+              Cancel
+            </Button>
+            <Button onClick={doSaveDayNote} disabled={setDayNote.isPending}>
+              {setDayNote.isPending && (
+                <Loader2 className="size-4 mr-1 animate-spin" />
+              )}
+              {noteText.trim() ? "Save note" : "Clear note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
@@ -2768,11 +3131,18 @@ function JobDetailInline({ job }: { job: Job }) {
                   {job.status}
                 </Badge>
               )}
-              {job.subStatus && (
-                <Badge variant="outline" className="text-xs">
-                  {job.subStatus}
-                </Badge>
-              )}
+              {job.subStatus && (() => {
+                const c = subStatusColor(job.subStatus);
+                return (
+                  <span
+                    className="rounded px-1.5 py-0.5 text-xs font-medium"
+                    style={{ backgroundColor: c.bg, color: c.text }}
+                    title={`Field sub-status: ${job.subStatus}`}
+                  >
+                    {job.subStatus}
+                  </span>
+                );
+              })()}
             </div>
             <h3 className="mt-2 text-base font-semibold leading-snug break-words">
               {job.projectTitle || job.company || "Untitled job"}

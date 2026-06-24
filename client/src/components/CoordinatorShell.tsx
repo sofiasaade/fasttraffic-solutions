@@ -23,10 +23,10 @@ import GlobalProjectSearch from "@/components/GlobalProjectSearch";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
   { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
   { href: "/day", label: "Day Timeline", icon: CalendarClock },
   { href: "/workers", label: "Workers", icon: Users },
+  { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
   { href: "/pending", label: "Pending Jobs", icon: AlertTriangle },
   { href: "/map", label: "Permit Map", icon: MapIcon },
   { href: "/alerts", label: "Change Alerts", icon: BellRing },

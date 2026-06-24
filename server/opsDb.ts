@@ -14,6 +14,7 @@ import {
   timeLogs,
   schedulerAssignments,
   InsertSchedulerAssignment,
+  schedulerDayNotes,
   technicianProfiles,
   InsertTechnicianProfile,
   technicianCertificates,
@@ -695,6 +696,39 @@ export async function getPrepCrewMap(jobIds: string[]) {
   return map;
 }
 
+/**
+ * Crew per job STRICTLY for a specific calendar day (only rows whose
+ * scheduledDate === date). Unlike getAssignmentsMapForDay this ignores generic
+ * (scheduledDate IS NULL) assignments. Used by the Day View "Ongoing" column so
+ * each day shows only the worker(s) the coordinator pinned to THAT day, while
+ * the full per-day history is still kept in job_assignments.
+ */
+export async function getDayPinnedAssignmentsMap(jobIds: string[], date: string) {
+  const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        inArray(jobAssignments.airtableJobId, jobIds),
+        eq(jobAssignments.scheduledDate, date),
+      ),
+    );
+  for (const r of rows) {
+    if (!map.has(r.airtableJobId)) {
+      map.set(r.airtableJobId, { Preparation: [], Setup: [], Pickup: [] });
+    }
+    const entry = map.get(r.airtableJobId)!;
+    if ((PHASES as readonly string[]).includes(r.phase)) {
+      const list = entry[r.phase as Phase];
+      if (!list.includes(r.technicianName)) list.push(r.technicianName);
+    }
+  }
+  return map;
+}
+
 export type AssignmentStatus = "tentative" | "confirmed";
 
 /**
@@ -1025,6 +1059,114 @@ export async function listBookedTechniciansOnDate(scheduledDate: string) {
     .from(jobAssignments)
     .where(eq(jobAssignments.scheduledDate, scheduledDate));
   return Array.from(new Set(rows.map((r) => r.technicianName)));
+}
+
+/* -------------------- Scheduler per-day job notes --------------------- */
+// Notes a coordinator leaves on a specific job cell for a specific date.
+
+/** Notes for a set of jobs within a date range (for the Scheduler grid). */
+export async function listSchedulerDayNotesInRange(
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(schedulerDayNotes)
+    .where(
+      and(
+        gte(schedulerDayNotes.noteDate, startDate),
+        lte(schedulerDayNotes.noteDate, endDate),
+      ),
+    )
+    .orderBy(desc(schedulerDayNotes.updatedAt));
+}
+
+/** The note for a single (job, date), or null. */
+export async function getSchedulerDayNote(
+  airtableJobId: string,
+  noteDate: string,
+) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(schedulerDayNotes)
+    .where(
+      and(
+        eq(schedulerDayNotes.airtableJobId, airtableJobId),
+        eq(schedulerDayNotes.noteDate, noteDate),
+      ),
+    );
+  return rows[0] ?? null;
+}
+
+/**
+ * Upsert the note for a (job, date). An empty/whitespace note deletes the row.
+ * Returns the surviving row id, or null when cleared.
+ */
+export async function setSchedulerDayNote(input: {
+  airtableJobId: string;
+  noteDate: string;
+  note: string;
+  actor?: { userId?: number; name?: string };
+}): Promise<number | null> {
+  const d = await db();
+  const trimmed = input.note.trim();
+  const existing = await getSchedulerDayNote(input.airtableJobId, input.noteDate);
+
+  if (!trimmed) {
+    if (existing) {
+      await d
+        .delete(schedulerDayNotes)
+        .where(eq(schedulerDayNotes.id, existing.id));
+    }
+    return null;
+  }
+
+  if (existing) {
+    await d
+      .update(schedulerDayNotes)
+      .set({
+        note: trimmed,
+        createdByUserId: input.actor?.userId ?? existing.createdByUserId,
+        createdByName: input.actor?.name ?? existing.createdByName,
+        updatedAt: new Date(),
+      })
+      .where(eq(schedulerDayNotes.id, existing.id));
+    return existing.id;
+  }
+
+  const res = await d.insert(schedulerDayNotes).values({
+    airtableJobId: input.airtableJobId,
+    noteDate: input.noteDate,
+    note: trimmed,
+    createdByUserId: input.actor?.userId ?? null,
+    createdByName: input.actor?.name ?? null,
+  });
+  return Number((res as any)[0]?.insertId ?? 0);
+}
+
+/* ------------------ Edit an existing day assignment ------------------- */
+
+/**
+ * Update an existing day-pinned assignment's time window and/or phase.
+ * Used by the Scheduler when a coordinator clicks an assigned worker chip to
+ * edit the assigned time and task (phase). Returns the updated row, or null.
+ */
+export async function updateScheduledAssignment(input: {
+  id: number;
+  phase?: string;
+  startTime?: string | null;
+  endTime?: string | null;
+}) {
+  const d = await db();
+  const patch: Record<string, unknown> = {};
+  if (input.phase !== undefined) patch.phase = input.phase;
+  if (input.startTime !== undefined) patch.startTime = input.startTime;
+  if (input.endTime !== undefined) patch.endTime = input.endTime;
+  if (Object.keys(patch).length === 0) return getAssignmentById(input.id);
+  await d.update(jobAssignments).set(patch).where(eq(jobAssignments.id, input.id));
+  return getAssignmentById(input.id);
 }
 
 /* ----------------------------- Job Photos ----------------------------- */

@@ -251,6 +251,27 @@ export type SchedulerAssignment = typeof schedulerAssignments.$inferSelect;
 export type InsertSchedulerAssignment =
   typeof schedulerAssignments.$inferInsert;
 
+/**
+ * Per-day notes a coordinator can leave on a job cell in the Scheduler
+ * (e.g. cancellation reason, postponed, special instruction for that date).
+ * One row per (job, date) — the latest note replaces the previous one for
+ * that date.
+ */
+export const schedulerDayNotes = mysqlTable("scheduler_day_notes", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
+  /** Local date the note applies to, stored as YYYY-MM-DD. */
+  noteDate: varchar("noteDate", { length: 10 }).notNull(),
+  note: text("note").notNull(),
+  createdByUserId: int("createdByUserId"),
+  createdByName: varchar("createdByName", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type SchedulerDayNote = typeof schedulerDayNotes.$inferSelect;
+export type InsertSchedulerDayNote = typeof schedulerDayNotes.$inferInsert;
+
 
 /**
  * Local job assignments: the authoritative record of which technicians are on a

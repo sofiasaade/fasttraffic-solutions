@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import DayViewMap, { type DayMarker } from "@/components/DayViewMap";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { subStatusColor } from "@shared/subStatusColors";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -190,11 +191,18 @@ function JobCard({
                 <Clock className="size-3" /> Pickup {prettyTime(job.permitEndTime)}
               </span>
             )}
-            {job.subStatus && (
-              <span className="truncate rounded bg-muted px-1.5 py-0.5">
-                {job.subStatus}
-              </span>
-            )}
+            {job.subStatus && (() => {
+              const c = subStatusColor(job.subStatus);
+              return (
+                <span
+                  className="truncate rounded px-1.5 py-0.5 font-medium"
+                  style={{ backgroundColor: c.bg, color: c.text }}
+                  title={`Field sub-status: ${job.subStatus}`}
+                >
+                  {job.subStatus}
+                </span>
+              );
+            })()}
           </div>
           <CrewByPhase job={job} />
           <PrepCarryOver job={job} />
@@ -431,9 +439,8 @@ export default function DashboardDay({
   const { data, isLoading } = trpc.coordinator.dashboardDay.useQuery({ date });
 
   const isToday = date === toKey(new Date());
-  // No dedicated job-detail route exists; send the coordinator to the
-  // scheduler where jobs are managed/assigned.
-  const onJob = (_id: string) => navigate("/scheduler");
+  // Clicking a job opens its full Project Detail view.
+  const onJob = (id: string) => navigate(`/projects/${id}`);
 
   // Build map markers from all three buckets. Single-day jobs naturally appear
   // in both startingToday and pickup; DayViewMap de-dupes by id for the map.

@@ -208,6 +208,22 @@ vi.mock("../opsDb", () => ({
     }
     return map;
   }),
+  // Strictly day-pinned crew (only scheduled rows whose date === requested day).
+  getDayPinnedAssignmentsMap: vi.fn(async (ids: string[], date: string) => {
+    const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();
+    const push = (jobId: string, phase: string, name: string) => {
+      if (!ids.includes(jobId)) return;
+      if (!map.has(jobId))
+        map.set(jobId, { Preparation: [], Setup: [], Pickup: [] });
+      const entry = map.get(jobId) as any;
+      if (!entry[phase]) return;
+      if (!entry[phase].includes(name)) entry[phase].push(name);
+    };
+    for (const s of state.scheduled) {
+      if (s.scheduledDate === date) push(s.airtableJobId, s.phase, s.technicianName);
+    }
+    return map;
+  }),
   // Prep crew across ALL dates (generic + any day-pinned row), de-duplicated.
   getPrepCrewMap: vi.fn(async (ids: string[]) => {
     const map = new Map<string, string[]>();
