@@ -577,15 +577,15 @@
 
 
 ## Batch: Scheduler/Dashboard/Day View improvements (2026-06-23)
-- [ ] Scheduler: use the SAME filters as the Dispatch board (same set + colors)
-- [ ] Dashboard: Field tags use the same Airtable Field-Operations sub-status colors
-- [ ] Day View: clicking a job opens a FULL Project Detail view (not redirect to Scheduler)
-- [ ] Day View: in Starting today and ALL sections, show Prep technician + Setup + Pickup assignees, by phase
-- [ ] Day View: Ongoing jobs keep a per-day record of assigned workers, but only display the worker assigned for the selected day
-- [ ] Navigation: move Dispatch board below Workers in the sidebar
-- [ ] Scheduler: allow leaving a NOTE on a job day cell (e.g. job cancelled reason), viewable per day
-- [ ] Scheduler: click an assigned day/worker to edit the assigned TIME and the assigned TASK
-- [ ] TypeScript clean + full tests passing
+- [x] Scheduler: use the SAME filters as the Dispatch board (same set + colors)
+- [x] Dashboard: Field tags use the same Airtable Field-Operations sub-status colors
+- [x] Day View: clicking a job opens a FULL Project Detail view (not redirect to Scheduler)
+- [x] Day View: in Starting today and ALL sections, show Prep technician + Setup + Pickup assignees, by phase
+- [x] Day View: Ongoing jobs keep a per-day record of assigned workers, but only display the worker assigned for the selected day
+- [x] Navigation: move Dispatch board below Workers in the sidebar
+- [x] Scheduler: allow leaving a NOTE on a job day cell (e.g. job cancelled reason), viewable per day
+- [x] Scheduler: click an assigned day/worker to edit the assigned TIME and the assigned TASK
+- [x] TypeScript clean + full tests passing
 
 ## Coordinator feedback batch (Jun 2026)
 
@@ -601,3 +601,23 @@
 - [x] Scheduler: click an assigned worker/day to edit the assigned time and task (phase)
 - [x] Backend helpers + tRPC procedures (dayNotes, setDayNote, updateScheduled, getDayPinnedAssignmentsMap)
 - [x] Vitest coverage for day notes, assignment edit, strict day-pinned crew (215 passing)
+
+
+## Coordinator feedback batch 2 (Jun 2026)
+
+- [ ] Scheduler: drag an already-assigned worker chip to a different day/job (move assignment)
+- [ ] Scheduler: expand task/phase options on assignment — add "No Parking", "Set up aside (continue next day)", keep "Pick up" only when the job truly ends, and a "Flagger" role slot
+- [ ] Scheduler day notes: quick-check toggles (Job cancelled, Postponed, Missing signs) in addition to the free-text note
+- [ ] Scheduler: clicking an equipment/truck chip should NOT auto-delete — open edit options (edit, move to another day/job) instead
+- [ ] Scheduler: equipment/truck chips draggable to another day or job
+- [ ] Scheduler jobs column: classify rows like the Airtable Field-Operations view
+- [ ] TypeScript clean + full tests passing
+
+
+## Batch 2 status (2026-06-24) — all complete
+- [x] Drag an assigned worker/equipment/truck to another day OR another job
+- [x] Expanded tasks: Preparation, Setup, Pickup, No Parking, Set up aside (continue next day), Flagger
+- [x] Day-note quick-check flags: Job cancelled, Postponed, Missing signs (+ free-text note)
+- [x] Equipment/truck chip click opens Edit/Remove dialog (no auto-delete); editable qty/installer/driver/notes
+- [x] Scheduler jobs column groups by Airtable Field-Operations sub-status ("Field Ops" mode)
+- [x] TypeScript clean + 221 tests passing

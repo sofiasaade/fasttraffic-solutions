@@ -62,16 +62,39 @@ import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
 import { classifyJobForDay } from "@shared/dashboardDay";
-import { subStatusColor } from "@shared/subStatusColors";
+import { subStatusColor, normalizeSubStatus } from "@shared/subStatusColors";
+import { SUB_STATUS_OPTIONS } from "@shared/airtableFields";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 
-type Phase = "Preparation" | "Setup" | "Pickup";
-const PHASES: Phase[] = ["Preparation", "Setup", "Pickup"];
+// Tasks a worker can be assigned to on a given day. The first three are the
+// canonical phases that drive Day-View crew buckets; the rest are extra
+// field tasks requested by coordinators:
+//  - "No Parking": only the No-Parking signs work.
+//  - "Set up aside": setup left in place to continue the next day.
+//  - "Flagger": traffic-control flagging role.
+type Phase =
+  | "Preparation"
+  | "Setup"
+  | "Pickup"
+  | "No Parking"
+  | "Set up aside"
+  | "Flagger";
+const PHASES: Phase[] = [
+  "Preparation",
+  "Setup",
+  "Set up aside",
+  "Pickup",
+  "No Parking",
+  "Flagger",
+];
 
 const PHASE_COLOR: Record<Phase, string> = {
   Preparation: "bg-blue-100 text-blue-800 border-blue-200",
   Setup: "bg-orange-100 text-orange-800 border-orange-200",
   Pickup: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  "No Parking": "bg-violet-100 text-violet-800 border-violet-200",
+  "Set up aside": "bg-amber-100 text-amber-800 border-amber-200",
+  Flagger: "bg-cyan-100 text-cyan-800 border-cyan-200",
 };
 
 // Strip a leading keycap/number emoji and whitespace from impact values
@@ -215,6 +238,19 @@ const STATUS_SECTIONS: {
     // Match Airtable sub-status "Cancelled (Field)"
     dot: subStatusColor("Cancelled (Field)").bg,
   },
+];
+
+// Field-Operations sub-status sections, mirroring the Airtable
+// "Sub-Status Field Operations" single-select (same order + colors). The
+// Scheduler "Field Ops" grouping classifies the jobs column exactly like the
+// Airtable view. A trailing "Unset" bucket catches jobs without a sub-status.
+const SUBSTATUS_SECTIONS: { key: string; title: string; dot: string }[] = [
+  ...SUB_STATUS_OPTIONS.map((label) => ({
+    key: `sub:${normalizeSubStatus(label)}`,
+    title: label.trim(),
+    dot: subStatusColor(label).bg,
+  })),
+  { key: "sub:__unset__", title: "No Sub-Status", dot: "#e5e7eb" },
 ];
 
 // ---- date helpers (local, no tz drift for day keys) ----
@@ -496,6 +532,8 @@ export default function Scheduler() {
   const moveEquipment = trpc.coordinator.moveEquipment.useMutation();
   const moveTruck = trpc.coordinator.moveTruck.useMutation();
   const updateScheduled = trpc.coordinator.updateScheduled.useMutation();
+  const updateEquipment = trpc.coordinator.updateEquipment.useMutation();
+  const updateTruck = trpc.coordinator.updateTruck.useMutation();
   const setDayNote = trpc.coordinator.setDayNote.useMutation();
   const changeBadgesQuery = trpc.coordinator.changeBadges.useQuery(undefined, {
     refetchInterval: 60_000,
@@ -551,7 +589,9 @@ export default function Scheduler() {
   // View mode: full week grid vs a single selected day (cards).
   const [viewMode, setViewMode] = useState<"week" | "day">("week");
   // Grouping mode: by permit STATUS (default) or by Day-View PHASE buckets.
-  const [groupBy, setGroupBy] = useState<"status" | "phase">("status");
+  const [groupBy, setGroupBy] = useState<"status" | "phase" | "subStatus">(
+    "status",
+  );
   // Index (0..6, Mon..Sun) of the selected day in the visible week.
   const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
     const todayIdx = (new Date().getDay() + 6) % 7;
@@ -565,6 +605,7 @@ export default function Scheduler() {
   });
   // Collapse state for the phase grouping (week grid), keyed by phase key.
   const [phaseCollapsed, setPhaseCollapsed] = useState<Record<string, boolean>>({});
+  const [subCollapsed, setSubCollapsed] = useState<Record<string, boolean>>({});
 
   const days = useMemo(
     () => Array.from({ length: rangeDays }, (_, i) => addDays(weekStart, i)),
@@ -609,6 +650,9 @@ export default function Scheduler() {
     jobId: string;
     date: string;
     note: string;
+    cancelled: boolean;
+    postponed: boolean;
+    missingSigns: boolean;
     authorName: string | null;
     updatedAt: number | null;
   };
@@ -678,6 +722,17 @@ export default function Scheduler() {
   const [truckDriver, setTruckDriver] = useState<string>("none");
   const [truckNotes, setTruckNotes] = useState("");
 
+  // Edit-equipment dialog state (click an equipment chip → edit/move/remove).
+  const [editEquip, setEditEquip] = useState<EquipmentRow | null>(null);
+  const [editEquipQty, setEditEquipQty] = useState(1);
+  const [editEquipTech, setEditEquipTech] = useState<string>("none");
+  const [editEquipNotes, setEditEquipNotes] = useState("");
+
+  // Edit-truck dialog state (click a truck chip → edit/move/remove).
+  const [editTruck, setEditTruck] = useState<TruckRow | null>(null);
+  const [editTruckDriver, setEditTruckDriver] = useState<string>("none");
+  const [editTruckNotes, setEditTruckNotes] = useState("");
+
   // Edit-assignment dialog state (click a worker chip to edit task/time).
   const [editChip, setEditChip] = useState<{
     row: ScheduledRow;
@@ -693,6 +748,11 @@ export default function Scheduler() {
     dayKey: string;
   } | null>(null);
   const [noteText, setNoteText] = useState("");
+  // Quick-status flags attached to a day note (cancelled / postponed / missing
+  // signs). These let a coordinator tag a day without typing a full note.
+  const [noteCancelled, setNoteCancelled] = useState(false);
+  const [notePostponed, setNotePostponed] = useState(false);
+  const [noteMissingSigns, setNoteMissingSigns] = useState(false);
 
   // Inline expanded job rows (accordion) — set of job ids
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(
@@ -925,6 +985,41 @@ export default function Scheduler() {
     return map;
   }, [weekJobs, dayKeys]);
 
+  // ---- Sub-status grouping (Airtable Field-Operations view) ----
+  // Groups jobs strictly by their Airtable "Sub-Status Field Operations" value
+  // into an ordered map keyed exactly like SUBSTATUS_SECTIONS.
+  const subKeyFor = useCallback((j: Job) => {
+    const norm = normalizeSubStatus(j.subStatus);
+    if (!norm) return "sub:__unset__";
+    const match = SUBSTATUS_SECTIONS.find((s) => s.key === `sub:${norm}`);
+    return match ? match.key : "sub:__unset__";
+  }, []);
+
+  const groupedDaySub = useMemo(() => {
+    const map: Record<string, Job[]> = {};
+    for (const s of SUBSTATUS_SECTIONS) map[s.key] = [];
+    for (const j of weekJobs) {
+      const s = parseDayKey(j.startDate);
+      const e = parseDayKey(j.endDate) || s;
+      if (!(selectedDayKey >= s && selectedDayKey <= e)) continue;
+      (map[subKeyFor(j)] ??= []).push(j);
+    }
+    return map;
+  }, [weekJobs, selectedDayKey, subKeyFor]);
+  const daySubCount = useMemo(
+    () => Object.values(groupedDaySub).reduce((n, arr) => n + arr.length, 0),
+    [groupedDaySub],
+  );
+
+  const groupedWeekSub = useMemo(() => {
+    const map: Record<string, Job[]> = {};
+    for (const s of SUBSTATUS_SECTIONS) map[s.key] = [];
+    for (const j of weekJobs) {
+      (map[subKeyFor(j)] ??= []).push(j);
+    }
+    return map;
+  }, [weekJobs, subKeyFor]);
+
   // Technicians already booked (day-pinned) per day this week.
   const bookedByDay = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -1067,31 +1162,41 @@ export default function Scheduler() {
     }
   };
 
+  // Human-friendly suffix describing where an item was moved (same job vs.
+  // a different job). Used in the success toast so the coordinator gets clear
+  // feedback when dragging across jobs.
+  const moveSuffix = (payload: { jobId: string }, job: Job, dk: string) =>
+    payload.jobId !== job.id
+      ? `to ${job.company ?? "another job"} on ${dk}`
+      : `to ${dk}`;
+
   const doMoveWorker = async (
     payload: { kind: "move-worker"; id: number; jobId: string; label: string },
     job: Job,
     dk: string,
   ) => {
-    if (payload.jobId !== job.id) {
-      toast.error("You can only move an assignment within the same job.");
-      return;
-    }
-    const res = await moveScheduled.mutateAsync({ id: payload.id, scheduledDate: dk });
+    const crossJob = payload.jobId !== job.id;
+    const res = await moveScheduled.mutateAsync({
+      id: payload.id,
+      scheduledDate: dk,
+      airtableJobId: crossJob ? job.id : undefined,
+    });
     if (!res.ok) {
       if (res.reason === "conflict") {
         const force = await moveScheduled.mutateAsync({
           id: payload.id,
           scheduledDate: dk,
+          airtableJobId: crossJob ? job.id : undefined,
           force: true,
         });
         if (force.ok) {
-          toast.success(`${payload.label} moved to ${dk} (over a day conflict).`);
+          toast.success(`${payload.label} moved ${moveSuffix(payload, job, dk)} (over a day conflict).`);
           invalidateJobData();
         }
       }
       return;
     }
-    toast.success(`${payload.label} moved to ${dk}.`);
+    toast.success(`${payload.label} moved ${moveSuffix(payload, job, dk)}.`);
     invalidateJobData();
   };
 
@@ -1100,12 +1205,13 @@ export default function Scheduler() {
     job: Job,
     dk: string,
   ) => {
-    if (payload.jobId !== job.id) {
-      toast.error("You can only move equipment within the same job.");
-      return;
-    }
-    await moveEquipment.mutateAsync({ id: payload.id, scheduledDate: dk });
-    toast.success(`${payload.label} moved to ${dk}.`);
+    const crossJob = payload.jobId !== job.id;
+    await moveEquipment.mutateAsync({
+      id: payload.id,
+      scheduledDate: dk,
+      airtableJobId: crossJob ? job.id : undefined,
+    });
+    toast.success(`${payload.label} moved ${moveSuffix(payload, job, dk)}.`);
     invalidateJobData();
   };
 
@@ -1114,12 +1220,13 @@ export default function Scheduler() {
     job: Job,
     dk: string,
   ) => {
-    if (payload.jobId !== job.id) {
-      toast.error("You can only move a truck within the same job.");
-      return;
-    }
-    await moveTruck.mutateAsync({ id: payload.id, scheduledDate: dk });
-    toast.success(`${payload.label} moved to ${dk}.`);
+    const crossJob = payload.jobId !== job.id;
+    await moveTruck.mutateAsync({
+      id: payload.id,
+      scheduledDate: dk,
+      airtableJobId: crossJob ? job.id : undefined,
+    });
+    toast.success(`${payload.label} moved ${moveSuffix(payload, job, dk)}.`);
     invalidateJobData();
   };
 
@@ -1173,14 +1280,29 @@ export default function Scheduler() {
     [dayNoteMap],
   );
 
+  // Short label for a day note: leading status flags first, then the typed
+  // note. Used in the cell indicators so a flagged day reads at a glance.
+  const dayNoteLabel = (dn: DayNoteRow | null): string => {
+    if (!dn) return "";
+    const flags = [
+      dn.cancelled ? "Cancelled" : null,
+      dn.postponed ? "Postponed" : null,
+      dn.missingSigns ? "Missing signs" : null,
+    ].filter(Boolean) as string[];
+    const prefix = flags.length ? flags.join(" · ") : "";
+    if (prefix && dn.note.trim()) return `${prefix} — ${dn.note}`;
+    return prefix || dn.note;
+  };
+  // Whether a day note carries any quick flag or text (drives the indicator).
+  const noteHasContent = (dn: DayNoteRow | null) =>
+    !!dn && (!!dn.note.trim() || dn.cancelled || dn.postponed || dn.missingSigns);
+
   // Open the edit dialog for an assigned worker chip (task + time window).
   const openEditChip = (row: ScheduledRow, job: Job) => {
     setEditChip({ row, job });
     const p = row.phase;
     setEditPhase(
-      p === "Preparation" || p === "Setup" || p === "Pickup"
-        ? (p as Phase)
-        : "Setup",
+      (PHASES as string[]).includes(p) ? (p as Phase) : "Setup",
     );
     setEditStart(row.startTime ?? "");
     setEditEnd(row.endTime ?? "");
@@ -1202,17 +1324,27 @@ export default function Scheduler() {
   // Open the per-day note dialog for a (job, day) cell.
   const openNoteDialog = (job: Job, dk: string) => {
     setNoteDialog({ job, dayKey: dk });
-    setNoteText(noteFor(job.id, dk)?.note ?? "");
+    const existing = noteFor(job.id, dk);
+    setNoteText(existing?.note ?? "");
+    setNoteCancelled(!!existing?.cancelled);
+    setNotePostponed(!!existing?.postponed);
+    setNoteMissingSigns(!!existing?.missingSigns);
   };
 
   const doSaveDayNote = async () => {
     if (!noteDialog) return;
+    const anyFlag = noteCancelled || notePostponed || noteMissingSigns;
     await setDayNote.mutateAsync({
       jobId: noteDialog.job.id,
       date: noteDialog.dayKey,
       note: noteText,
+      cancelled: noteCancelled,
+      postponed: notePostponed,
+      missingSigns: noteMissingSigns,
     });
-    toast.success(noteText.trim() ? "Note saved." : "Note cleared.");
+    toast.success(
+      noteText.trim() || anyFlag ? "Note saved." : "Note cleared.",
+    );
     setNoteDialog(null);
     invalidateJobData();
   };
@@ -1252,6 +1384,27 @@ export default function Scheduler() {
     invalidateJobData();
   };
 
+  // Open the equipment chip options dialog (edit / move / remove).
+  const openEditEquip = (row: EquipmentRow) => {
+    setEditEquip(row);
+    setEditEquipQty(row.quantity ?? 1);
+    setEditEquipTech(row.technicianName ?? "none");
+    setEditEquipNotes(row.notes ?? "");
+  };
+
+  const doSaveEditEquip = async () => {
+    if (!editEquip) return;
+    await updateEquipment.mutateAsync({
+      id: editEquip.id,
+      quantity: editEquipQty,
+      technicianName: editEquipTech === "none" ? null : editEquipTech,
+      notes: editEquipNotes.trim() ? editEquipNotes.trim() : null,
+    });
+    toast.success(`Updated ${editEquip.equipmentName}.`);
+    setEditEquip(null);
+    invalidateJobData();
+  };
+
   const doScheduleTruck = async () => {
     if (!truckDrop) return;
     await setTruck.mutateAsync({
@@ -1271,6 +1424,25 @@ export default function Scheduler() {
   const removeTruckChip = async (row: TruckRow) => {
     await removeTruck.mutateAsync({ id: row.id });
     toast.success(`Removed ${row.truckName} from ${row.scheduledDate}.`);
+    invalidateJobData();
+  };
+
+  // Open the truck chip options dialog (edit / move / remove).
+  const openEditTruck = (row: TruckRow) => {
+    setEditTruck(row);
+    setEditTruckDriver(row.driverName ?? "none");
+    setEditTruckNotes(row.notes ?? "");
+  };
+
+  const doSaveEditTruck = async () => {
+    if (!editTruck) return;
+    await updateTruck.mutateAsync({
+      id: editTruck.id,
+      driverName: editTruckDriver === "none" ? null : editTruckDriver,
+      notes: editTruckNotes.trim() ? editTruckNotes.trim() : null,
+    });
+    toast.success(`Updated ${editTruck.truckName}.`);
+    setEditTruck(null);
     invalidateJobData();
   };
 
@@ -1383,6 +1555,7 @@ export default function Scheduler() {
             </span>
             {(() => {
               const dn = noteFor(job.id, dk);
+              const has = noteHasContent(dn);
               return (
                 <button
                   type="button"
@@ -1390,25 +1563,34 @@ export default function Scheduler() {
                     e.stopPropagation();
                     openNoteDialog(job, dk);
                   }}
-                  title={dn ? `Note: ${dn.note}` : "Add a note for this day"}
+                  title={has ? dayNoteLabel(dn) : "Add a note for this day"}
                   className={cn(
                     "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors",
-                    dn
-                      ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                    has
+                      ? dn?.cancelled
+                        ? "bg-rose-100 text-rose-800 hover:bg-rose-200"
+                        : "bg-amber-100 text-amber-800 hover:bg-amber-200"
                       : "text-muted-foreground hover:bg-accent",
                   )}
                 >
                   <StickyNote className="size-3" />
-                  {dn ? "Note" : "Add note"}
+                  {has ? "Note" : "Add note"}
                 </button>
               );
             })()}
           </div>
           {(() => {
             const dn = noteFor(job.id, dk);
-            return dn ? (
-              <div className="mb-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900 whitespace-pre-wrap">
-                {dn.note}
+            return noteHasContent(dn) ? (
+              <div
+                className={cn(
+                  "mb-1.5 rounded-md border px-2 py-1 text-[11px] whitespace-pre-wrap",
+                  dn?.cancelled
+                    ? "border-rose-200 bg-rose-50 text-rose-900"
+                    : "border-amber-200 bg-amber-50 text-amber-900",
+                )}
+              >
+                {dayNoteLabel(dn)}
               </div>
             ) : null;
           })()}
@@ -1727,10 +1909,10 @@ export default function Scheduler() {
                       e.dataTransfer.setData("application/json", JSON.stringify(payload));
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    onClick={() => removeEquipChip(eq)}
+                    onClick={() => openEditEquip(eq)}
                     title={`${eq.quantity}× ${eq.equipmentName}${
                       eq.technicianName ? ` • install: ${eq.technicianName}` : ""
-                    }${eq.notes ? ` • ${eq.notes}` : ""} — click to remove`}
+                    }${eq.notes ? ` • ${eq.notes}` : ""} — click to edit`}
                     className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start gap-1"
                     style={{
                       backgroundColor: `${color}1a`,
@@ -1764,10 +1946,10 @@ export default function Scheduler() {
                       e.dataTransfer.setData("application/json", JSON.stringify(payload));
                       e.dataTransfer.effectAllowed = "move";
                     }}
-                    onClick={() => removeTruckChip(tk)}
+                    onClick={() => openEditTruck(tk)}
                     title={`${tk.truckName}${
                       tk.driverName ? ` • driver: ${tk.driverName}` : ""
-                    }${tk.notes ? ` • ${tk.notes}` : ""} — click to remove`}
+                    }${tk.notes ? ` • ${tk.notes}` : ""} — click to edit`}
                     className="group w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start gap-1 border-dashed"
                     style={{
                       backgroundColor: `${color}14`,
@@ -1787,6 +1969,7 @@ export default function Scheduler() {
               {/* Per-day note on a covered cell (cancellation reason, etc.). */}
               {covers && (() => {
                 const dn = noteFor(job.id, dk);
+                const has = noteHasContent(dn);
                 return (
                   <button
                     type="button"
@@ -1794,17 +1977,19 @@ export default function Scheduler() {
                       e.stopPropagation();
                       openNoteDialog(job, dk);
                     }}
-                    title={dn ? `Note: ${dn.note}` : "Add a note for this day"}
+                    title={has ? dayNoteLabel(dn) : "Add a note for this day"}
                     className={cn(
                       "w-full text-left text-[10px] leading-tight px-1.5 py-0.5 rounded border flex items-start gap-1",
-                      dn
-                        ? "bg-amber-100 border-amber-300 text-amber-900"
+                      has
+                        ? dn?.cancelled
+                          ? "bg-rose-100 border-rose-300 text-rose-900"
+                          : "bg-amber-100 border-amber-300 text-amber-900"
                         : "border-dashed border-border text-muted-foreground opacity-0 group-hover/row:opacity-100 hover:opacity-100",
                     )}
                   >
                     <StickyNote className="size-3 shrink-0 mt-px" />
                     <span className="whitespace-normal break-words min-w-0">
-                      {dn ? dn.note : "Note"}
+                      {has ? dayNoteLabel(dn) : "Note"}
                     </span>
                   </button>
                 );
@@ -1835,7 +2020,7 @@ export default function Scheduler() {
           <h1 className="text-2xl font-extrabold tracking-tight">Scheduler</h1>
           <p className="text-sm text-muted-foreground">
             Drag a worker or equipment onto a job/day to schedule it. Jobs
-            grouped by {groupBy === "phase" ? "day phase (Prep / Starting / Ongoing / Pick up)" : "permit status"}.
+            grouped by {groupBy === "phase" ? "day phase (Prep / Starting / Ongoing / Pick up)" : groupBy === "subStatus" ? "Airtable Field-Operations sub-status" : "permit status"}.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1893,6 +2078,19 @@ export default function Scheduler() {
               title="Group jobs by day phase (Prep / Starting / Ongoing / Pick up)"
             >
               Phase
+            </button>
+            <button
+              type="button"
+              onClick={() => setGroupBy("subStatus")}
+              className={cn(
+                "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                groupBy === "subStatus"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+              title="Group jobs by Airtable Sub-Status Field Operations"
+            >
+              Field Ops
             </button>
           </div>
           {/* Range selector — only relevant for the week grid. Lets the user
@@ -2139,7 +2337,39 @@ export default function Scheduler() {
               </div>
               )}
 
-              {groupBy === "phase" ? (
+              {groupBy === "subStatus" ? (
+                daySubCount === 0 ? (
+                  <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
+                    No jobs on {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}.
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {SUBSTATUS_SECTIONS.map((section) => {
+                      const sectionJobs = groupedDaySub[section.key];
+                      if (!sectionJobs || sectionJobs.length === 0) return null;
+                      return (
+                        <div key={section.key}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span
+                              className="size-2.5 rounded-full"
+                              style={{ backgroundColor: section.dot }}
+                            />
+                            <span className="font-semibold text-sm">
+                              {section.title}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ({sectionJobs.length})
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {sectionJobs.map(renderJobCard)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              ) : groupBy === "phase" ? (
                 dayPhaseCount === 0 ? (
                   <div className="p-10 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
                     No jobs on {WEEKDAY[selectedDayIdx]} {selectedDayDate.getDate()}.
@@ -2279,6 +2509,13 @@ export default function Scheduler() {
                       dot: s.dot,
                       jobs: groupedWeekPhase[s.key],
                     }))
+                  : groupBy === "subStatus"
+                  ? SUBSTATUS_SECTIONS.map((s) => ({
+                      key: s.key,
+                      title: s.title,
+                      dot: s.dot,
+                      jobs: groupedWeekSub[s.key] ?? [],
+                    })).filter((s) => s.jobs.length > 0)
                   : STATUS_SECTIONS.map((s) => ({
                       key: s.key as string,
                       title: s.title,
@@ -2290,10 +2527,14 @@ export default function Scheduler() {
                   const isCollapsed =
                     groupBy === "phase"
                       ? !!phaseCollapsed[section.key]
+                      : groupBy === "subStatus"
+                      ? !!subCollapsed[section.key]
                       : collapsed[section.key as SectionKey];
                   const toggleCollapse = () =>
                     groupBy === "phase"
                       ? setPhaseCollapsed((c) => ({ ...c, [section.key]: !c[section.key] }))
+                      : groupBy === "subStatus"
+                      ? setSubCollapsed((c) => ({ ...c, [section.key]: !c[section.key] }))
                       : setCollapsed((c) => ({
                           ...c,
                           [section.key as SectionKey]: !c[section.key as SectionKey],
@@ -3001,6 +3242,53 @@ export default function Scheduler() {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Quick-status flags — tag the day fast without typing a note. */}
+          <div className="flex flex-wrap gap-2">
+            {([
+              {
+                key: "cancelled" as const,
+                label: "Job cancelled",
+                on: noteCancelled,
+                set: setNoteCancelled,
+                cls: "bg-rose-100 border-rose-300 text-rose-800",
+              },
+              {
+                key: "postponed" as const,
+                label: "Postponed",
+                on: notePostponed,
+                set: setNotePostponed,
+                cls: "bg-amber-100 border-amber-300 text-amber-900",
+              },
+              {
+                key: "missingSigns" as const,
+                label: "Missing signs",
+                on: noteMissingSigns,
+                set: setNoteMissingSigns,
+                cls: "bg-orange-100 border-orange-300 text-orange-900",
+              },
+            ]).map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => f.set((v) => !v)}
+                aria-pressed={f.on}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  f.on
+                    ? f.cls
+                    : "bg-transparent border-dashed border-border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {f.on ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <span className="size-3.5 rounded-sm border border-current opacity-50" />
+                )}
+                {f.label}
+              </button>
+            ))}
+          </div>
+
           <Textarea
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
@@ -3019,6 +3307,181 @@ export default function Scheduler() {
               )}
               {noteText.trim() ? "Save note" : "Clear note"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Equipment chip options: edit quantity/installer/notes or remove. */}
+      <Dialog
+        open={!!editEquip}
+        onOpenChange={(v) => {
+          if (!v) setEditEquip(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Equipment</DialogTitle>
+            <DialogDescription>
+              {editEquip && (
+                <>
+                  {editEquip.equipmentName} on{" "}
+                  <strong>{editEquip.scheduledDate}</strong>. Edit the details, or
+                  drag the chip to another day/job to move it.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Quantity</label>
+              <Input
+                type="number"
+                min={1}
+                max={999}
+                value={editEquipQty}
+                onChange={(e) =>
+                  setEditEquipQty(Math.max(1, Number(e.target.value) || 1))
+                }
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Installer (optional)
+              </label>
+              <Select value={editEquipTech} onValueChange={setEditEquipTech}>
+                <SelectTrigger>
+                  <SelectValue placeholder="No installer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No installer</SelectItem>
+                  {(techQuery.data ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.displayName}>
+                      {t.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Notes</label>
+              <Textarea
+                value={editEquipNotes}
+                onChange={(e) => setEditEquipNotes(e.target.value)}
+                rows={3}
+                placeholder="e.g. Drop at the north entrance."
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                if (editEquip) {
+                  void removeEquipChip(editEquip);
+                  setEditEquip(null);
+                }
+              }}
+            >
+              <X className="size-4 mr-1" />
+              Remove
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditEquip(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={doSaveEditEquip}
+                disabled={updateEquipment.isPending}
+              >
+                {updateEquipment.isPending && (
+                  <Loader2 className="size-4 mr-1 animate-spin" />
+                )}
+                Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Truck chip options: edit driver/notes or remove. */}
+      <Dialog
+        open={!!editTruck}
+        onOpenChange={(v) => {
+          if (!v) setEditTruck(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Truck</DialogTitle>
+            <DialogDescription>
+              {editTruck && (
+                <>
+                  {editTruck.truckName} on{" "}
+                  <strong>{editTruck.scheduledDate}</strong>. Edit the details, or
+                  drag the chip to another day/job to move it.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                Driver (optional)
+              </label>
+              <Select value={editTruckDriver} onValueChange={setEditTruckDriver}>
+                <SelectTrigger>
+                  <SelectValue placeholder="No driver" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No driver</SelectItem>
+                  {(techQuery.data ?? []).map((t) => (
+                    <SelectItem key={t.id} value={t.displayName}>
+                      {t.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Notes</label>
+              <Textarea
+                value={editTruckNotes}
+                onChange={(e) => setEditTruckNotes(e.target.value)}
+                rows={3}
+                placeholder="e.g. Needs the lift gate."
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => {
+                if (editTruck) {
+                  void removeTruckChip(editTruck);
+                  setEditTruck(null);
+                }
+              }}
+            >
+              <X className="size-4 mr-1" />
+              Remove
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setEditTruck(null)}>
+                Cancel
+              </Button>
+              <Button onClick={doSaveEditTruck} disabled={updateTruck.isPending}>
+                {updateTruck.isPending && (
+                  <Loader2 className="size-4 mr-1 animate-spin" />
+                )}
+                Save
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

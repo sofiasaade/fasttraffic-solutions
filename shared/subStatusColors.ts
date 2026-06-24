@@ -80,7 +80,7 @@ const SUB_STATUS_TOKEN: Record<string, string> = {
 
 const NEUTRAL = { bg: "#e5e7eb", text: "#1d1f25" };
 
-function normalizeSubStatus(s?: string | null): string {
+export function normalizeSubStatus(s?: string | null): string {
   return (s ?? "").trim();
 }
 

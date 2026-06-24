@@ -1017,6 +1017,7 @@ export async function removeAssignment(id: number) {
 export async function moveScheduledAssignment(input: {
   id: number;
   scheduledDate: string; // YYYY-MM-DD
+  airtableJobId?: string; // when present, also move to another job
 }): Promise<number | null> {
   const d = await db();
   const found = await d
@@ -1025,15 +1026,17 @@ export async function moveScheduledAssignment(input: {
     .where(eq(jobAssignments.id, input.id));
   const row = found[0];
   if (!row) return null;
-  if (row.scheduledDate === input.scheduledDate) return row.id;
+  const targetJob = input.airtableJobId ?? row.airtableJobId;
+  if (row.scheduledDate === input.scheduledDate && targetJob === row.airtableJobId)
+    return row.id;
 
-  // Merge if the same worker is already on the target day for this job+phase.
+  // Merge if the same worker is already on the target job+day for this phase.
   const dup = await d
     .select()
     .from(jobAssignments)
     .where(
       and(
-        eq(jobAssignments.airtableJobId, row.airtableJobId),
+        eq(jobAssignments.airtableJobId, targetJob),
         eq(jobAssignments.phase, row.phase),
         eq(jobAssignments.technicianName, row.technicianName),
         eq(jobAssignments.scheduledDate, input.scheduledDate),
@@ -1046,7 +1049,7 @@ export async function moveScheduledAssignment(input: {
 
   await d
     .update(jobAssignments)
-    .set({ scheduledDate: input.scheduledDate })
+    .set({ scheduledDate: input.scheduledDate, airtableJobId: targetJob })
     .where(eq(jobAssignments.id, input.id));
   return input.id;
 }
@@ -1108,13 +1111,21 @@ export async function setSchedulerDayNote(input: {
   airtableJobId: string;
   noteDate: string;
   note: string;
+  cancelled?: boolean;
+  postponed?: boolean;
+  missingSigns?: boolean;
   actor?: { userId?: number; name?: string };
 }): Promise<number | null> {
   const d = await db();
   const trimmed = input.note.trim();
+  const cancelled = !!input.cancelled;
+  const postponed = !!input.postponed;
+  const missingSigns = !!input.missingSigns;
+  const hasAny = !!trimmed || cancelled || postponed || missingSigns;
   const existing = await getSchedulerDayNote(input.airtableJobId, input.noteDate);
 
-  if (!trimmed) {
+  // A row with no text AND no flags is meaningless: delete/clear it.
+  if (!hasAny) {
     if (existing) {
       await d
         .delete(schedulerDayNotes)
@@ -1128,6 +1139,9 @@ export async function setSchedulerDayNote(input: {
       .update(schedulerDayNotes)
       .set({
         note: trimmed,
+        cancelled,
+        postponed,
+        missingSigns,
         createdByUserId: input.actor?.userId ?? existing.createdByUserId,
         createdByName: input.actor?.name ?? existing.createdByName,
         updatedAt: new Date(),
@@ -1140,6 +1154,9 @@ export async function setSchedulerDayNote(input: {
     airtableJobId: input.airtableJobId,
     noteDate: input.noteDate,
     note: trimmed,
+    cancelled,
+    postponed,
+    missingSigns,
     createdByUserId: input.actor?.userId ?? null,
     createdByName: input.actor?.name ?? null,
   });
@@ -1419,6 +1436,28 @@ export async function setEquipmentAssignment(input: {
   return Number((res as any)[0]?.insertId ?? 0);
 }
 
+// Edit an existing equipment placement in place (quantity / installer / notes).
+// Used when a coordinator clicks an equipment chip and chooses "Edit" instead
+// of removing it.
+export async function updateEquipmentAssignment(input: {
+  id: number;
+  technicianName?: string | null;
+  quantity?: number;
+  notes?: string | null;
+}): Promise<boolean> {
+  const d = await db();
+  const patch: Record<string, unknown> = {};
+  if (input.technicianName !== undefined) patch.technicianName = input.technicianName;
+  if (input.quantity !== undefined) patch.quantity = input.quantity;
+  if (input.notes !== undefined) patch.notes = input.notes;
+  if (Object.keys(patch).length === 0) return false;
+  await d
+    .update(equipmentAssignments)
+    .set(patch)
+    .where(eq(equipmentAssignments.id, input.id));
+  return true;
+}
+
 export async function listEquipmentAssignmentsForWeek(
   startDate: string,
   endDate: string,
@@ -1450,6 +1489,7 @@ export async function removeEquipmentAssignment(id: number) {
 export async function moveEquipmentAssignment(input: {
   id: number;
   scheduledDate: string;
+  airtableJobId?: string; // when present, also move to another job
 }): Promise<number | null> {
   const d = await db();
   const found = await d
@@ -1458,13 +1498,15 @@ export async function moveEquipmentAssignment(input: {
     .where(eq(equipmentAssignments.id, input.id));
   const row = found[0];
   if (!row) return null;
-  if (row.scheduledDate === input.scheduledDate) return row.id;
+  const targetJob = input.airtableJobId ?? row.airtableJobId;
+  if (row.scheduledDate === input.scheduledDate && targetJob === row.airtableJobId)
+    return row.id;
   const dup = await d
     .select()
     .from(equipmentAssignments)
     .where(
       and(
-        eq(equipmentAssignments.airtableJobId, row.airtableJobId),
+        eq(equipmentAssignments.airtableJobId, targetJob),
         eq(equipmentAssignments.equipmentName, row.equipmentName),
         eq(equipmentAssignments.scheduledDate, input.scheduledDate),
       ),
@@ -1477,7 +1519,7 @@ export async function moveEquipmentAssignment(input: {
   }
   await d
     .update(equipmentAssignments)
-    .set({ scheduledDate: input.scheduledDate })
+    .set({ scheduledDate: input.scheduledDate, airtableJobId: targetJob })
     .where(eq(equipmentAssignments.id, input.id));
   return input.id;
 }
@@ -1672,6 +1714,25 @@ export async function setTruckAssignment(input: {
   return Number((res as any)[0]?.insertId ?? 0);
 }
 
+// Edit an existing truck placement in place (driver / notes). Used when a
+// coordinator clicks a truck chip and chooses "Edit".
+export async function updateTruckAssignment(input: {
+  id: number;
+  driverName?: string | null;
+  notes?: string | null;
+}): Promise<boolean> {
+  const d = await db();
+  const patch: Record<string, unknown> = {};
+  if (input.driverName !== undefined) patch.driverName = input.driverName;
+  if (input.notes !== undefined) patch.notes = input.notes;
+  if (Object.keys(patch).length === 0) return false;
+  await d
+    .update(truckAssignments)
+    .set(patch)
+    .where(eq(truckAssignments.id, input.id));
+  return true;
+}
+
 export async function listTruckAssignmentsForWeek(
   startDate: string,
   endDate: string,
@@ -1701,6 +1762,7 @@ export async function removeTruckAssignment(id: number) {
 export async function moveTruckAssignment(input: {
   id: number;
   scheduledDate: string;
+  airtableJobId?: string; // when present, also move to another job
 }): Promise<number | null> {
   const d = await db();
   const found = await d
@@ -1709,13 +1771,15 @@ export async function moveTruckAssignment(input: {
     .where(eq(truckAssignments.id, input.id));
   const row = found[0];
   if (!row) return null;
-  if (row.scheduledDate === input.scheduledDate) return row.id;
+  const targetJob = input.airtableJobId ?? row.airtableJobId;
+  if (row.scheduledDate === input.scheduledDate && targetJob === row.airtableJobId)
+    return row.id;
   const dup = await d
     .select()
     .from(truckAssignments)
     .where(
       and(
-        eq(truckAssignments.airtableJobId, row.airtableJobId),
+        eq(truckAssignments.airtableJobId, targetJob),
         eq(truckAssignments.truckName, row.truckName),
         eq(truckAssignments.scheduledDate, input.scheduledDate),
       ),
@@ -1726,7 +1790,7 @@ export async function moveTruckAssignment(input: {
   }
   await d
     .update(truckAssignments)
-    .set({ scheduledDate: input.scheduledDate })
+    .set({ scheduledDate: input.scheduledDate, airtableJobId: targetJob })
     .where(eq(truckAssignments.id, input.id));
   return input.id;
 }

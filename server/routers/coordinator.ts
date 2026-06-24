@@ -74,12 +74,14 @@ import {
   setEquipmentAssignment,
   listEquipmentAssignmentsForWeek,
   removeEquipmentAssignment,
+  updateEquipmentAssignment,
   moveEquipmentAssignment,
   listTruckCatalog,
   seedTruckCatalog,
   setTruckAssignment,
   listTruckAssignmentsForWeek,
   removeTruckAssignment,
+  updateTruckAssignment,
   moveTruckAssignment,
   createBillingNote,
   listBillingNotes,
@@ -109,6 +111,20 @@ import {
 import { storageGetSignedUrl, storagePut } from "../storage";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
+
+// Day-pinned Scheduler assignments support a richer set of tasks than the
+// canonical Preparation/Setup/Pickup phases used for the Airtable contract:
+//  - "No Parking": install/remove No Parking signage (often the day before)
+//  - "Set up aside": partial setup that continues the next day
+//  - "Flagger": worker assigned as a flagger (billed separately to the client)
+const taskSchema = z.enum([
+  "Preparation",
+  "Setup",
+  "Set up aside",
+  "No Parking",
+  "Flagger",
+  "Pickup",
+]);
 
 // --- Current weather (Open-Meteo, no API key) with a small in-process cache ---
 type WeatherResult = {
@@ -819,7 +835,7 @@ export const coordinatorRouter = router({
     .input(
       z.object({
         jobId: z.string(),
-        phase: phaseSchema,
+        phase: taskSchema,
         technicianName: z.string(),
         scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         startTime: z
@@ -911,6 +927,7 @@ export const coordinatorRouter = router({
       z.object({
         id: z.number(),
         scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        airtableJobId: z.string().optional(),
         force: z.boolean().optional(),
       }),
     )
@@ -950,6 +967,7 @@ export const coordinatorRouter = router({
       const id = await moveScheduledAssignment({
         id: input.id,
         scheduledDate: input.scheduledDate,
+        airtableJobId: input.airtableJobId,
       });
       return { ok: true as const, id };
     }),
@@ -960,7 +978,7 @@ export const coordinatorRouter = router({
     .input(
       z.object({
         id: z.number(),
-        phase: phaseSchema.optional(),
+        phase: taskSchema.optional(),
         startTime: z
           .string()
           .regex(/^\d{2}:\d{2}$/)
@@ -1013,6 +1031,9 @@ export const coordinatorRouter = router({
         jobId: r.airtableJobId,
         date: r.noteDate,
         note: r.note,
+        cancelled: !!r.cancelled,
+        postponed: !!r.postponed,
+        missingSigns: !!r.missingSigns,
         authorName: r.createdByName,
         updatedAt: r.updatedAt ? new Date(r.updatedAt).getTime() : null,
       }));
@@ -1025,6 +1046,9 @@ export const coordinatorRouter = router({
         jobId: z.string(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         note: z.string(),
+        cancelled: z.boolean().optional(),
+        postponed: z.boolean().optional(),
+        missingSigns: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1032,6 +1056,9 @@ export const coordinatorRouter = router({
         airtableJobId: input.jobId,
         noteDate: input.date,
         note: input.note,
+        cancelled: input.cancelled,
+        postponed: input.postponed,
+        missingSigns: input.missingSigns,
         actor: {
           userId: ctx.user.id,
           name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
@@ -1045,7 +1072,18 @@ export const coordinatorRouter = router({
         fieldName: input.date,
         oldValue: null,
         newValue: input.note.trim() || null,
-        details: input.note.trim() ? "Day note set" : "Day note cleared",
+        details: (() => {
+          const flags = [
+            input.cancelled ? "Cancelled" : null,
+            input.postponed ? "Postponed" : null,
+            input.missingSigns ? "Missing signs" : null,
+          ].filter(Boolean);
+          if (id === null) return "Day note cleared";
+          const parts = [] as string[];
+          if (input.note.trim()) parts.push("note");
+          if (flags.length) parts.push(flags.join(", "));
+          return parts.length ? `Day note set (${parts.join("; ")})` : "Day note set";
+        })(),
       });
       return { ok: true as const, id };
     }),
@@ -1144,12 +1182,28 @@ export const coordinatorRouter = router({
       return { ok: true as const };
     }),
 
+  // Edit an existing equipment placement in place (quantity / installer / notes).
+  updateEquipment: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        technicianName: z.string().nullable().optional(),
+        quantity: z.number().int().min(1).max(999).optional(),
+        notes: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const ok = await updateEquipmentAssignment(input);
+      return { ok };
+    }),
+
   // Move an existing equipment placement to another day.
   moveEquipment: adminProcedure
     .input(
       z.object({
         id: z.number(),
         scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        airtableJobId: z.string().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -1244,11 +1298,26 @@ export const coordinatorRouter = router({
       z.object({
         id: z.number(),
         scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        airtableJobId: z.string().optional(),
       }),
     )
     .mutation(async ({ input }) => {
       const id = await moveTruckAssignment(input);
       return { ok: id !== null, id };
+    }),
+
+  // Edit an existing truck placement in place (driver / notes).
+  updateTruck: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        driverName: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const ok = await updateTruckAssignment(input);
+      return { ok };
     }),
 
   // Remove a single truck assignment (by row id).

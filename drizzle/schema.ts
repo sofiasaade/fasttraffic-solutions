@@ -263,6 +263,10 @@ export const schedulerDayNotes = mysqlTable("scheduler_day_notes", {
   /** Local date the note applies to, stored as YYYY-MM-DD. */
   noteDate: varchar("noteDate", { length: 10 }).notNull(),
   note: text("note").notNull(),
+  /** Quick status flags for the day (coordinator checkboxes). */
+  cancelled: boolean("cancelled").default(false).notNull(),
+  postponed: boolean("postponed").default(false).notNull(),
+  missingSigns: boolean("missingSigns").default(false).notNull(),
   createdByUserId: int("createdByUserId"),
   createdByName: varchar("createdByName", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
