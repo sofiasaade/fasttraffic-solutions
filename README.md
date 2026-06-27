@@ -13,7 +13,7 @@ This template gives you a React 19 + Tailwind 4 + Express 4 + tRPC 11 stack with
 
 ---
 
-## Build Loop (Four Touch Points)
+## Build Loop (Five Touch Points)
 
 1. Update schema in `drizzle/schema.ts`, then run `pnpm db:push`.
 2. Add database helpers in `server/db.ts` (return raw results).
