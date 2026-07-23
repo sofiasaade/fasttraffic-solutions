@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,7 +79,13 @@ function JobRow({
     <tr className="border-t border-border hover:bg-accent/40 transition-colors">
       <td className="px-4 py-3 align-top">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-sm">{job.company ?? "—"}</span>
+          <Link
+            href={`/projects/${job.id}`}
+            className="font-medium text-sm hover:text-primary hover:underline"
+            title="Open project details (info, crew, plans)"
+          >
+            {job.company ?? "—"}
+          </Link>
           <ChangeBadge changes={changes} />
         </div>
         {job.zone && (

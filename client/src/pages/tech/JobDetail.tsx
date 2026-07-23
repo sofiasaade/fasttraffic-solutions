@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import MiniJobMap from "@/components/MiniJobMap";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,24 @@ export default function JobDetail() {
 
   const [hazardOpen, setHazardOpen] = useState(false);
   const [note, setNote] = useState("");
+  const [noteCategory, setNoteCategory] = useState<string>("general");
+
+  const completeJob = trpc.technician.completeJob.useMutation({
+    onSuccess: (r) => {
+      if (r.hazardMissing) {
+        // The alarm: work marked done but today's hazard assessment is missing.
+        toast.warning(
+          "⚠️ Hazard assessment NOT filled for this job. Complete it before your next job — you can't check out for the day without it.",
+          { duration: 9000 },
+        );
+      } else {
+        toast.success("Marked as completed");
+      }
+      utils.technician.myJobs.invalidate();
+      utils.technician.dayStatus.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const checkIn = trpc.technician.checkIn.useMutation({
     onSuccess: () => {
@@ -182,6 +201,15 @@ export default function JobDetail() {
           )}
         </div>
       </div>
+
+      {/* Project location map — so the technician can see where the job is. */}
+      {typeof job.lat === "number" && typeof job.lon === "number" && (
+        <MiniJobMap
+          lat={job.lat}
+          lon={job.lon}
+          label={job.company ?? job.jobAddress ?? undefined}
+        />
+      )}
 
       {/* Phase selector */}
       {myPhases.length > 1 && (
@@ -316,20 +344,59 @@ export default function JobDetail() {
         )}
       </div>
 
-      {/* Notes */}
+      {/* Work complete — signs installed / picked up */}
+      <div className="bg-card border rounded-xl p-4">
+        <Button
+          className="w-full"
+          variant={(job as any).completedAt ? "outline" : "default"}
+          disabled={completeJob.isPending}
+          onClick={() =>
+            completeJob.mutate({
+              jobId,
+              completed: !(job as any).completedAt,
+            })
+          }
+        >
+          {completeJob.isPending && (
+            <Loader2 className="size-4 animate-spin mr-1" />
+          )}
+          {(job as any).completedAt
+            ? "✓ Work completed — tap to undo"
+            : "Mark work completed (signs installed)"}
+        </Button>
+      </div>
+
+      {/* Notes — with "novedades" incident categories for signs */}
       <div className="bg-card border rounded-xl p-4 space-y-3">
-        <span className="font-semibold">Field Notes</span>
+        <span className="font-semibold">Field Notes / Novedades</span>
+        <Select value={noteCategory} onValueChange={setNoteCategory}>
+          <SelectTrigger className="h-9">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="general">General note</SelectItem>
+            <SelectItem value="stolen">🚨 Signs stolen</SelectItem>
+            <SelectItem value="lost">❓ Signs lost</SelectItem>
+            <SelectItem value="damaged">🔧 Signs damaged</SelectItem>
+          </SelectContent>
+        </Select>
         <Textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Log anything out of the ordinary…"
+          placeholder={
+            noteCategory === "general"
+              ? "Log anything out of the ordinary…"
+              : "Which signs and how many? What happened?"
+          }
           rows={3}
         />
         <Button
           className="w-full"
           variant="outline"
           disabled={!note.trim() || addNote.isPending}
-          onClick={() => addNote.mutate({ jobId, note })}
+          onClick={() =>
+            addNote.mutate({ jobId, note, category: noteCategory as any })
+          }
         >
           {addNote.isPending && <Loader2 className="size-4 animate-spin mr-1" />}
           Add note

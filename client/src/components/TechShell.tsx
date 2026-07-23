@@ -1,9 +1,10 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Cone, ClipboardList, Bell, LogOut } from "lucide-react";
+import { Cone, ClipboardList, Bell, LogOut, Clock, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
+import BrandMark from "@/components/BrandMark";
 
 export default function TechShell({
   children,
@@ -13,25 +14,32 @@ export default function TechShell({
   title?: string;
 }) {
   const [location] = useLocation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const notifQuery = trpc.technician.notifications.useQuery(undefined, {
     refetchInterval: 30000,
   });
   const unread = notifQuery.data?.unread ?? 0;
+  // Entered from the coordinator's technician list → offer a way back to it.
+  const cameFromRoster = user?.loginMethod === "dev-tech";
 
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto relative">
       <header className="sticky top-0 z-20 bg-sidebar text-sidebar-foreground">
         <div className="flex items-center justify-between h-14 px-4">
           <div className="flex items-center gap-2">
-            <img
-              src="/manus-storage/fts-icon-192_a254898a.png"
-              alt="Fast Traffic Solutions logo"
-              className="size-8 rounded-lg object-cover"
-            />
+            <BrandMark className="size-8" />
             <span className="font-bold">{title ?? "Fast Traffic"}</span>
           </div>
           <div className="flex items-center gap-1">
+            {cameFromRoster && (
+              <a
+                href="/api/dev-login?back=roster"
+                title="Switch technician"
+                className="p-2 rounded-lg hover:bg-sidebar-accent"
+              >
+                <Users className="size-5" />
+              </a>
+            )}
             <Link
               href="/app/notifications"
               className="relative p-2 rounded-lg hover:bg-sidebar-accent"
@@ -56,12 +64,18 @@ export default function TechShell({
       <main className="flex-1 pb-20">{children}</main>
 
       <nav className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-card border-t border-border z-20">
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-3">
           <TabLink
             href="/app"
             active={location === "/app"}
             icon={ClipboardList}
             label="My Jobs"
+          />
+          <TabLink
+            href="/app/hours"
+            active={location === "/app/hours"}
+            icon={Clock}
+            label="Hours"
           />
           <TabLink
             href="/app/notifications"

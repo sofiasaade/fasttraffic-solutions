@@ -117,7 +117,16 @@ export default function PendingJobs() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold truncate">
+                  <span
+                    role="link"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/projects/${job.id}`);
+                    }}
+                    title="Open full project details (info, crew, plans)"
+                    className="font-semibold truncate cursor-pointer hover:text-primary hover:underline"
+                  >
                     {job.company ?? "Untitled job"}
                   </span>
                   <span className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide border border-rose-300 bg-rose-50 text-rose-700">

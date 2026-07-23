@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -196,11 +196,12 @@ function setupDurationShade(value: string | null | undefined): {
 // PHASE buckets: Prep work / Starting / Ongoing / Pick up. The phase grouping
 // reuses classifyJobForDay so it stays identical to the Dashboard.
 type PhaseKey = "prep" | "starting" | "ongoing" | "pickup";
+// Titles and colors match the Dashboard Day view columns exactly.
 const PHASE_SECTIONS: { key: PhaseKey; title: string; dot: string }[] = [
-  { key: "prep", title: "Prep work", dot: "#2563eb" },
-  { key: "starting", title: "Starting", dot: "#16a34a" },
-  { key: "ongoing", title: "Ongoing", dot: "#d97706" },
-  { key: "pickup", title: "Pick up", dot: "#059669" },
+  { key: "prep", title: "Prep work", dot: "#7c3aed" },
+  { key: "starting", title: "Starting today", dot: "#ea580c" },
+  { key: "ongoing", title: "Ongoing (daily)", dot: "#2563eb" },
+  { key: "pickup", title: "Pick up today", dot: "#16a34a" },
 ];
 
 type SectionKey = "submitted" | "approved" | "field" | "cancelled";
@@ -515,6 +516,18 @@ export default function Scheduler() {
   const [, navigate] = useLocation();
   const jobsQuery = trpc.coordinator.boardJobs.useQuery();
   const techQuery = trpc.coordinator.technicians.useQuery();
+  // Pay-period hours per technician (OT prevention while assigning).
+  const periodHoursQuery = trpc.coordinator.techPeriodHours.useQuery(undefined, {
+    refetchInterval: 120_000,
+  });
+  const hoursByTech = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of periodHoursQuery.data?.sums ?? []) {
+      map.set((s as any).technicianName, Number((s as any).hours ?? 0));
+    }
+    return map;
+  }, [periodHoursQuery.data]);
+  const otThreshold = periodHoursQuery.data?.threshold ?? 44;
   const equipmentCatalogQuery = trpc.coordinator.equipmentCatalog.useQuery();
   const utils = trpc.useUtils();
   // Central helper: refresh every job-related window after any change here.
@@ -587,10 +600,14 @@ export default function Scheduler() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<PanelTab>("workers");
   // View mode: full week grid vs a single selected day (cards).
-  const [viewMode, setViewMode] = useState<"week" | "day">("week");
-  // Grouping mode: by permit STATUS (default) or by Day-View PHASE buckets.
+  // Opens in DAY view of today — the daily assignment workflow. Week view is
+  // one click away for forward planning.
+  const [viewMode, setViewMode] = useState<"week" | "day">("day");
+  // Grouping mode: Day-View PHASE buckets by default (same information as the
+  // Dashboard Day view — Prep work / Starting today / Ongoing / Pick up), with
+  // permit STATUS and Airtable sub-status still available as toggles.
   const [groupBy, setGroupBy] = useState<"status" | "phase" | "subStatus">(
-    "status",
+    "phase",
   );
   // Index (0..6, Mon..Sun) of the selected day in the visible week.
   const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => {
@@ -927,7 +944,7 @@ export default function Scheduler() {
     const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], pickup: [] };
     for (const j of weekJobs) {
       const cancelled = isCancelledJob(j);
-      const b = classifyJobForDay(j.startDate, j.endDate, selectedDayKey, j.setupDuration);
+      const b = classifyJobForDay(j.startDate, j.endDate, selectedDayKey, j.setupDuration, j.subStatus);
       if (cancelled) {
         // Cancelled jobs only surface in "Starting" (when they were due to start).
         if (b.startingToday) map.starting.push(j);
@@ -971,7 +988,7 @@ export default function Scheduler() {
       const hasPrep = (j.techPrep?.length ?? 0) > 0;
       const startKey = (j.startDate || "").slice(0, 10);
       for (const dk of dayKeys) {
-        const b = classifyJobForDay(j.startDate, j.endDate, dk, j.setupDuration);
+        const b = classifyJobForDay(j.startDate, j.endDate, dk, j.setupDuration, j.subStatus);
         if (cancelled) {
           if (b.startingToday) add("starting", j);
           continue;
@@ -1502,6 +1519,14 @@ export default function Scheduler() {
               <span className="font-semibold text-sm leading-tight break-words group-hover/card:text-primary">
                 {job.company ?? "—"}
               </span>
+              <Link
+                href={`/projects/${job.id}`}
+                onClick={(e) => e.stopPropagation()}
+                title="Open full project details (info, crew, plans)"
+                className="ml-auto shrink-0 text-muted-foreground hover:text-primary"
+              >
+                <ExternalLink className="size-3.5" />
+              </Link>
             </div>
             {/* Tags moved below the name, in order, wrapping as needed */}
             {(job.impact || (changeBadgesMap[job.id]?.length ?? 0) > 0) && (
@@ -1729,6 +1754,14 @@ export default function Scheduler() {
             <span className="font-medium text-sm leading-tight break-words group-hover/jobcell:text-primary">
               {job.company ?? "—"}
             </span>
+            <Link
+              href={`/projects/${job.id}`}
+              onClick={(e) => e.stopPropagation()}
+              title="Open full project details (info, crew, plans)"
+              className="ml-auto shrink-0 text-muted-foreground hover:text-primary"
+            >
+              <ExternalLink className="size-3.5" />
+            </Link>
           </div>
           {/* Tags moved below the name, in order, wrapping as needed */}
           {(job.impact ||
@@ -2211,15 +2244,53 @@ export default function Scheduler() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Date filter — same as the Dispatch board. Jumps the visible
-                  week to the picked date and selects it in Day view. */}
-              <div className="w-44">
-                <Input
+              {/* Date filter — same control as the Dashboard Day view
+                  (‹ date › + Today). Jumps the visible week to the picked
+                  date and selects it in Day view (same jumpToDate as before). */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9"
+                  onClick={() => {
+                    const base = dateFilter || dayKeyLocal(new Date());
+                    const [y, m, d] = base.split("-").map(Number);
+                    if (!y || !m || !d) return;
+                    jumpToDate(dayKeyLocal(addDays(new Date(y, m - 1, d), -1)));
+                  }}
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <input
                   type="date"
                   value={dateFilter}
                   onChange={(e) => jumpToDate(e.target.value)}
-                  className="h-9"
+                  className="h-9 rounded-md border border-border bg-background px-3 text-sm"
                 />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9"
+                  onClick={() => {
+                    const base = dateFilter || dayKeyLocal(new Date());
+                    const [y, m, d] = base.split("-").map(Number);
+                    if (!y || !m || !d) return;
+                    jumpToDate(dayKeyLocal(addDays(new Date(y, m - 1, d), 1)));
+                  }}
+                  aria-label="Next day"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+                {dateFilter !== dayKeyLocal(new Date()) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => jumpToDate(dayKeyLocal(new Date()))}
+                  >
+                    Today
+                  </Button>
+                )}
               </div>
               {(jobFilter || zoneFilter !== "all" || dateFilter) && (
                 <Button
@@ -2505,7 +2576,10 @@ export default function Scheduler() {
                 (groupBy === "phase"
                   ? PHASE_SECTIONS.map((s) => ({
                       key: s.key as string,
-                      title: s.title,
+                      // In the multi-day grid a job matches the phase on ANY
+                      // visible day, so "today" would be misleading — the
+                      // day-specific wording only applies in Day view.
+                      title: s.title.replace(" today", ""),
                       dot: s.dot,
                       jobs: groupedWeekPhase[s.key],
                     }))
@@ -2713,6 +2787,27 @@ export default function Scheduler() {
                                 • {bookedDays}d booked
                               </span>
                             )}
+                            {(() => {
+                              const h = hoursByTech.get(w.airtableName) ?? 0;
+                              if (h <= 0) return null;
+                              const near = h >= otThreshold - 8 && h < otThreshold;
+                              const over = h >= otThreshold;
+                              return (
+                                <span
+                                  className={cn(
+                                    "ml-1 font-semibold tabular-nums",
+                                    over
+                                      ? "text-red-600"
+                                      : near
+                                        ? "text-amber-600"
+                                        : "text-emerald-600",
+                                  )}
+                                  title={`${h.toFixed(1)}h this pay period (OT after ${otThreshold}h)`}
+                                >
+                                  • {h.toFixed(1)}h{over ? " OT!" : ""}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">

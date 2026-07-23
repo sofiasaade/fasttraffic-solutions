@@ -11,13 +11,14 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import DispatchBoard from "./pages/DispatchBoard";
 import OvertimeDashboard from "./pages/OvertimeDashboard";
+import Payroll from "./pages/Payroll";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Scheduler from "./pages/Scheduler";
+import DailyBoard from "./pages/DailyBoard";
 import WorkersCalendar from "./pages/WorkersCalendar";
 import PendingJobs from "./pages/PendingJobs";
-import DayTimeline from "./pages/DayTimeline";
 import ProjectDetail from "./pages/ProjectDetail";
 import TechnicianApp from "./pages/TechnicianApp";
 
@@ -46,7 +47,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/app" component={TechnicianApp} />
-      <Route path="/app/:rest*" component={TechnicianApp} />
+      {/* Match ALL sub-paths (multi-segment, e.g. /app/job/:id). The previous
+          `:rest*` param only matched a single segment. */}
+      <Route path="/app/*" component={TechnicianApp} />
 
       {isCoordinator ? (
         <>
@@ -68,6 +71,11 @@ function Router() {
               <Scheduler />
             </CoordinatorShell>
           </Route>
+          <Route path="/daily">
+            <CoordinatorShell>
+              <DailyBoard />
+            </CoordinatorShell>
+          </Route>
           <Route path="/projects/:id">
             <CoordinatorShell>
               <ProjectDetail />
@@ -83,9 +91,6 @@ function Router() {
               <PendingJobs />
             </CoordinatorShell>
           </Route>
-          <Route path="/day">
-            <DayTimeline />
-          </Route>
           <Route path="/map">
             <CoordinatorShell>
               <PermitMap />
@@ -94,6 +99,11 @@ function Router() {
           <Route path="/overtime">
             <CoordinatorShell>
               <OvertimeDashboard />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/payroll">
+            <CoordinatorShell>
+              <Payroll />
             </CoordinatorShell>
           </Route>
           <Route path="/alerts">

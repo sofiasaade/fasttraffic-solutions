@@ -58,6 +58,7 @@ export function classifyJobForDay(
   endDate: string | null | undefined,
   day: string,
   setupDuration?: string | null,
+  subStatus?: string | null,
 ): DayBucket {
   const start = dayKey(startDate);
   const end = dayKey(endDate) || start;
@@ -70,12 +71,55 @@ export function classifyJobForDay(
   if (start === day) result.startingToday = true;
   if (end === day) result.pickup = true;
   // Ongoing only for recurring every-day setups, strictly between start/end.
+  // A job counts as recurring if EITHER its Setup Duration says so OR its
+  // Field-Operations sub-status is "Daily Setup (Field)" — some daily jobs
+  // carry a generic duration like "Daytime Work…".
   if (
     start < day &&
     day < end &&
-    isRecurringDailySetup(setupDuration)
+    (isRecurringDailySetup(setupDuration) || isDailySetupSubStatus(subStatus))
   ) {
     result.ongoing = true;
   }
   return result;
+}
+
+/**
+ * Whether the Airtable "Sub-Status Field Operations" marks the job as a daily
+ * setup (e.g. "Daily Setup (Field)").
+ */
+export function isDailySetupSubStatus(
+  subStatus: string | null | undefined,
+): boolean {
+  return /daily\s+set\s*up/i.test(subStatus ?? "");
+}
+
+/**
+ * Extract the start hour (0-23) from an Airtable "Setup Duration" string like
+ * "Daytime Work (7:00 AM - 5:00 PM)" or "Daily Set Up (9:00 AM - 3:00) …".
+ * Returns null when no time is present (e.g. "24 Hours Set Up").
+ */
+export function startHourFromSetupDuration(
+  setupDuration: string | null | undefined,
+): number | null {
+  const s = setupDuration ?? "";
+  const m = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const ampm = (m[3] || "").toUpperCase();
+  if (ampm === "PM" && h !== 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  return h;
+}
+
+/** Time bucket for the technician-first board: before 9 / at 9 / after 9. */
+export type TimeBucket = "before9" | "at9" | "after9" | "notime";
+export function timeBucketFromSetupDuration(
+  setupDuration: string | null | undefined,
+): TimeBucket {
+  const h = startHourFromSetupDuration(setupDuration);
+  if (h === null) return "notime";
+  if (h < 9) return "before9";
+  if (h === 9) return "at9";
+  return "after9";
 }

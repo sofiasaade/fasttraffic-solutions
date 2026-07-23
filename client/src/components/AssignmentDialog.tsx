@@ -50,6 +50,8 @@ export default function AssignmentDialog({
   });
   const [phase, setPhase] = useState<Phase>("Preparation");
   const [selected, setSelected] = useState<string[]>([]);
+  const [techNote, setTechNote] = useState("");
+  const setNote = trpc.coordinator.setAssignmentNote.useMutation();
   const [pendingConflicts, setPendingConflicts] = useState<Conflict[] | null>(
     null,
   );
@@ -96,6 +98,16 @@ export default function AssignmentDialog({
       technicians: selected,
       force,
     });
+    // Optional note to the technician(s) — shows on their app job card.
+    if (techNote.trim()) {
+      for (const name of selected) {
+        setNote.mutate({
+          jobId: job.id,
+          technicianName: name,
+          note: techNote.trim(),
+        });
+      }
+    }
   };
 
   return (
@@ -198,6 +210,16 @@ export default function AssignmentDialog({
               </Button>
             </div>
           </div>
+        )}
+
+        {!pendingConflicts && (
+          <textarea
+            value={techNote}
+            onChange={(e) => setTechNote(e.target.value)}
+            placeholder="Note for the technician (optional) — shows in their app…"
+            rows={2}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
         )}
 
         {!pendingConflicts && (

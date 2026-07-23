@@ -1,7 +1,12 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { MapView } from "@/components/Map";
+import OsmDayMap from "@/components/OsmDayMap";
 import { Loader2, AlertTriangle, MapPinned } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+// When the Manus Google-Maps proxy is not configured (e.g. running locally),
+// fall back to a free OpenStreetMap renderer with identical pins/popups.
+const USE_OSM_FALLBACK = !import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
 
 /**
  * A compact map for the Dashboard Day view. Plots that day's jobs
@@ -302,12 +307,16 @@ export default function DayViewMap({
           </div>
         ) : (
           <>
-            <MapView
-              className={cn("w-full h-full")}
-              initialCenter={DEFAULT_CENTER}
-              initialZoom={10}
-              onMapReady={onMapReady}
-            />
+            {USE_OSM_FALLBACK ? (
+              <OsmDayMap markers={filteredMarkers} onUnlocated={setUnlocated} />
+            ) : (
+              <MapView
+                className={cn("w-full h-full")}
+                initialCenter={DEFAULT_CENTER}
+                initialZoom={10}
+                onMapReady={onMapReady}
+              />
+            )}
             {visibleTotal === 0 && (
               <div className="absolute inset-0 flex items-center justify-center bg-background/70 text-sm text-muted-foreground pointer-events-none">
                 No jobs match the selected filters.

@@ -1,0 +1,1533 @@
+{
+ "records": [
+  {
+   "id": "rec0EOfnfP6BcyJAl",
+   "createdTime": "2026-06-11T14:13:15.000Z",
+   "fields": {
+    "Lon": -114.1475734,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0786702,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "403 370-0036",
+    "Request ID": "218052",
+    "Calendar info": "CPVI (CARDINAL POINT VENTURES INC.) 4141 KOVITZ AVE NW, Calgary",
+    "Start Date": "2026-06-29T07:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "403 3700036",
+    "Signs Count": "BARRICADE. 4\nCA- CONSTRUCTION AHEAD 2\nCONES 9\nWM 4\nYIELD 1\nCE- CONSTRUCTION ENDS 1",
+    "Job Address": "4141 KOVITZ AVE NW, Calgary",
+    "Company": "CPVI (CARDINAL POINT VENTURES INC.)",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Andrew Anderson",
+    "End Date": "2026-06-29T11:00:00.000Z",
+    "Closure Type": [
+     "Back lane closure"
+    ]
+   }
+  },
+  {
+   "id": "rec14QXdykEWb29eq",
+   "createdTime": "2026-06-04T15:17:17.000Z",
+   "fields": {
+    "Lon": -114.1320637,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.05624570000001,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4038620276",
+    "Request ID": "217376",
+    "Calendar info": "🅿️ Kobi Construction Ltd 3120 Parkdale Blvd NW, Calgary",
+    "Start Date": "2026-06-14T06:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "4038159596",
+    "Signs Count": "SIGNS\t22\nWM\t22\nBARRICADES (Plain)\t3\nBARRICADES + ROAD CLOSURE\t4\nPedestrian Detour Right\t1\nPedestrian Detour Left\t1\nSC-Sidewalk Closed\t2\nParking Prohibited\t10\nCA - Construction Ahead\t6\nCE - Construction Ends\t4\nDA - DETOUR AHEAD\t2\nDL - DETOUR LEFT\t2\nDR - DETOUR RIGHT\t1\nLTO - Local Traffic Only\t1\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t1\nNTT - Through Traffic Prohibited\t1\nNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t2\nRCA - Road Closed AHEAD\t1  ",
+    "Job Address": "3120 Parkdale Blvd NW, Calgary",
+    "Company": "Kobi Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Emma Franzmann",
+    "End Date": "2026-06-18T18:00:00.000Z",
+    "Closure Type": [
+     "Road closure",
+     "Back lane closure"
+    ]
+   }
+  },
+  {
+   "id": "rec1WaFWEJUsBnZBP",
+   "createdTime": "2026-06-23T22:50:13.000Z",
+   "fields": {
+    "Lon": -114.0529414,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.86275209999999,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 970-4238",
+    "Request ID": "Sent the plan to the client.",
+    "Calendar info": "Bowmark Group (Rental) 50 Creekstone Hill SW, Calgary\n",
+    "Start Date": "2026-06-29T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 970-4238",
+    "Project Title / Email Reference": "Creekrise Phase 1 - TAS Setup Request\n210 Ave SW, Calgary",
+    "Job Address": "50 Creekstone Hill SW, Calgary\n",
+    "Company": "Bowmark Group (Rental)",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Luis Vega",
+    "End Date": "2026-06-30T19:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "rec1cQD4zS0ZJJZJA",
+   "createdTime": "2026-06-15T15:14:38.000Z",
+   "fields": {
+    "Lon": -114.0770561,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0489194,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 710-7003",
+    "Request ID": "218507",
+    "Calendar info": "🅿️ Alberta Infrastructure 700 5 Ave SW, Calgary \n",
+    "Start Date": "2026-07-05T08:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "(403) 710-7003",
+    "Signs Count": "PARKING PROHIBITED 13",
+    "Project Title / Email Reference": "Fwd: Acceptance of Bid – Left Lane Closure (5 Ave SW) – 2026 Premier’s Stampede Breakfast\n5th Ave SW, Calgary",
+    "Job Address": "700 5 Ave SW, Calgary \n",
+    "Company": "Alberta Infrastructure",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Benedict Serrona",
+    "End Date": "2026-07-06T19:00:00.000Z",
+    "Closure Type": [
+     "Single left lane closure"
+    ]
+   }
+  },
+  {
+   "id": "rec3605nlfTEzLYYy",
+   "createdTime": "2026-05-21T16:34:42.000Z",
+   "fields": {
+    "Lon": -114.10211,
+    "Sub-Status Field Operations": "Setup Prepared (Field) ",
+    "Municipality": "City of Calgary",
+    "Lat": 51.07158,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "(403) 369-2067",
+    "Request ID": "Sent the plan to the client",
+    "Calendar info": "North Star Contracting Inc 1770 21 Ave NW, Calgary",
+    "Start Date": "2026-06-29T06:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 369-2067",
+    "Signs Count": "PHASE 1A\n\nBARRICADES (Plain) 9\nBARRICADES + ROAD CLOSURE 9\nCA - CONSTRUCTION AHEAD 11\nCE - CONSTRUCTION END 11\nDL - DETOUR LEFT 4\nDR - DETOUR RIGHT 6\nLTO - LOCAL TRAFFIC ONLY 3\nNR - TURN RIGHT PROHIBITED 3\nNL - TURN LEFT PROHIBITED 2\nNTT - NO THROUGH TRAFFIC 3\nNTT + AL - NO THROUGH TRAFFIC + ARROW LEFT 1\nNTT + AR - NO THROUGH TRAFFIC + ARROW RIGHT 1\nNTT + LTO - NO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPDL - PEDESTRIAN DETOUR LEFT 3\nPDR - PEDESTRIAN DETOUR RIGHT 3\nPP - PARKING PROHIBIDED 46\nRCA - ROAD CLOSED AHEAD 6\nSC - SIDEWALK CLOSED 6\nWM 52\n\nPHASE 1B\n\nB - BARRICADES:B BARRICADE 5\nB - BARRICADES:RC - ROAD CLOSED 7\nCA - CONSTRUCTION AHEAD 10\nCE - CONSTRUCTION END 9\nDA - DETOUR AHEAD 3\nDL - DETOUR LEFT 5\nDR - DETOUR RIGHT 4\nLTO - LOCAL TRAFFIC ONLY 2\nNL - TURN LEFT PROHIBITED:NL 2\nNR - TURN RIGHT PROHIBITED 2\nNTT - NO THROUGH TRAFFIC 2\nNTT + AL - NO THROUGH TRAFFIC + ARROW LEFT 1\nNTT + AR - NO THROUGH TRAFFIC + ARROW RIGHT 1\nNTT + LTO - NO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPDL - PEDESTRIAN DETOUR LEFT 1\nPDR - PEDESTRIAN DETOUR RIGHT 1\nPP - PARKING PROHIBIDED 44\nRCA - ROAD CLOSED AHEAD 4\nSC - SIDEWALK CLOSED 2\nWM 46\n\nPHASE 3\n\nB - BARRICADES:B BARRICADE 3\nB - BARRICADES:RC - ROAD CLOSED 6\nCA - CONSTRUCTION AHEAD 9\nCE - CONSTRUCTION END 9\nDA - DETOUR AHEAD 1\nDL - DETOUR LEFT 4\nDR - DETOUR RIGHT 3\nLTO - LOCAL TRAFFIC ONLY 3\nNL - TURN LEFT PROHIBITED:NL 1\nNR - TURN RIGHT\nPROHIBITED:NR 1\nNTT - NO THROUGH TRAFFIC 3\nPP - PARKING PROHIBIDED 34\nRCA - ROAD CLOSED AHEAD 3\nWM 38\n\nPHASE 4\n\nB - BARRICADES:B  BARRICADE 7\nB - BARRICADES:RC - ROAD CLOSED 10\nCA - CONSTRUCTION AHEAD 12\nCE - CONSTRUCTION END 11\nDA - DETOUR AHEAD 3\nDL - DETOUR LEFT 4\nDR - DETOUR RIGHT 4\nLTO - LOCAL TRAFFIC ONLY 3\nNL - TURN LEFT PROHIBITED:NL 2\nNR - TURN RIGHT PROHIBITED 2\nNTT - NO THROUGH TRAFFIC 3\nNTT + LTO - NO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPDL - PEDESTRIAN DETOUR LEFT 1\nPDR - PEDESTRIAN DETOUR RIGHT 1\nPP - PARKING PROHIBIDED 20\nRCA - ROAD CLOSED AHEAD 5\nSC - SIDEWALK CLOSED 2\nWM 50\n\nPHASE 5 \n\nB - BARRICADES:B  BARRICADE 5\nB - BARRICADES:RC - ROAD CLOSED 12\nCA - CONSTRUCTION AHEAD 12\nCE - CONSTRUCTION END 12\nDA - DETOUR AHEAD 3\nDL - DETOUR LEFT 3\nDR - DETOUR RIGHT 4\nLTO - LOCAL TRAFFIC ONLY 3\nNL - TURN LEFT PROHIBITED:NL 3\nNR - TURN RIGHT PROHIBITED 2\nNTT - NO THROUGH TRAFFIC 3\nPDL - PEDESTRIAN DETOUR LEFT 1\nPDR - PEDESTRIAN DETOUR RIGHT 1\nPP - PARKING PROHIBIDED 42\nRCA - ROAD CLOSED AHEAD 4\nSC - SIDEWALK CLOSED 2\nWM 49\n\nPHASE 6A\n\nBARRICADES 4\nBARRICADES + ROAD CLOSED 5\nCONSTRUCTION AHEAD 6\nCONSTRUCTION END 5\nDETOUR AHEAD 1\nDETOUR LEFT 5\nDETOUR RIGHT 5\nLOCAL TRAFFIC ONLY 1\nNO THROUGH TRAFFIC + LOCAL TRAFFIC ONLY 1\nNO THROUGH TRAFFIC 1\nTURN RIGHT PROHIBITED 1\nPEDESTRIAN LEFT 1\nPEDESTRIAN RIGHT 1\nBARRICADES + SIDEWALK CLOSED 2\nPP - PARKING PROHIBIDED 16\nROAD CLOSED AHEAD 3\nWM 29\n\nPHASE 6B\n\nBARRICADES 2\nBARRICADES + ROAD CLOSED 4\nCONSTRUCTION AHEAD 5\nCONSTRUCTION END 5\nDETOUR AHEAD 1\nDETOUR LEFT 6\nDETOUR RIGHT 4\nTURN LEFT PROHIBITED 1\nLOCAL TRAFFIC ONLY 1\nNO THROUGH TRAFFIC 1\nPARKING PROHIBIDED 12\nROAD CLOSED AHEAD 2\nWM 26",
+    "Project Title / Email Reference": "Capitol Hill CDI - Traffic Accomodation\n17th St NW, Calgary (Plan a set-up)",
+    "Job Address": "1770 21 Ave NW, Calgary",
+    "Company": "North Star Contracting Inc",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Scott Kearl",
+    "End Date": "2026-09-28T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "rec6Jn2pWRwWRSJbo",
+   "createdTime": "2026-06-08T17:36:53.000Z",
+   "fields": {
+    "Lon": -114.044789,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0049287,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "(587) 703-2233",
+    "Request ID": "218677 Phase 2\n218675 Phase 1",
+    "Calendar info": "Bowmark Group 5614 BURBANK RD SE, Calgary",
+    "Start Date": "2026-06-23T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(587) 703-2233",
+    "Signs Count": "PHASE 1A\n\nBA - BARRICADE + ARROW 11\nCA - CONSTRUCTION AHEAD 5\nCE - CONSTRUCTION END 5\nCONES 90\nJSL - JOG SING LEFT 1\nNTRS - NARROW TO THE RIGHT SINGLE LANE 1\nTWT - TWO WAY TRAFFIC 8\nWM 12\n\nPHASE 1B\n\nBA - BARRICADE + ARROW 11\nCA - CONSTRUCTION AHEAD 5\nCE - CONSTRUCTION END 5\nCONES 110\nJSL - JOG SING LEFT 2\nNTRS - NARROW TO THE RIGHT SINGLE LANE 1\nPP - PARKING PROHIBIDED 1\nTWT - TWO WAY TRAFFIC 9\nWM 15\n\nPHASE 2A\n\nBA - BARRICADE + ARROW 9\nCA - CONSTRUCTION AHEAD 5\nCE - CONSTRUCTION END 5\nCONES 130\nJSR - JOG SIGN RIGHT 1\nNTLS - NARROW TO THE LEFT SINGLE LANE 1\nNTRS - NARROW TO THE\nRIGHT SINGLE LANE 2\nPP - PARKING PROHIBIDED 1\nTWT - TWO WAY TRAFFIC 14\nWM 14\n\nPHASE 2B\n\nBA - BARRICADE + ARROW 10\nCA - CONSTRUCTION AHEAD 6\nCE - CONSTRUCTION END 6\nCONES 140\nJSR - JOG SIGN RIGHT 1\nNTL - NARROW TO THE LEFT 1\nNTRS - NARROW TO THE\nRIGHT SINGLE LANE 1\nTWT - TWO WAY TRAFFIC 16\nWM 17",
+    "Project Title / Email Reference": "Burbank RD SE Lane Closures\nLoc 567",
+    "Job Address": "5614 BURBANK RD SE, Calgary",
+    "Company": "Bowmark Group",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Jaffar Kadry",
+    "End Date": "2026-07-23T15:00:00.000Z",
+    "Closure Type": [
+     "Single left lane closure",
+     "Single right lane closure",
+     "Speed reduction with left lane closure",
+     "Speed reduction with right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "rec801Cu04iYLIb2a",
+   "createdTime": "2026-06-12T22:28:20.000Z",
+   "fields": {
+    "Lon": -113.9722857,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.1494261,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "(403) 606-2926",
+    "Calendar info": "📌 North Star Contracting Inc 10690 42 St NE, Calgary",
+    "Start Date": "2026-06-22T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 606-2926",
+    "Signs Count": "PHASE 1\n\nCONSTRUCTION AHEAD 2\nCONSTRUCTION END 2\nTURN LEFT PROHIBITED 1\nTURN RIGHT PROHIBITED 1\nBARRICADE +ROAD CLOSED 2\nBARRICADE + ARROW LEFT 3\nNARROW TO THE LEFT SINGLE 1\nCONES 14\nWM 7 \n\nPHASE 2\n\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 3\nTURN LEFT PROHIBITED 1\nTURN RIGHT PROHIBITED 1\nBARRICADE +ROAD CLOSED 2\nBARRICADE + ARROW LEFT 3\nNARROW TO THE LEFT SINGLE 1\nPEDESTRIAN DETOUR LEFT 1\nPEDESTRIAN DETOUR RIGHT 1\nBARRICADE + SIDEWALK CLOSED 2\nCONES 15\nWM 9 ",
+    "Project Title / Email Reference": "Request for Traffic Set Up: 10690 42 St NE",
+    "Job Address": "10690 42 St NE, Calgary",
+    "Company": "North Star Contracting Inc",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Cooper Skiba",
+    "End Date": "2026-07-11T19:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recA3EfTp82hQ28oz",
+   "createdTime": "2026-05-04T19:23:33.000Z",
+   "fields": {
+    "Lon": -114.1612584,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.1364853,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "(403) 312-7136",
+    "Calendar info": "📌 📺 Fillmore Construction 5251 Country Hills Boulevard NW, Calgary (VMB Rental)",
+    "Start Date": "2026-05-11T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 312-7136",
+    "Signs Count": "VMB",
+    "Project Title / Email Reference": "SDM #6972 Country Hills/Fillmore Construction\n(Set-Up Only)",
+    "Job Address": "5251 Country Hills Boulevard NW, Calgary (VMB Rental)",
+    "Company": "Fillmore Construction",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Josh Toutt",
+    "End Date": "2026-06-30T18:29:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recA6mgh12VxnWPWZ",
+   "createdTime": "2026-03-09T14:35:45.000Z",
+   "fields": {
+    "Lon": -113.9778789,
+    "Sub-Status Field Operations": "Picked up",
+    "Municipality": "City of Calgary",
+    "Lat": 51.2092368,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "780-907-0001",
+    "Calendar info": "📌 Peak Contracting Services 292221 Wagon Wheel Blvd, Balzac, AB T4A 3N5, Calgary  (Set-Up Only - )",
+    "Start Date": "2026-04-20T07:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "780-907-0001",
+    "Signs Count": "2 message boards\n\nCA - Construction Ahead\t4\nCE - Construction Ends\t4\nDA - DETOUR AHEAD\t3\nDL - DETOUR LEFT\t2\nDR - DETOUR RIGHT\t6\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t1\n\nSIGNS\t21\nWM\t21\nBARRICADES + ROAD CLOSURE\t6\nBARRICADES + Entry Prohibited\t6\n",
+    "Project Title / Email Reference": "Set-Up Only",
+    "Job Address": "292221 Wagon Wheel Blvd, Balzac, AB T4A 3N5, Calgary  (Set-Up Only - )",
+    "Company": "Peak Contracting Services",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Jason Herrera",
+    "End Date": "2026-04-27T17:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recAWnUentgf08FnK",
+   "createdTime": "2026-06-18T17:43:31.000Z",
+   "fields": {
+    "Lon": -114.0628139,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.910436,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(778) 907-1464",
+    "Request ID": "219192",
+    "Calendar info": "Fiber Communications 271 MIDPARK BLVD SE, Calgary",
+    "Start Date": "2026-07-06T09:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "(778) 907-1464",
+    "Signs Count": "BARRICADES + ARROW LEFT 3\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 5\nCONES 13\nNARROW TO THE LEFT 2\nMANDATORY AHEAD AND LEFT 1\nWM 11",
+    "Project Title / Email Reference": "TMP & PERMIT:271 MIDPARK BLVD SE",
+    "Job Address": "271 MIDPARK BLVD SE, Calgary",
+    "Company": "Fiber Communications",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Navjot Gill",
+    "End Date": "2026-07-10T15:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recCOLN7NYIjLrs61",
+   "createdTime": "2026-06-08T18:45:34.000Z",
+   "fields": {
+    "Lon": -114.1408243,
+    "Sub-Status Field Operations": "Setup Prepared (Field) ",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0348737,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 371-6827",
+    "Request ID": "218983 July 01 - July 04\n217968 - June 17 - June 20\n",
+    "Calendar info": "🅿️ Birchcliff Development Ltd 2040 37 St SW, Calgary",
+    "Start Date": "2026-07-02T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 371-6827",
+    "Signs Count": "CA - Construction Ahead\t6\nCE - Construction Ends\t5\nDA - DETOUR AHEAD\t2\nDL - DETOUR LEFT\t1\nDR - DETOUR RIGHT\t2\nNL - Left Turn Prohibited\t3\nNR - Right Turn Prohibited\t1\nNTL - NARROW TO THE LEFT (1 LINE)\t1\nNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t1\nRCA - Road Closed AHEAD\t1\n\nSIGNS\t23\nWM\t23\nBARRICADES (Plain)\t1\nBARRICADES + ROAD CLOSURE\t3\nBARRICADES + ARROW\t4\nCANDLES\t5\nCONES\t30\nPedestrian Detour Right\t1\nPedestrian Detour Left\t3\nSC-Sidewalk Closed\t4\nParking Prohibited\t29",
+    "Project Title / Email Reference": "Killarney",
+    "Job Address": "2040 37 St SW, Calgary",
+    "Company": "Birchcliff Development Ltd",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Brian Duxbury",
+    "End Date": "2026-07-04T15:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recDtHWbXQ1xNgHWJ",
+   "createdTime": "2026-06-19T18:07:03.000Z",
+   "fields": {
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4039999201",
+    "Request ID": "219189",
+    "Calendar info": "McIntyre Crane & Rigging Ltd 80 Patterson Crescent SW, Calgary, AB T3H 2B9",
+    "Start Date": "2026-07-16T07:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "4039999201",
+    "Signs Count": "B - BARRICADES:B - BARRICADE - 5\nB - BARRICADES:RC - ROAD CLOSED - 5\nCA - CONSTRUCTION AHEAD - 6\nCE - CONSTRUCTION END - 4\nDETOURS:DL - DETOUR LEFT - 1\nDETOURS:DR - DETOUR RIGHT  -1\nNO THROUGH TRAFFIC - 2\n LOCAL TRAFFIC ONLY  - 2\nPARKING PROHIBIDED:BOTH SIDES - 1\nPEDESTRIAN LEFT - 2\nSIDEWALK CLOSED - 2\nROAD CLOSURE AHEAD - 1\nTURN RIGHT PROHIBITED - 1\nWM - 18",
+    "Job Address": "80 Patterson Crescent SW, Calgary, AB T3H 2B9",
+    "Company": "McIntyre Crane & Rigging Ltd",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Nate Tobin",
+    "End Date": "2026-07-16T17:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recGEDOGANPRJQxoH",
+   "createdTime": "2026-06-02T19:31:29.000Z",
+   "fields": {
+    "Lon": -114.0636965,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0671659,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 781-5387",
+    "Request ID": "217240",
+    "Calendar info": "Ledcor 120 16 Ave NW, Calgary",
+    "Start Date": "2026-06-15T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 781-5387",
+    "Signs Count": "B - BARRICADES:B BARRICADE 7\nB - BARRICADES:RC - ROAD CLOSED 7\nCA - CONSTRUCTION AHEAD 3\nCE - CONSTRUCTION END 2\nNL - TURN LEFT PROHIBITED:NL 3\nNR - TURN RIGHT PROHIBITED 1\nNTT + LTO - NO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPDL - PEDESTRIAN DETOUR LEFT 1\nPDR - PEDESTRIAN DETOUR RIGHT 1\nPP - PARKING PROHIBIDED 8\nSC - SIDEWALK CLOSED 2\nWM 10",
+    "Project Title / Email Reference": "LTS Request for Lane Closure, TMP, SU, NP, Sidewalk Closure - NGMR-112695\nAlley between 17 AVE NW and 16 AVE NW, Calgary",
+    "Job Address": "120 16 Ave NW, Calgary",
+    "Company": "Ledcor",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Cecilia Chan",
+    "End Date": "2026-06-27T19:00:00.000Z",
+    "Closure Type": [
+     "Back lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recMjZvHlsawkd4OZ",
+   "createdTime": "2026-06-08T19:12:24.000Z",
+   "fields": {
+    "Lon": -114.0953111,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0384362,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "(403) 404-8587",
+    "Calendar info": "🅿️ Lear Construction 1517 16th Ave SW, Calgary",
+    "Start Date": "2026-06-10T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 404-8587",
+    "Signs Count": "CONSTRUCTION AHEAD 3\nCONSTRUCTION END 3\nROAD CLOSED AHEAD 1\nNO THROUGH TRAFFIC + ARROW LEFT 1\nNO THROUGH TRAFFIC + ARROW RIGHT 1\nNO THROUGH TRAFFIC 2\nLOCAL TRAFFIC ONLY 2\nBARRICADES + ROAD CLOSED 4\nBARRICADES 3\nDETOUR LEFT 1\nDETOUR RIGHT 1\nDETOUR AHEAD 1\nPARKING PROHIBITED 20\nWM 16\n\n",
+    "Job Address": "1517 16th Ave SW, Calgary",
+    "Company": "Lear Construction",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Logan Schuster",
+    "End Date": "2026-06-22T19:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recNADk8kMv8B51H6",
+   "createdTime": "2026-06-08T15:02:01.000Z",
+   "fields": {
+    "Lon": -114.0822646,
+    "Sub-Status Field Operations": "Setup Prepared - Signs Missing (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0353581,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 807-9157",
+    "Request ID": "Sent the updated plan to the client",
+    "Calendar info": "ALSA Road Construction Ltd. 902 Royal Ave SW, Calgary\n",
+    "Start Date": "2026-06-29T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 807-9157",
+    "Signs Count": "BA - BARRICADES + ARROW 8\nB - BARRICADES:B  BARRICADE 5\nB - BARRICADES:RC - ROAD CLOSED 5\nCA - CONSTRUCTION AHEAD 6\nCE - CONSTRUCTION END 5\nCONES 61\nDA - DETOUR AHEAD 2\nDL - DETOUR LEFT 1\nDR - DETOUR RIGHT 5\nNL - TURN LEFT PROHIBITED:NL 1\nNR - TURN RIGHT PROHIBITED 1\nNTLS - NARROW TO THE LEFT SINGLE LANE 2\nPDL - PEDESTRIAN DETOUR LEFT 2\nPDR - PEDESTRIAN DETOUR RIGHT 2\nPP - PARKING PROHIBIDED 17\nRCA - ROAD CLOSED AHEAD 1\nRNT - ROAD NARROWS TEMPORARY 1\nSC - SIDEWALK CLOSED 4\nMRL - MANDATORY RIGHT AND LEFT 1\nWM 26",
+    "Project Title / Email Reference": "8 St & Royal av SW\n",
+    "Job Address": "902 Royal Ave SW, Calgary\n",
+    "Company": "ALSA Road Construction Ltd.",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Hatem Kamis",
+    "End Date": "2026-07-04T15:00:00.000Z"
+   }
+  },
+  {
+   "id": "recNfD8KmLZkEaWh7",
+   "createdTime": "2026-03-30T20:18:33.000Z",
+   "fields": {
+    "Lon": -114.0726092,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.02375929999999,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "(825) 779-1492",
+    "Request ID": "Sent the plan to the client.",
+    "Calendar info": "👷 📺 🅿️ North Star Contracting Inc 339 Rideau Pl NW, Calgary",
+    "Start Date": "2026-05-23T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(825) 779-1492",
+    "Signs Count": "Phase 1\nREF\tITEM\tCOUNT\nBPTS - Be Prepared to Stop\t3\nCA - Construction Ahead\t8\nCE - Construction Ends\t7\nDA - DETOUR AHEAD\t3\nLTO - Local Traffic Only\t5\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t2\nNTT - Through Traffic Prohibited\t5\nNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t2\nRCA - Road Closed AHEAD\t4\nTCPA - Traffic Control Person Ahead\t3\nSIGNS\t43\nWM\t43\n\t\nBARRICADES + ROAD CLOSURE\t11\nBARRICADES + ARROW\t1\nBARRICADES + Entry Prohibited\t4\nCANDLES\t5\nVMB-Message Board\t2\nFLAGGER \t3\nCONES\t20\nParking Prohibited\t86\n\nREF\tITEM\tCOUNT\n\tBARRICADES (Plain)\t10\n\tBARRICADES + ROAD CLOSURE\t12\n\tBARRICADES + ARROW\t1\n\tBARRICADES + Entry Prohibited\t5\n\tCONES\t20\n\tParking Prohibited\t62\n\n\n\nPhase 2\nREF\tITEM\tCOUNT\n\tCA - Construction Ahead\t4\n\tCE - Construction Ends\t4\n\tNE - Entry Prohibited\t2\n\tNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t1\n\tTCPA - Traffic Control Person Ahead\t4\n\tBPTS - Be Prepared to Stop\t4\n\tSIGNS\t19\n\tWM\t19\n\n\nREF\tITEM\tCOUNT\n\tBARRICADES (Plain)\t1\n\tBARRICADES + ROAD CLOSURE\t1\n\tBARRICADES + ARROW\t\n\tBARRICADES + Entry Prohibited\t2\n\tCONES\t45\n\tParking Prohibited\t20\n\nPhase 3\nREF\tITEM\tCOUNT\n\tCA - Construction Ahead\t4\n\tCE - Construction Ends\t4\n\tTCPA - Traffic Control Person Ahead\t4\n\tBPTS - Be Prepared to Stop\t4\n\tSIGNS\t16\n\tWM\t16\n\nREF\tITEM\tCOUNT\n\tBARRICADES + ARROW\t2\n\tCONES\t20\n\tParking Prohibited\t4\n\nPhase 4\nREF\tITEM\tCOUNT\n\tCA - Construction Ahead\t3\n\tCE - Construction Ends\t3\n\tLTO - Local Traffic Only\t1\n\tNL - Left Turn Prohibited\t1\n\tNTT - Through Traffic Prohibited\t1\n\tNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t1\n\tSIGNS\t10\n\tWM\t10\n\nREF\tITEM\tCOUNT\n\tBARRICADES (Plain)\t14\n\tBARRICADES + ROAD CLOSURE\t4\n\tBARRICADES + Entry Prohibited\t2\n\tParking Prohibited\t40\n",
+    "Project Title / Email Reference": "Traffic Plan Rideau Ph 2(Plan and Set-up)",
+    "Job Address": "339 Rideau Pl NW, Calgary",
+    "Company": "North Star Contracting Inc",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Dyllon Panych",
+    "End Date": "2026-06-30T15:00:00.000Z",
+    "Closure Type": [
+     "Road closure",
+     "Yield to oncoming traffic",
+     "Two-way flagging operation"
+    ]
+   }
+  },
+  {
+   "id": "recNkccs9XXvSGbD3",
+   "createdTime": "2026-06-23T21:45:35.000Z",
+   "fields": {
+    "Lon": -114.0928437,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.9871209,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4038620276",
+    "Request ID": "219185",
+    "Calendar info": "Kobi Construction Ltd 1408 75 Ave SW, Calgary",
+    "Start Date": "2026-07-02T06:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "4038159596",
+    "Signs Count": "BARRICADES 2\nBARRICADES+ROAD\nCLOSED 2\nNO THROUGH TRAFFIC +\nLOCAL TRAFFIC 2\nCONSTRUCTION AHEAD 2\nWM 4",
+    "Job Address": "1408 75 Ave SW, Calgary",
+    "Company": "Kobi Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Emma Franzmann",
+    "End Date": "2026-07-05T18:00:00.000Z",
+    "Closure Type": [
+     "Back lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recOHVs9m8ru39XXU",
+   "createdTime": "2026-06-18T18:03:09.000Z",
+   "fields": {
+    "Lon": -114.1377463,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0868194,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4038620276",
+    "Request ID": "218795",
+    "Calendar info": "🟢 Kobi Construction Ltd 3636 Research Rd NW, Calgary",
+    "Start Date": "2026-06-28T06:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "4038159596",
+    "Signs Count": "B - BARRICADES:B  BARRICADE 6\nB - BARRICADES:RC - ROAD CLOSED 8\nCA - CONSTRUCTION AHEAD 6\nCE - CONSTRUCTION END 6\nDL - DETOUR LEFT 1\nDR - DETOUR RIGHT 2\nLTO - LOCAL TRAFFIC ONLY 2\nNL - TURN LEFT PROHIBITED:NL 2\nNTT - NO THROUGH TRAFFIC 2\nPDL - PEDESTRIAN DETOUR LEFT 1\nPP - PARKING PROHIBIDED 16\nRCA - ROAD CLOSED AHEAD 2\nSC - SIDEWALK CLOSED 2\nCUSTOM SIGN 1\nWM 23",
+    "Job Address": "3636 Research Rd NW, Calgary",
+    "Company": "Kobi Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Emma Franzmann",
+    "End Date": "2026-07-02T18:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recPPWd5Fw7Owwp6G",
+   "createdTime": "2026-06-17T20:16:03.000Z",
+   "fields": {
+    "Lon": -114.0712294,
+    "Sub-Status Field Operations": "Setup Prepared (Field) ",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0337597,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 604-9190",
+    "Request ID": "218818",
+    "Calendar info": "FWD Construction Ltd 2116 4th St SW, Calgary",
+    "Start Date": "2026-06-29T07:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "(403) 604-9190",
+    "Signs Count": "BA - BARRICADES + ARROW 2\nB - BARRICADES:B  BARRICADE 3\nB - BARRICADES:RC - ROAD CLOSED 2\nCA - CONSTRUCTION AHEAD 3\nCE - CONSTRUCTION END 2\nNL - TURN LEFT PROHIBITED:NL 1\nNR - TURN RIGHT PROHIBITED 1\nNTT + LTO - NO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPDL - PEDESTRIAN DETOUR LEFT 1\nPDR - PEDESTRIAN DETOUR RIGHT 1\nPP - PARKING PROHIBIDED 4\nSC - SIDEWALK CLOSED 2\nWM 8\n\nCONES 10",
+    "Project Title / Email Reference": "Aberdeen - traffic plan\n(extra parking) ",
+    "Job Address": "2116 4th St SW, Calgary",
+    "Company": "FWD Construction Ltd",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Robert Williams",
+    "End Date": "2026-08-03T17:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recREDyMvAcwqcA9M",
+   "createdTime": "2026-03-17T20:59:00.000Z",
+   "fields": {
+    "Lon": -113.9783893,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "Town of Okotoks",
+    "Lat": 50.7066502,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 561-8904",
+    "Request ID": "Sent the updated plan to the client",
+    "Calendar info": "🚨 📺 🅿️ Cannex Contracting 2000 Inc 200 Southridge Dr, Okotoks, AB T1S 0B2, Canadá\nWestmount Rd, Okotoks ",
+    "Start Date": "2026-06-22T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 561-8904",
+    "Signs Count": "PHASE 1 \n\nCA - Construction Ahead\t12\nCE - Construction Ends\t9\nDA - DETOUR AHEAD\t3\nDL - DETOUR LEFT\t6\nDR - DETOUR RIGHT\t3\nJL - JOG SIGN LEFT\t1\nKL - Keep Left\t1\nLO - Mandatory Left Lane Turn\t2\nLTO - Local Traffic Only\t1\nNL - Left Turn Prohibited\t1\nNTLS - NARROWS TO THE LEFT (0 LINES)\t1\nNTOR - Turn on Red Prohibited\t1\nNTT - Through Traffic Prohibited\t1\nNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t1\nRCA - Road Closed AHEAD\t3\nSLO - Mandatory STRAIGHT, Left or Right Lane Turn\t1\nSRO - Mandatory STRAIGHT OR Right Lane Turn\t1\nTWT - Two-Way Traffic\t3\nBARRICADES (Plain)\t10\nBARRICADES + ROAD CLOSURE\t11\nBARRICADES + ARROW\t3\nVMB-Message Board\t3\nSIGNS\t51\nWM\t51\nCONES\t50\n\nPHASE 2 \n\nCA - Construction Ahead\t8\nCE - Construction Ends\t8\nDA - DETOUR AHEAD\t2\nDL - DETOUR LEFT\t2\nDR - DETOUR RIGHT\t2\nJL - JOG SIGN LEFT\t1\nJR - JOG SIGN RIGHT\t1\nKR - Keep Right\t2\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t1\nNTLR - NARROW TO THE RIGHT (0 LINES)\t1\nRCA - Road Closed AHEAD\t2\nSLO - Mandatory STRAIGHT, Left or Right Lane Turn\t2\n Mandatory LEFT OR Right Lane Turn\t1\nTWT - Two-Way Traffic\t3\nBARRICADES (Plain)\t10\nBARRICADES + ROAD CLOSURE\t4\nBARRICADES + ARROW\t2\nVMB-Message Board\t1\nCONES\t35\n\nPHASE 3\n\nSIGNS\t28\nWM\t28\nBARRICADES (Plain)\t2\nBARRICADES + ROAD CLOSURE\t4\nVMB-Message Board\t2\nParking Prohibited\t6\nCA - Construction Ahead\t5\nCE - Construction Ends\t3\nDA - DETOUR AHEAD\t3\nDL - DETOUR LEFT\t5\nDR - DETOUR RIGHT\t5\nLTO - Local Traffic Only\t1\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t1\nNTT - Through Traffic Prohibited\t1\nNTT+AL - NO THROUGH TRAFFIC + ARROW LEFT\t1\nNTT+AR - NO THROUGH TRAFFIC + ARROW RIGHT\t1\nRCA - Road Closed AHEAD\t1",
+    "Project Title / Email Reference": "Westmount Okotoks",
+    "Job Address": "200 Southridge Dr, Okotoks, AB T1S 0B2, Canadá\nWestmount Rd, Okotoks ",
+    "Company": "Cannex Contracting 2000 Inc",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Keith Sand",
+    "End Date": "2026-06-29T19:00:00.000Z",
+    "Notes": "1. A full road closure on Westmount Rd (Plan A) will not be permitted, as this route provides the only access to the commercial businesses located south of the proposed closure.\n\n• SEE PLAN B (Revised Phase 2) which maintains two-way traffic on Westmount Rd to ensure continuous access to commercial businesses.\n\n2. Plan B is preferred; however, it will require revisions. Currently, signage on Southridge Dr. is unclear, with conflicting instructions (e.g., no right turn followed immediately by a straight/right turn indication).\n\n•R// This is not a \"No Right Turn\" sign; the sign represents a NO TURN ON RED. This allows vehicles to proceed straight and to turn right, however, they cannot turn on RED because the dedicated turning lane has been closed for the work zone.\n\n3. Traffic traveling westbound from the east does not appear to have adequate advance warning or directional guidance.\n\n•R// The plan has been updated to include additional advance warning signage for westbound traffic. Variable Message Signs (VMS) have been strategically positioned in advance of the intersection to provide clear directional guidance and adequate reaction time, in accordance with the Temporary Traffic Control Manual standards.\n\n4. Similarly, northbound traffic intending to turn left is not clearly addressed.\n\n•R// The revised plan incorporates specific lane designation signage and clear detour routing for northbound traffic intending to turn left. Additional delineation and traffic control devices have been added to guide these vehicles safely through the modified intersection layout.\n\n5. Variable Message Boards (VMS) may be required to help manage potentially confusing movements, particularly:\n\n•For southbound traffic on Westmount Rd approaching the closure, where access to commercial properties remains available immediately prior to the closure.\n\n•For traffic traveling south on Southridge Dr., turning west onto Westland St, and then south onto Westmount Rd.\n\n•R// VMS boards have been added to the revised plan to address both specific movements. A VMS is now positioned for southbound Westmount Rd traffic to clearly indicate \"LOCAL ACCESS ONLY\" while notifying through-traffic of the closure ahead. An additional VMS has been placed to guide the southbound Southridge Dr. detour route via Westland St.\n\n6. No pedestrian accommodation or detour information has been provided. This must be clearly identified if pedestrian routes are impacted.\n\n•R// The revised plan (Phase 2) explicitly notes \"NO PEDESTRIAN IMPACT\" in the affected areas. Existing pedestrian pathways and crosswalks will remain open and accessible throughout the duration of the utility tie-in work. Should any temporary sidewalk closures become necessary during specific operations, standard pedestrian detour signage (TC-40 series) will be implemented.\n\n7. The south road closure plan should also be reviewed to ensure similar scenarios are addressed.\n\n•R// The south road closure plan has been thoroughly reviewed and updated in parallel with these revisions. Similar advance warning, clear directional signage, and VMS deployments have been incorporated to ensure consistency and address all potential traffic movement conflicts across the entire project scope.",
+    "Closure Type": [
+     "Road closure",
+     "Road diversion two directions"
+    ]
+   }
+  },
+  {
+   "id": "recRSTClEGP9PQWgZ",
+   "createdTime": "2026-05-20T16:34:26.000Z",
+   "fields": {
+    "Lon": -114.06134,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.86519999999999,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(587) 581-5876",
+    "Request ID": "215862",
+    "Calendar info": "🅿️ KLS Earthworks & Environmental 329 Belmont Ave SW, Calgary (weekend)",
+    "Start Date": "2026-07-03T07:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "(587) 581-5876",
+    "Signs Count": "CA - Construction Ahead\t5\nCE - Construction Ends\t5\nDA - DETOUR AHEAD\t3\nDL - DETOUR LEFT\t3\nDR - DETOUR RIGHT\t3\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t2\nRCA - Road Closed AHEAD\t2\nSIGNS\t24\nWM\t24\nBARRICADES (Plain)\t8\nBARRICADES + ROAD CLOSURE\t7\nPedestrian Detour Right\t1\nPedestrian Detour Left\t1\nSC-Sidewalk Closed\t2\nParking Prohibited\t42",
+    "Job Address": "329 Belmont Ave SW, Calgary (weekend)",
+    "Company": "KLS Earthworks & Environmental",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Jordan Goddard",
+    "End Date": "2026-07-05T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recRrNIKpSLxRHD77",
+   "createdTime": "2026-06-04T20:27:09.000Z",
+   "fields": {
+    "Lon": -114.2102692,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0600174,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 606-2926",
+    "Request ID": "Sent the updated plan to the client.",
+    "Calendar info": "North Star Contracting Inc 882 85 St SW, Calgary (Plan and Setup)",
+    "Start Date": "2026-06-22T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 606-2926",
+    "Signs Count": "BARRICADES + ARROW RIGHT 8\nCONSTRUCTION AHEAD 7\nCONSTRUCTION END 8\nCONES 31\nNARROW TO THE RIGHT SINGLE LANE 4\nPARKING PROHIBIDED 40\nWM 19",
+    "Project Title / Email Reference": "Request for Review and Stamp of Traffic Plan: 23-033 9 Ave SW West Springs\n9th Ave SW\n(Plan and Set-Up)",
+    "Job Address": "882 85 St SW, Calgary (Plan and Setup)",
+    "Company": "North Star Contracting Inc",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Emma Skiba",
+    "End Date": "2026-07-06T19:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recSduLzoC2aHaDK7",
+   "createdTime": "2026-06-17T21:03:57.000Z",
+   "fields": {
+    "Lon": -114.1364138,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0506483,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 333-1589",
+    "Request ID": "218764",
+    "Calendar info": "Precision Underground Services 3507 Spruce DR SW, Calgary",
+    "Start Date": "2026-06-26T18:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 333-1589",
+    "Signs Count": "BARRICADES 5\nBARRICADES+ROAD\nCLOSED 5\nDETOUR AHEAD 2\nDETOUR LEFT 4\nDETOUR RIGHT 3\nTURN LEFT PROHIBITED 1\nLOCAL TRAFFIC 1\nNO THROUGH TRAFFIC 1\nPARKING PROHIBIDED\nBOTH SIDES 64\nPEDESTRIAN LEFT 1\nPEDESTRIAN RIGHT 1\nSIDEWALK CLOSED 2\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 4\nROAD CLOSED AHEAD 2\nWM 26\nCICYCLE DETOUR LEFT 2\nBICYCLE LANE CLOSED 2",
+    "Project Title / Email Reference": "Re: Joanne Slack - Precision Underground Services - 3507 Spruce DR SW",
+    "Job Address": "3507 Spruce DR SW, Calgary",
+    "Company": "Precision Underground Services",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Joanne Slack",
+    "End Date": "2026-06-27T22:00:00.000Z",
+    "Closure Type": [
+     "Road closure",
+     "Full Road Closure that includes Bike Facilities"
+    ]
+   }
+  },
+  {
+   "id": "recSnCxGYiPSGp8N9",
+   "createdTime": "2026-01-09T21:10:36.000Z",
+   "fields": {
+    "Lon": -114.12815,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.01533,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "(403) 390-6325",
+    "Request ID": "Set up Only",
+    "Calendar info": "📌 Anthem Properties Group 555 Bishop Dr SW, Calgary (Set-up Only)",
+    "Start Date": "2026-06-24T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 390-6325",
+    "Project Title / Email Reference": "(Setup Only)",
+    "Job Address": "555 Bishop Dr SW, Calgary (Set-up Only)",
+    "Company": "Anthem Properties Group",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Jacob Kitchen",
+    "End Date": "2026-07-31T17:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recT0uwqbWbFPHA8Z",
+   "createdTime": "2026-06-10T21:15:29.000Z",
+   "fields": {
+    "Lon": -114.0703846,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.8628417,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(778) 907-1464",
+    "Request ID": "218682",
+    "Calendar info": "🅿️ Fiber Communications 21106 Sheriff King St SW, Calgary, AB T2X 5C9, Canadá",
+    "Start Date": "2026-06-29T09:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "(778) 907-1464",
+    "Signs Count": "BARRICADES + ARROW LEFT 2\nBARRICADES 3\nCONSTRUCTION AHEAD 5\nCONSTRUCTION END 7\nCONES 15\nDETOUR AHEAD 6\nDETOUR LEFT 3\nMAX 50 2\nMANDATORY AHEAD AND RIGHT 1\nNARROW TO THE LEFT 2\nNO TRUCK RIGHT 1\nTRUCK 8\nPARKING PROHIBITED 20\nWM 36",
+    "Project Title / Email Reference": "TMP & PERMIT:560 BELMONT WAY SW",
+    "Job Address": "21106 Sheriff King St SW, Calgary, AB T2X 5C9, Canadá",
+    "Company": "Fiber Communications",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Navjot Gill",
+    "End Date": "2026-07-03T15:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recTnQHFq3hFmxaXx",
+   "createdTime": "2026-05-12T22:00:06.000Z",
+   "fields": {
+    "Lon": -114.074333,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.00265109999999,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(587) 226-6293",
+    "Request ID": "215277",
+    "Calendar info": "🅿️ Chandos Construction Ltd 510 57 Ave SW #201, Calgary, AB T2V 0H2, Canadá",
+    "Start Date": "2026-05-22T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(587) 226-6293",
+    "Signs Count": "Barricades + arrow left 3\nConstruction ahead 1\nConstruction end 1\nNarrow to the left single lane  1\ncones 30\nParking prohibited 11\nWM 3\n",
+    "Project Title / Email Reference": "57th Ave SW, Calgary\nParking lane closures",
+    "Job Address": "510 57 Ave SW #201, Calgary, AB T2V 0H2, Canadá",
+    "Company": "Chandos Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Kevin McGovern",
+    "End Date": "2026-07-10T19:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recUUXoE7gRkXIYke",
+   "createdTime": "2026-05-29T16:43:45.000Z",
+   "fields": {
+    "Lon": -114.1524166,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0499277,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 807-9157",
+    "Request ID": "Sent the updated plan to the client to request the permit",
+    "Calendar info": "🅿️ ALSA Road Construction Ltd. 112 Windermere Rd SW, Calgary, AB T3C 3K5, Canadá ",
+    "Start Date": "2026-06-20T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 807-9157",
+    "Signs Count": "PHASE 1 \n\nSIGNS\t21\nWM\t21\nBARRICADES + ARROW\t5\nCONES\t35\nPedestrian Detour Right\t2\nPedestrian Detour Left\t2\nSC-Sidewalk Closed\t4\nParking Prohibited\t9\nCA - Construction Ahead\t6\nCE - Construction Ends\t6\nDA - DETOUR AHEAD\t3\nDL - DETOUR LEFT\t2\nDR - DETOUR RIGHT\t1\nNL - Left Turn Prohibited\t1\nNTLS - NARROWS TO THE LEFT (0 LINES)\t2\n\nPHASE 2 \n\nSIGNS\t13\nWM\t13\nBARRICADES + ARROW\t5\nCONES\t30\nPedestrian Detour Right\t2\nPedestrian Detour Left\t2\nSC-Sidewalk Closed\t4\nParking Prohibited\t7\nCA - Construction Ahead\t6\nCE - Construction Ends\t6\nNTLS - NARROWS TO THE LEFT (0 LINES)\t1",
+    "Project Title / Email Reference": "45 st and Windermere Road sw\n(Plan and Set-up)",
+    "Job Address": "112 Windermere Rd SW, Calgary, AB T3C 3K5, Canadá ",
+    "Company": "ALSA Road Construction Ltd.",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Hatem Kamis",
+    "End Date": "2026-07-02T15:00:00.000Z",
+    "Closure Type": [
+     "Single left lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recUWJnq6f9OHjmS5",
+   "createdTime": "2026-03-20T15:23:59.000Z",
+   "fields": {
+    "Lon": -114.2100528,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.1832186,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 703-8779",
+    "Request ID": "210962",
+    "Calendar info": "Kidco Construction Ltd 7331 144 AV NW, Calgary",
+    "Start Date": "2026-03-28T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 703-8779",
+    "Signs Count": "PAGE 1 - FTS-26-2776-A\n\nSIGNS\t12\nWM\t12\nCA - Construction Ahead\t3\nCE - Construction Ends\t3\nM50 - Maximum Speed\t2\nM70 - Maximum Speed\t2\nMA50 - Maximum Speed Ahead\t2\n\nPAGE 2 - FTS-26-2776-B\n\nSIGNS\t16\nWM\t16\nCA - Construction Ahead\t6\nCE - Construction Ends\t6\nM50 - Maximum Speed\t2\nMA50 - Maximum Speed Ahead\t2",
+    "Project Title / Email Reference": "Rockyridge Road",
+    "Job Address": "7331 144 AV NW, Calgary",
+    "Company": "Kidco Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Ben Molotsky",
+    "End Date": "2026-06-27T19:00:00.000Z",
+    "Closure Type": [
+     "Work adjacent to a roadway"
+    ]
+   }
+  },
+  {
+   "id": "recUcqtls9gcdTHux",
+   "createdTime": "2026-06-17T21:42:51.000Z",
+   "fields": {
+    "Lon": -114.0289532,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.9371069,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(647) 995-1807",
+    "Request ID": "218806",
+    "Calendar info": "🅿️ YellowBird Communications 208 QUEEN ALEXANDRA RD SE , Calgary",
+    "Start Date": "2026-06-26T08:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(647) 995-1807",
+    "Signs Count": "B-BARRICADE 6\nB-BARRICADES:RC-ROAD CLOSED 4\nCA-CONSTRUCTION AHEAD 5\nCE-CONSTRUCTION END 5\nDA-DETOUR AHEAD 2\nDL-DETOUR LEFT 2\nDR-DETOUR RIGHT 1\nLTO-LOCAL TRAFFIC ONLY 1\nNTT-NO THROUGH TRAFFIC 1\nNR-TURN RIGHT PROHIBITED 2\nNTT+LTO-NO THROUGH TRAFFIC + LOCAL TRAFFIC 2\nPARKING PROHIBITED  3\nPDL-PEDESTRIAN LEFT 1\nPDR-PEDESTRIAN RIGHT 1\nSC-SIDEWALK CLOSED 2\nNL-TURN LEFT PROHIBIDED 2\nCUSTOM SIGN 1\nWM 23\n",
+    "Project Title / Email Reference": "MH 4B-4:",
+    "Job Address": "208 QUEEN ALEXANDRA RD SE , Calgary",
+    "Company": "YellowBird Communications",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "JAY SAMYANI",
+    "End Date": "2026-06-30T17:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recVwOO2qhWVW1tKC",
+   "createdTime": "2026-06-08T18:43:28.000Z",
+   "fields": {
+    "Lon": -114.0733298,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0676599,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 909-3956",
+    "Request ID": "217807",
+    "Calendar info": "🅿️ Cannex Contracting 2000 Inc 531 17 Ave NW, Calgary",
+    "Start Date": "2026-06-26T06:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 909-3956",
+    "Signs Count": "BARRICADES 2\nBARRICADES + ROAD CLOSED 8 \nPARKING PROHIBITED 10\nPEDESTRIAN DETOUR LEFT 1 \nPEDESTRIIA DETOUR RIGHT 1 \nSIDEWALK CLOSED 2 \nCONSTRUCTION AHEAD 5 \nCONSTRUCTION END 5\nROAD CLOSED AHEAD 2\nLOCAL TRAFFIC ONLY 1 \nNO THROUGHT TRAFFIC 1 \nNO THROUGHT TRAFFIC + LOCAL TRAFFIC ONLY 1\nNO THROUGHT TRAFFIC + ARROW LEFT 1 \nNO THROUGHT TRAFFIC + ARROW RIGHT 1 \nDETOUR AHEAD 6\nDETOUR LEFT 3 \nDETOUR RIGHT 7\nTURN LEFT PROHIBITED 2\nTURN RIGHT PROHIBITED 1",
+    "Project Title / Email Reference": "MP527 - 527 & 531 17 Ave NW",
+    "Job Address": "531 17 Ave NW, Calgary",
+    "Company": "Cannex Contracting 2000 Inc",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Marc Chamberland",
+    "End Date": "2026-06-30T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recXCrFzZesDAZVhw",
+   "createdTime": "2026-06-19T15:41:36.000Z",
+   "fields": {
+    "Lon": -114.0623676,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0230797,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4038620276",
+    "Request ID": "218863 ",
+    "Calendar info": "🅿️ 🟢 Kobi Construction Ltd 47 34 Ave SW, Calgary",
+    "Start Date": "2026-06-28T06:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "4038159596",
+    "Signs Count": "Phase 1 \nCA - Construction Ahead\t3\nCE - Construction Ends\t3\nY - Yield\t2\nYOT - Yield to Oncoming Traffic\t2\n\nBARRICADES + ARROW\t1\nCANDLES\t5\nCONES\t15\nPedestrian Detour Right\t1\nPedestrian Detour Left\t1\nSC-Sidewalk Closed\t2\nSIGNS\t10\nWM\t10\nBARRICADES (Plain)\t1\nParking Prohibited\t14\n\nPHASE 2\n\nCA - Construction Ahead\t3\nCE - Construction Ends\t3\nY - Yield\t1\nYOT - Yield to Oncoming Traffic\t1\n\nSIGNS\t8\nWM\t8\nBARRICADES (Plain)\t2\nParking Prohibited\t14",
+    "Job Address": "47 34 Ave SW, Calgary",
+    "Company": "Kobi Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Emma Franzmann",
+    "End Date": "2026-07-01T18:00:00.000Z",
+    "Closure Type": [
+     "Yield to oncoming traffic"
+    ]
+   }
+  },
+  {
+   "id": "recYkgno9y9grNiyU",
+   "createdTime": "2026-04-10T14:40:02.000Z",
+   "fields": {
+    "Lon": -113.8935357,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0386067,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 863-1906",
+    "Request ID": "212835",
+    "Calendar info": "Kidco Construction Ltd 1605 100 St SE, Calgary, AB T1X 0L4, Canadá (Phase 2)",
+    "Start Date": "2026-06-14T19:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 863-1906",
+    "Signs Count": "BARRICADES + ARROW LEFT 2 \nCONES 110 \nCONSTRUCTION AHEAD 2 \nCONSTRUCTION END 5 \nWM 8",
+    "Project Title / Email Reference": "17 Ave SE and 100 St SE, Calgary\nRequest for pricing (Kidco): Qualico - Bellwether Traffic Accommodations",
+    "Job Address": "1605 100 St SE, Calgary, AB T1X 0L4, Canadá (Phase 2)",
+    "Company": "Kidco Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Harry Jennings",
+    "End Date": "2026-06-27T19:00:00.000Z",
+    "Closure Type": [
+     "Work adjacent to a roadway"
+    ]
+   }
+  },
+  {
+   "id": "recZNdI8AK9PbNYLM",
+   "createdTime": "2026-04-29T17:20:54.000Z",
+   "fields": {
+    "Lon": -114.1408243,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0348737,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 371-6827",
+    "Request ID": "214556",
+    "Calendar info": "Birchcliff Development Ltd 2040 37 St SW, Calgary (Alley Closure)",
+    "Start Date": "2026-05-14T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 371-6827",
+    "Signs Count": "BARRICADES + ROAD CLOSURE 3\nCA - Construction Ahead 3\nCE - Construction Ends 2\nNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY 1\nWM 8",
+    "Job Address": "2040 37 St SW, Calgary (Alley Closure)",
+    "Company": "Birchcliff Development Ltd",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Brian Duxbury",
+    "End Date": "2026-07-07T17:00:00.000Z",
+    "Closure Type": [
+     "Back lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recZlZxUcGXHB82Gr",
+   "createdTime": "2026-06-05T16:06:27.000Z",
+   "fields": {
+    "Lon": -114.0297041,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0507977,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(587) 703-2233",
+    "Request ID": "218910",
+    "Calendar info": "Bowmark Group 25 St Georges Dr NE, Calgary\n",
+    "Start Date": "2026-06-27T10:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(587) 703-2233",
+    "Signs Count": "Barricades + arrow left 3 \nCones 25\nConstruction ahead 3 \nConstruction end 4\nNarrow to the left 1",
+    "Project Title / Email Reference": "ST GEORGES DR NE/ 12 ST NE, Calgary\nD4 L100-101 Lane Closure",
+    "Job Address": "25 St Georges Dr NE, Calgary\n",
+    "Company": "Bowmark Group",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Jaffar Kadry",
+    "End Date": "2026-07-17T14:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recaQ4861qo5nk79j",
+   "createdTime": "2026-05-27T16:51:56.000Z",
+   "fields": {
+    "Lon": -114.09477,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.18963,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "(403) 371-9739",
+    "Calendar info": "Volker Stevin 15151 14 ST NW, Calgary",
+    "Start Date": "2026-05-30T19:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 371-9739",
+    "Project Title / Email Reference": "14 St @ 148 Ave NW Carrington",
+    "Job Address": "15151 14 ST NW, Calgary",
+    "Company": "Volker Stevin",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Spencer Hammill ",
+    "End Date": "2026-06-30T19:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recaZhui0EzXno14R",
+   "createdTime": "2026-03-27T17:54:45.000Z",
+   "fields": {
+    "Lon": -113.9298736,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "Rocky View County",
+    "Lat": 51.2069983,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(780) 907-0001",
+    "Request ID": "Sent the plan to the client.",
+    "Calendar info": "🚨 📺 Peak Contracting Services 11 High Plains Trail, Rocky View County, AB T4A 3M6, Canadá",
+    "Start Date": "2026-06-22T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(780) 907-0001",
+    "Signs Count": "PHASE 1\nBARRICADES 4\nROAD CLOSED 4\nCONSTRUCTION 5\nCONSTRUCTION ENDS 4\nROAD CLOSED AHEAD 2\nDETOUR AHEAD 6\nDETOUR LEFT 4\nDETOUR RIGHT 2\nMAX 50 2\nLOCAL TRAFFIC ONLY 3\nNO THROUGH TRAFFIC 3\nPARKING PROHIBIDED\nBOTH SIDES 18\n50 AHEAD 2\nWM 42\nVMB 2\n\nPHASE 2\nBARRICADES 3\nROAD CLOSED 4\nCONSTRUCTION 4\nCONSTRUCTION ENDS 3\nROAD CLOSED AHEAD 3\nDETOUR AHEAD 1\nDETOUR LEFT 1\nDETOUR RIGHT 2\nLOCAL TRAFFIC ONLY 3\nNO THROUGH TRAFFIC 3\nPARKING PROHIBIDED\nBOTH SIDES 18\nWM 19",
+    "Project Title / Email Reference": "C06-26 RDC - High Plains Industrial Warehouse",
+    "Job Address": "11 High Plains Trail, Rocky View County, AB T4A 3M6, Canadá",
+    "Company": "Peak Contracting Services",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Jason Herrera",
+    "End Date": "2026-07-06T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "reccvwbc9T757ZtN6",
+   "createdTime": "2026-03-02T14:14:28.000Z",
+   "fields": {
+    "Lon": -113.950452,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "Rocky View County",
+    "Lat": 51.1993653,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "4035546794",
+    "Request ID": "Submitted plan to the client for review and approval.",
+    "Calendar info": "🚨 📺 🛞 Kidco Construction Ltd 261039 Wagon Wheel Cres, Rocky View County, AB T4A 0E2, Canadá (Plan and Setup)",
+    "Start Date": "2026-05-11T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "4036503841",
+    "Signs Count": "PHASE 1 - FTS-26-2713-A\n\nCA - Construction Ahead\t10\nCE - Construction Ends\t10\nDA - DETOUR AHEAD\t5\nDL - DETOUR LEFT\t9\nDR - DETOUR RIGHT\t2\nJL - JOG SIGN LEFT\t3\nJR - JOG SIGN RIGHT\t1\nKL - Keep Left\t1\nKR - Keep Right\t1\nLO - Mandatory Left Lane Turn\t4\nLTO - Local Traffic Only\t1\nM50 - Maximum Speed\t12\nMA50 - Maximum Speed Ahead\t2\nNL - Left Turn Prohibited\t2\nNR - Right Turn Prohibited\t2\nNTOR - Turn on Red Prohibited\t1\nNTR - NARROW TO THE RIGHT (1 LINE)\t2\nNTT - Through Traffic Prohibited\t1\nOM - Double Object Marker\t2\nRCA - Road Closed AHEAD\t2\nRO - Mandatory Right Lane Turn \t2\nSLO - Mandatory STRAIGHT OR Left Lane Turn\t1\nSRO - Mandatory STRAIGHT OR Right Lane Turn\t2\nTWT - Two-Way Traffic\t23\nSIGNS\t101\nWM\t101\nBARRICADES (Plain)\t8\nBARRICADES + ROAD CLOSURE\t7\nBARRICADES + ARROW\t7\nBARRICADES + Entry Prohibited\t4\nBARREL\t8\nARROW BOARD\t2\nVMB-Message Board\t2\n\nCONES\t250\n\nPHASE 2 - FTS-26-2713-B\n\nCA - Construction Ahead\t7\nCE - Construction Ends\t7\nJL - JOG SIGN LEFT\t3\nJR - JOG SIGN RIGHT\t1\nKL - Keep Left\t1\nKR - Keep Right\t1\nM50 - Maximum Speed\t10\nMA50 - Maximum Speed Ahead\t2\nNTOR - Turn on Red Prohibited\t1\nNTR - NARROW TO THE RIGHT (1 LINE)\t2\nOM - Double Object Marker\t2\nRO - Mandatory Right Lane Turn \t2\nSLO - Mandatory STRAIGHT OR Left Lane Turn\t3\nSRO - Mandatory STRAIGHT OR Right Lane Turn\t2\nTWT - Two-Way Traffic\t13\nSIGNS\t57\nWM\t57\nBARRICADES (Plain)\t5\nBARRICADES + ARROW\t7\nBARREL\t8\nARROW BOARD\t2\n\nCONES\t175",
+    "Project Title / Email Reference": "Cross Iron Dr and Wagon Wheel Cres",
+    "Job Address": "261039 Wagon Wheel Cres, Rocky View County, AB T4A 0E2, Canadá (Plan and Setup)",
+    "Company": "Kidco Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Jax Leeson",
+    "End Date": "2026-09-05T19:00:00.000Z",
+    "Closure Type": [
+     "Median crossover two-way traffic"
+    ]
+   }
+  },
+  {
+   "id": "recdpbNrZYbPNfc1y",
+   "createdTime": "2026-06-11T16:02:04.000Z",
+   "fields": {
+    "Lon": -114.0959456,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0367433,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(778) 939-5707",
+    "Request ID": "218269",
+    "Calendar info": "👷 🅿️ InfiSol Technical Services Ltd. 1450 19TH AVE SW, Calgary",
+    "Start Date": "2026-06-23T08:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(778) 939-5707",
+    "Signs Count": "PHASE 1 \n\nCA - Construction Ahead\t6\nCE - Construction Ends\t6\nDA - DETOUR AHEAD\t2\nDL - DETOUR LEFT\t3\nDR - DETOUR RIGHT\t4\nLTO - Local Traffic Only\t1\nLTO + AR - Local Traffic Only - arrow Right\t1\nNL - Left Turn Prohibited\t3\nNR - Right Turn Prohibited\t1\nNTT - Through Traffic Prohibited\t1\nRCA - Road Closed AHEAD\t2\nPATHWAY DETOUR LEFT\t3\nPATHWAY DETOUR RIGHT\t1\nPATHWAY DETOUR AHEAD\t2\nPATHWAY CLOSED\t2\nSIGNS\t38\nWM\t38\nBARRICADES (Plain)\t3\nBARRICADES + ROAD CLOSURE\t4\nParking Prohibited\t31\nCONES\t30\n\nPHASE 2 \n\nBPTS - Be Prepared to Stop\t6\nCA - Construction Ahead\t5\nCE - Construction Ends\t5\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t1\nNTT+LTO - NO THROUGH TRAFFIC AND LOCAL TRAFFIC ONLY\t1\nTCPA - Traffic Control Person Ahead\t3\nSIGNS\t22\nWM\t22\nBARRICADES (Plain)\t4\nBARRICADES + ROAD CLOSURE\t2\nBARRICADES + ARROW\t2\nPedestrian Detour Right\t2\nPedestrian Detour Left\t2\nSC-Sidewalk Closed\t4\nParking Prohibited\t10\nFLAGGER \t2\nCONES\t20",
+    "Project Title / Email Reference": "Flaggers Quote Request - 1450 19TH AVE SW CALGARY AB",
+    "Job Address": "1450 19TH AVE SW, Calgary",
+    "Company": "InfiSol Technical Services Ltd.",
+    "Setup Duration": "Daytime Work (8:00 AM - 5:00 PM)",
+    "Requestor Name": "Aakarsh Jain",
+    "End Date": "2026-07-03T16:00:00.000Z",
+    "Notes": "MH 2AA-6 — 1609 19 AV SW\nMH 2AA -7 - 1620 19 Ave SW\nMH 2AA-8 —- 1725 19 Av SW\nMH2AA-9\nMH 2AB-6\nMH 2AB-5 — 1620 19 AV SW\nMH 2AB-4 — 1511 19 AV SW\nMH - 2A - 10 - 1809 19 AV SW",
+    "Closure Type": [
+     "Single right lane closure",
+     "Single left lane closure",
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recf54zQN1u21A2QA",
+   "createdTime": "2026-05-06T19:52:46.000Z",
+   "fields": {
+    "Lon": -114.1612584,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.1364853,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 312-7136",
+    "Request ID": "PBC",
+    "Calendar info": "🛞 Fillmore Construction 5251 Country Hills Blvd NW, Calgary, AB T3A 4K1, Canadá ",
+    "Start Date": "2026-05-21T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 312-7136",
+    "Signs Count": "ARROW BOARD 1\nBA - BARRICADES + ARROW 1\nB - BARRICADES:RC - ROAD CLOSED 3\nCA - CONSTRUCTION AHEAD 1\nCE - CONSTRUCTION END 1\nDA - DETOUR AHEAD 1\nDR - DETOUR RIGHT 1\nNR - TURN RIGHT PROHIBITED 1\nWM 5\n\nCONES 16",
+    "Project Title / Email Reference": "Sarcee Trail NW, Calgary (Plan and Setup)",
+    "Job Address": "5251 Country Hills Blvd NW, Calgary, AB T3A 4K1, Canadá ",
+    "Company": "Fillmore Construction",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Josh Toutt",
+    "End Date": "2026-06-12T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recfk3DFtTzr7fnh8",
+   "createdTime": "2026-04-10T14:31:08.000Z",
+   "fields": {
+    "Lon": -113.8935357,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0386067,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 863-1906",
+    "Request ID": "212358",
+    "Calendar info": "🛞 Kidco Construction Ltd 1605 100 St SE, Calgary, AB T1X 0L4, Canadá (Phase 1)\n",
+    "Start Date": "2026-04-20T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 863-1906",
+    "Signs Count": "ARROW BOARD LEFT 1 \nBARRICADES + ARROW LEFT 3 \nCONES 80 \nMAXIMUN SPEED 50 1 \nCONSTRUCTION AHEAD 2 \nCONSTRUCTION END 5 \nDO NOT PASSING 2\n50 AHEAD 2 \nWM 12",
+    "Project Title / Email Reference": "17 Ave SE and 100 St SE, Calgary\nRequest for pricing (Kidco): Qualico - Bellwether Traffic Accommodations",
+    "Job Address": "1605 100 St SE, Calgary, AB T1X 0L4, Canadá (Phase 1)\n",
+    "Company": "Kidco Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Harry Jennings",
+    "End Date": "2026-07-31T19:00:00.000Z",
+    "Closure Type": [
+     "Work adjacent to a roadway"
+    ]
+   }
+  },
+  {
+   "id": "recgB7sDcAWv5IhU0",
+   "createdTime": "2026-05-15T20:29:43.000Z",
+   "fields": {
+    "Lon": -114.0132144,
+    "Sub-Status Field Operations": "Setup Prepared (Field) ",
+    "Municipality": "City of Airdrie",
+    "Lat": 51.249344,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "403-612-2624",
+    "Request ID": "Sent permit submission to the city of Airdrie.",
+    "Calendar info": "🚨 Blue-Con Excavating Ltd 788 Southpoint Heath SW, Airdrie",
+    "Start Date": "2026-06-29T07:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "403-612-2624",
+    "Signs Count": "BARRICADES 4 \nBARRICADES+ROAD CLOSED 4 \nDETOUR LEFT 2 \nDETOUR RIGHT 2\nLOCAL TRAFFIC 1 \nNO THROUGH TRAFFIC 1 \nPARKING PROHIBIDED BOTH SIDES 14 \nPEDESTRIAN LEFT 1 \nPEDESTRIAN RIGHT 1 \nSIDEWALK CLOSED 2 \nCONSTRUCTION AHEAD 8 \nCONSTRUCTION END 8 \nROAD CLOSED AHEAD 3 \nTURN RIGHT PROHIBITED 1 \nWM 28 \nFLASHER LIGHT 8 \nCUSTOM SIGN 2",
+    "Job Address": "788 Southpoint Heath SW, Airdrie",
+    "Company": "Blue-Con Excavating Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Cassandra Jones",
+    "End Date": "2026-07-03T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recjntBaomO5sSIgl",
+   "createdTime": "2026-04-14T18:05:30.000Z",
+   "fields": {
+    "Lon": -113.8935357,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0386067,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(780) 938-6552",
+    "Request ID": "NEW REQUEST (214189)\n212664 ",
+    "Calendar info": "PTL Group 1605 100 St SE, Calgary\n",
+    "Start Date": "2026-04-23T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(780) 938-6552",
+    "Signs Count": "phase 1\n\nBARRELS 8 \nBARRICADES + ARROW LEFT 6 \nCONES 120 \nMAX 50 1 \nMAX 80 1 \nDo Not Pass 1\nCONSTRUCTION AHEAD 4 \nCONSTRUCTION END 5\n50 AHEAD 1 \nWM 13\n\nphase 2 \n\nBARRELS 8\nBARRICADES + ARROW LEFT  7\nCONES 200\nMAX 50 1\nMAX 80 1\nDo Not Pass 1\nJOG RIGHT 1\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 5\n50 AHEAD  1\nWM 14\n\nPHASE 3 \n\nBARRELS 8\nBARRICADES + ARROW LEFT  7\nCONES 200\nMAX 50 1\nMAX 80 2\nDo Not Pass 1\nJOG RIGHT 1\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 6\n50 AHEAD  1\nWM 14\n\nPHASE 4 (BOTH SHOULDER)\n\nBARRELS 8\nBARRICADES + ARROW LEFT  10\nCONES 250\nMAX 50 2\nMAX 80 2\nDo Not Pass 2\nJOG RIGHT 1\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 6\n50 AHEAD  2\nWM 17",
+    "Project Title / Email Reference": "Traffic control required for PTL Group (LTS Project)\n(17th Ave SE, Calgary)",
+    "Job Address": "1605 100 St SE, Calgary\n",
+    "Company": "PTL Group",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Stirling Caverly",
+    "End Date": "2026-07-06T19:00:00.000Z",
+    "Closure Type": [
+     "Work adjacent to a roadway"
+    ]
+   }
+  },
+  {
+   "id": "recli4QybcVjZLu6g",
+   "createdTime": "2026-06-22T14:00:01.000Z",
+   "fields": {
+    "Lon": -113.9106208,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.8854018,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "5878918133",
+    "Request ID": "219016",
+    "Calendar info": "🛞 Geo Grout Inc 276 Magnolia Cres SE, Calgary\n",
+    "Start Date": "2026-06-29T09:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "5878918133",
+    "Signs Count": "BARRICADES + ARROW LEFT 2\nARROW BOARD 1 \nCONSTRUCTION AHEAD 2 \nNARROW TO THE LEFT 2 \nCONSTRUCTION END 2\nCONES 40 ",
+    "Project Title / Email Reference": "Rangeview Blvd  SE",
+    "Job Address": "276 Magnolia Cres SE, Calgary\n",
+    "Company": "Geo Grout Inc",
+    "Setup Duration": "Daytime Work (9:00 AM - 3:00 PM)",
+    "Requestor Name": "Patrick Adair",
+    "End Date": "2026-06-30T15:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recm5Tb4aOlMurKds",
+   "createdTime": "2026-06-15T21:48:05.000Z",
+   "fields": {
+    "Lon": -114.0681831,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0302359,
+    "Impact Category": "1️⃣ Set-Up Only",
+    "Requestor Phone Number": "403-560-4131",
+    "Calendar info": "Ken Woo 902-225- 25ave SW, Calgary",
+    "Start Date": "2026-07-28T13:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "403-560-4131",
+    "Job Address": "902-225- 25ave SW, Calgary",
+    "Company": "Ken Woo",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Ken Woo",
+    "End Date": "2026-07-29T18:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "recmHJRvR6dIHedx7",
+   "createdTime": "2026-06-05T20:41:42.000Z",
+   "fields": {
+    "Lon": -113.9886695,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.09104869999999,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 651-7691",
+    "Request ID": "217492",
+    "Calendar info": "Maf-Worx Concrete Services Ltd 3400 39 Ave NE, Calgary\n",
+    "Start Date": "2026-06-15T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 815-1653",
+    "Signs Count": "CLOSURE 1 \n\nCONES 200\nBARRICADES + LEFT 8\nBARRICADES + RIGHT 4\nCONSTRUCTION AHEAD 11\nCONSTRUCTION END 14\nNARROW TO THE LEFT 2\nNARROW TO THE RIGHT 4\nMAX 50 6\n\nCLOSURE 2\nCONES 200\nBARRICADES + ARROW LEFT 12\nBARRICADES + ARROW RIGHT 4\nCONSTRUCTION AHEAD 10\nCONSTRUCTION END 12\nNARROW TO THE RIGHT 5\nTRUCK RIGHT PROHIBITED 2\nMAX 50 4\nDETOUR AHEAD 2\nDETOUR LEFT 4\nDETOUR RIGHT 2\n",
+    "Project Title / Email Reference": "RE: Surface Overlay #651 to 674\n39 Ave NE, Calgary",
+    "Job Address": "3400 39 Ave NE, Calgary\n",
+    "Company": "Maf-Worx Concrete Services Ltd",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Ray Bertelli",
+    "End Date": "2026-06-30T15:00:00.000Z",
+    "Closure Type": [
+     "Single left lane closure",
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recmR2RTsjXoiHdOf",
+   "createdTime": "2026-06-17T14:38:07.000Z",
+   "fields": {
+    "Lon": -114.1635217,
+    "Sub-Status Field Operations": "Setup Prepared (Field) ",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0714983,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(506) 654-0913",
+    "Request ID": "218621",
+    "Calendar info": "🅿️ Dominium 1615 46 St NW, Calgary",
+    "Start Date": "2026-06-29T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(506) 654-0913",
+    "Signs Count": "BARRICADES + ARROW 2 \nBARRICADE. 4 \nCA - CONSTRUCTION AHEAD 4 \nCE - CONSTRUCTION ENDS 3\nDA - DETOUR AHEAD 3 \nDL - DETOUR LEFT 2 \nDR - DETOUR RIGHT 4 \nBARRICADES + ROAD\nCLOSURE 3 \nNP - PARKING PROHIBITED. 20 \nPDL - PEDESTRIAN DETOUR LEFT 1 \nPDR - PEDESTRIAN DETOUR RIGHT 1 \nRCA - ROAD CLOSED AHEAD 1 \nSC-SIDEWALK CLOSED 2 \nWM 20\n\nCONES 30 ",
+    "Project Title / Email Reference": "Lane Closure Request",
+    "Job Address": "1615 46 St NW, Calgary",
+    "Company": "Dominium",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "Landen Lawton",
+    "End Date": "2026-07-03T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "reco1dQMJfF5tCAOL",
+   "createdTime": "2026-03-13T21:04:41.000Z",
+   "fields": {
+    "Lon": -114.0066332,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.1368695,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "(403) 540-6044",
+    "Request ID": "214923",
+    "Calendar info": "📺 🛞 PCL Construction Management Inc. 2222 Airport Ave NE, Calgary, AB T3J 3C6, Canadá ",
+    "Start Date": "2026-06-08T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 540-6044",
+    "Signs Count": "TAP 15\n\n50 A - 50 AHEAD 2\nARROW BOARD LEFT 1\nBARREL 8\nBARRICADES + ARROW LEFT 8\nBARRICADES 4\nCONSTRUCTION AHEAD 5\nCONSTRUCTION END 7\nCONES 74\nDOUBLE OBJECT MARKER 1\nM 50 - MAX 50 2\nM 80 - MAX 80 2\nNARROW TO THE LEFT 3\nPEDESTRIAN DETOUR LEFT 2\nPEDESTRIAN DETOUR RIGHT 2\nBARRICADES + SIDEWALK CLOSED 4\nWM 22\n\nTAP 2\n\n50 A - 50 AHEAD 2\nARROW BOARD LEFT 1\nBARREL 8\nBARRICADES + ARROW LEFT 5\nBARRICADES 4\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 4\nCONES 38\nDOUBLE OBJECT MARKER 1\nM 50 - MAX 50 2\nM 80 - MAX 80 2\nNARROW TO THE LEFT 2\nWM 15\n\nTAP 3 & TAP 8\n\nBARRICADES 1\nBARRICADES + ARROW\nLEFT\n3\nBARRICADES + ARROW RIGHT 8\nBARRICADES + ROAD CLOSED 1\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 5\nCONES 139\nDETOUR AHEAD 2\nDETOUR RIGHT 2\nJOG SIGN RIGHT 1\nMANDATORY AHEAD AND LEFT 1\nMANDATORY RIGHT AND LEFT 1\nNARROW TO THE LEFT SINGLE 1\nNARROW TO THE RIGHT 2\nTURN RIGHT PROHIBITED 1\nNO TRUCK LEFT 1\nPEDESTRIAN DETOUR LEFT 1\nPEDESTRIAN DETOUR RIGHT 1\nBARRICADES + SIDEWALK CLOSED 2\nVMB 1\nWM 18\n\nTAP 4\n\n50 AHEAD 2\nARROW BOARD RIGHT 2\nBARREL 15\nBARRICADES + ARROW LEFT 3\nBARRICADES + ARROW RIGHT 8\nBARRICADES 3\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 6\nCONES 103\nM 50 - MAX 50 2\nM 80 - MAX 80 2\nNARROW TO THE LEFT SINGLE 1\nNARROW TO THE RIGHT 3\nNARROW TO THE RIGHT SINGLE 1\nWM 20\n\nTAP 5\n\nBARRICADES + ARROW LEFT 1\nBARRICADES 1\nBARRICADES + ROAD CLOSED 1\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 6\nCONES 17\nDETOUR AHEAD 3\nDETOUR LEFT 1\nDETOUR RIGHT 5\nTURN RIGHT PROHIBITED 1\nVMB 3\nWM 21\n\nTAP 6\n\n50 AHEAD 2\nARROW BOARD LEFT 3\nADDED RIGHT 2\nBARREL 23\nBARRICADES + ARROW LEFT 13\nBARRICADES 1\nCONSTRUCTION AHEAD 5\nCONSTRUCTION END 7\nCONES 146\nM 50 - MAX 50 2\nM 80 - MAX 80 2\nNARROW TO THE LEFT 6\nNARROW TO THE LEFT SINGLE 1\nWM 33\n\nTAP 7 - PART 1\n\nBARRICADES + ARROW RIGHT 3\nCONSTRUCTION AHEAD 1\nCONSTRUCTION END 1\nCONES 15\nNARROW TO THE RIGHT SINGLE LANE 1\nWM 3\n\nTAP 7 - PART 2\n\nBARRICADES + ARROW LEFT 3\nCONSTRUCTION AHEAD 1\nCONSTRUCTION END 1\nCONES 15\nNARROW TO THE LEFT SINGLE LANE 1\nWM 3\n\nTAP 9 \n\n50 AHEAD 4\nARROW BOARD LEFT 2\nARROW BOARD RIGHT 1\nADDED RIGHT 1\nBARREL 15\nBARRICADES + ARROW LEFT 6\nBARRICADES + ARROW RIGHT 3\nCONSTRUCTION AHEAD 6\nCONSTRUCTION END 7\nCONES 95\nM 50 - MAX 50 4\nM 80 - MAX 80 2\nNARROW TO THE LEFT 3\nWM 27\n\nTAP 10 - PART 1\n\nARROW BOARD RIGHT 1\nBARRICADES + ARROW RIGHT 10\nCONSTRUCTION AHEAD 7\nCONSTRUCTION END 8\nCONES 53\nDOUBLE OBJECT MARKER 1\nM 50 - MAX 50 1\nMANDATORY AHEAD AND LEFT 1\nMANDATORY LEFT 1\nNARROW TO THE RIGHT 2\nNARROW TO THE RIGHT SINGLE 1\nPEDESTRIAN DETOUR LEFT 1\nPDESTRIAN DETOUR RIGHT 1\nSIDEWALK CLOSED 2\nWM 25\n\nTAP 10 - PART 2\n\nBARRICADES + ARROW LEFT 8\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 4\nCONES 57\nDOUBLE OBJECT MARKER 1\nM 50 - MAX 50 2\nMANDATORY RIGHT 2\nNARROW TO THE LEFT 3\nWM 15\n\nTAP 11\n\nARROW BOARD LEFT 1\nBARRICADES + ARROW LEFT 12\nBARRICADES + ARROW RIGHT 1\nCONSTRUCTION AHEAD 8\nCONSTRUCTION END 8\nCONES 93\nDOUBLE OBJECT MARKER 1\nM 50 - MAX 50 3\nMANDATORY RIGHT 2\nNARROW TO THE LEFT 3\nNARROW TO THE RIGHT 1\nWM 27\n\nTAP 13 & TAP 14\n\n50 A - 50 AHEAD 2\nARROW BOARD LEFT 3\nARROW BOARD RIGHT 1\nBARREL 8\nBARRICADES + ARROWLEFT 14\nBARRICADES + ARROW RIGHT 14\nBARRICADES 5\nCONSTRUCTION AHEAD 8\nCONSTRUCTION END 9\nCONES 184\nDOUBLE OBJECT MARKER 4\nM 50 - MAX 50 6\nM 80 - MAX 80 2\nMANDATORY RIGHT 1\nNARROW TO THE LEFT 7\nNARROW TO THE RIGHT 3\nNARROW TO THE RIGHT SINGLE 1\nWM 39\n\nTAP 12 & 14 \n\n50 A - 50 AHEAD 4\nARROW BOARD LEFT 2\nBARRICADES + ARROW LEFT 13\nBARRICADES + ARROW RIGHT 3\nBARREL 16\nBARRICADES 2\nCONSTRUCTION AHEAD 8\nCONSTRUCTION END 9\nCONES 108\nDOUBLE OBJECT MARKER 1\nM 50 - MAX 50 3\nM 80 - MAX 80 4\nNARROW TO THE LEFT 3\nNARROW TO THE RIGHT SINGLE 2\nWM 34\n\nTAP 1\n\n50 A - 50 AHEAD 4\nARROW BOARD RIGHT 2\nBARREL 16\nBARRICADES + ARROW RIGHT 12\nCONSTRUCTION AHEAD 6\nCONSTRUCTION END 5\nCONES 103\nM 50 - MAX 50 4\nM 80 - MAX 80 4\nNARROW TO THE RIGHT 4\nWM 29\n\n",
+    "Project Title / Email Reference": "Airport Trail - Traffic Accommodation required for CCTV of underground infrastructure\nAirport Trail, Calgary",
+    "Job Address": "2222 Airport Ave NE, Calgary, AB T3J 3C6, Canadá ",
+    "Company": "PCL Construction Management Inc.",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Hannah Ferns",
+    "End Date": "2026-06-26T15:00:00.000Z",
+    "Closure Type": [
+     "Single left lane closure",
+     "Single right lane closure",
+     "Mobile operations on collector or arterial ≤60 km/h"
+    ]
+   }
+  },
+  {
+   "id": "recov9C5qdyod7JWB",
+   "createdTime": "2026-06-08T17:34:29.000Z",
+   "fields": {
+    "Lon": -114.1351193,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0392046,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "(587) 703-2233",
+    "Request ID": "218156",
+    "Calendar info": "Bowmark Group 1710 33 ST SW, Calgary ",
+    "Start Date": "2026-06-22T09:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(587) 703-2233",
+    "Signs Count": "BARRICADES+ARROW LEFT 30\nBARRICADES+ARROW\nRIGHT 2\nBARRICADES 6\nBARRICADES+ROAD\nCLOSED 6\nDETOUR AHEAD 2\nDETOUR LEFT 1\nDETOUR RIGHT 5\nYIELD 2\nYIELD AHEAD 1\nMANDATORY AHEAD AND\nRIGHT 1\nMANDATORY RIGHT 1\nMANDATORY RIGHT AND\nLEFT 1\nNARROW TO THE LEFT 3\nNO THROUGH TRAFFIC +\nLOCAL TRAFFIC 2\nPARKING PROHIBIDED\nBOTH SIDES 68\nCONSTRUCTION AHEAD 13\nCONSTRUCTION END 11\nROAD CLOSED AHEAD 1\nNO TURN ON RED RIGHT 1\nTURN LEFT PROHIBIDED 2\nTURN RIGHT PROHIBITED 2\nWM 54",
+    "Project Title / Email Reference": "33rd ST SW Lane Closures\n(Location 500)\n(Location 501, 502, 503)\n(Location 504, 505, 506)\n(Location 507)",
+    "Job Address": "1710 33 ST SW, Calgary ",
+    "Company": "Bowmark Group",
+    "Setup Duration": "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    "Requestor Name": "Jaffar Kadry",
+    "End Date": "2026-07-06T15:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure",
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recpfnwJQOan9gBsy",
+   "createdTime": "2026-06-09T17:10:40.000Z",
+   "fields": {
+    "Lon": -114.07084,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.98442499999999,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4038130073",
+    "Request ID": "217822",
+    "Calendar info": "🅿️ Kidco Construction Ltd 7810 Macleod Tr SE, Calgary",
+    "Start Date": "2026-07-06T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "4038130073",
+    "Signs Count": "BARRICADES 4\nBARRICADES + ROAD CLOSED 4\nDETOUR LEFT 1\nDETOUR RIGHT 1\nLOCAL TRAFFIC 3\nNO THROUGH TRAFFIC 3\nNO THROUGH TRAFFIC + ARROW LEFT 1\nNO THROUGH TRAFFIC + ARROW RIGHT 1\nNO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPARKING PROHIBITED 5\nCONSTRUCTION AHEAD 6\nCONSTRUCTION END 5\nROAD CLOSED AHEAD 3\nTURN LEFT PROHIBITED 1\nTURN RIGHT PROHIBITED 1\nWM 31",
+    "Job Address": "7810 Macleod Tr SE, Calgary",
+    "Company": "Kidco Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Jonathan Vargas",
+    "End Date": "2026-07-08T19:00:00.000Z",
+    "Closure Type": [
+     "Road closure"
+    ]
+   }
+  },
+  {
+   "id": "recs1UmCFRyPD1BsA",
+   "createdTime": "2026-01-29T16:02:32.000Z",
+   "fields": {
+    "Lon": -114.188096,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.1829204,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 703-8779",
+    "Request ID": "219326 (Jul 08 - Sept 01)\n212284 (April 17 - April 20)\n210673 phases (April 04 - July 30) \n210447 Phase 1 (March 21)",
+    "Calendar info": "👷 🛞 Kidco Construction Ltd 7005 144 Ave NW, Calgary",
+    "Start Date": "2026-04-09T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 703-8779",
+    "Signs Count": "Phase 1 - FTS-26-2605-1 \n\nSIGNS\t4\nWM\t4\nBARRICADES + ARROW\t3\nCANDLES\t7\nARROW BOARD\t1\nCONES\t25\nCA - Construction Ahead\t1\nCE - Construction Ends\t1\nM50 - Maximum Speed\t1\nM70 - Maximum Speed\t1\n\nPhase 1 - FTS-26-2605-A\n\nSIGNS\t10\nWM\t10\nBARRICADES + ARROW\t2\nARROW BOARD\t1\nCONES\t40\nCA - Construction Ahead\t3\nCE - Construction Ends\t4\nM50 - Maximum Speed\t1\nM70 - Maximum Speed\t1\nMA50 - Maximum Speed Ahead\t1\n\nPhase 2 - FTS-26-2605-B\n\nSIGNS\t33\nWM\t33\nBARRICADES + ARROW\t5\nBARREL\t16\nARROW BOARD\t2\nCONES\t130\nCA - Construction Ahead\t4\nCE - Construction Ends\t4\nJL - JOG SIGN LEFT\t1\nJR - JOG SIGN RIGHT\t1\nKR - Keep Right\t2\nM50 - Maximum Speed\t2\nM30 - Maximum Speed\t2\nM70 - Maximum Speed\t2\nMA50 - Maximum Speed Ahead\t2\nMA30 - Maximum Speed Ahead\t2\nSLO - Mandatory STRAIGHT, Left or Right Lane Turn\t2\nTWT - Two-Way Traffic\t9\n\nPhase 3 - FTS-26-2605-C\n\nSIGNS\t10\nWM\t10\nBARRICADES + ARROW\t2\nARROW BOARD\t1\nCONES\t40\nCA - Construction Ahead\t3\nCE - Construction Ends\t4\nM50 - Maximum Speed\t1\nM70 - Maximum Speed\t1\nMA50 - Maximum Speed Ahead\t1\n\nPHASE 4 -FTS-26-2605-D\n\nSIGNS\t25\nWM\t25\nBARRICADES + ARROW\t3\nARROW BOARD\t1\nFLAGGER \t2\nCONES\t40\nBPTS - Be Prepared to Stop\t2\nCA - Construction Ahead\t4\nCE - Construction Ends\t4\nM50 - Maximum Speed\t2\nM30 - Maximum Speed\t2\nM70 - Maximum Speed\t1\nMA50 - Maximum Speed Ahead\t2\nMA30 - Maximum Speed Ahead\t2\nNPA - no passing\t4\nTCPA - Traffic Control Person Ahead\t2\n\nPHASE 5 - (NEW FLAGGERS) \n\nARROW BOARD LEFT 1\nBARRICADES + ARROW LEFT 2\nCONES 47\nBE PREPARED TO STOP 4\nFLAGGER PERSON 4\nFLAGGER PERSON AHEAD 4\nMAX 50 2\nMAX 30 2\nMAX 30 AHEAD 2\nMAX 70 1\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 4\n50 AHEAD 2\nNPA - no passing\t2\nWM 27\n\n\n\n",
+    "Project Title / Email Reference": "NCWS Feedermain TAS Plans - UG26-908\n144 Ave NW / 69th St NW",
+    "Job Address": "7005 144 Ave NW, Calgary",
+    "Company": "Kidco Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Ben Molotsky",
+    "End Date": "2026-07-30T19:00:00.000Z",
+    "Closure Type": [
+     "Shoulder work",
+     "Centre line crossover two-way traffic"
+    ]
+   }
+  },
+  {
+   "id": "recsWWxuaBzYD7C1Y",
+   "createdTime": "2026-06-17T21:33:38.000Z",
+   "fields": {
+    "Lon": -114.0335103,
+    "Sub-Status Field Operations": "Daily Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 50.9427335,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "6479951807",
+    "Request ID": "218810",
+    "Calendar info": "🅿️ YellowBird Communications 1204 Lake Sylvan dr SE, Calgary",
+    "Start Date": "2026-06-26T08:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "6479951807",
+    "Signs Count": "BARRICADES + ARROW LEFT 8\nBARRICADES + ROAD CLOSED 3\nCONSTRUCTION AHEAD 7\nCONSTRUCTION END 6\nCONES 40\nMANDATORY AHEAD AND RIGHT 1\nMANDATORY AHEAD RIGHT AND LEFT 1\nNARROW TO THE LEFT SINGLE 1\nNO THROUGH TRAFFIC + LOCAL TRAFFIC 1\nPEDESTRIAN DETOUR LEFT 1\nPEDESTRIAN DETOUR RIGHT 1\nPARKING PROHIBITED 52\nBARRICADES + SIDEWALK CLOSED 2\nTURN LEFT PROHIBITED 1\nTURN RIGHT PROHIBITED 1\nWM 19",
+    "Job Address": "1204 Lake Sylvan dr SE, Calgary",
+    "Company": "YellowBird Communications",
+    "Setup Duration": "Daytime Work (7:00 AM - 5:00 PM)",
+    "Requestor Name": "JAY SAMYANI",
+    "End Date": "2026-06-30T17:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "rectKkvb0T8jrtVSy",
+   "createdTime": "2026-03-03T19:26:09.000Z",
+   "fields": {
+    "Lon": -114.0514996,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Airdrie",
+    "Lat": 51.2878433,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 862-0271",
+    "Request ID": "Sent the updated plan to the client",
+    "Calendar info": "🚨 🅿️ Kobi Construction Ltd 1215 Fowler Rd SW, Airdrie, AB T4B 3M9, Canadá",
+    "Start Date": "2026-04-06T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 862-0271",
+    "Signs Count": "CA - Construction Ahead\t5\nCE - Construction Ends\t5\nDA - DETOUR AHEAD\t1\nDL - DETOUR LEFT\t1\nDR - DETOUR RIGHT\t1\nLTO - Local Traffic Only\t2\nNE - Entry Prohibited\t5\nNL - Left Turn Prohibited\t1\nNR - Right Turn Prohibited\t1\nNTT - Through Traffic Prohibited\t2\nRCA - Road Closed AHEAD\t2\n\nParking Prohibited\t30\n\nSIGNS\t26\nWM\t26\nBARRICADES \t10",
+    "Project Title / Email Reference": "Wildflower - Traffic Closur",
+    "Job Address": "1215 Fowler Rd SW, Airdrie, AB T4B 3M9, Canadá",
+    "Company": "Kobi Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Sarah Paloma",
+    "End Date": "2026-06-30T19:00:00.000Z",
+    "Closure Type": [
+     "Set-up Only"
+    ]
+   }
+  },
+  {
+   "id": "rectQ7q0SBW3txmwZ",
+   "createdTime": "2026-06-23T16:51:31.000Z",
+   "fields": {
+    "Lon": -114.1291052,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0227471,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 781-5387",
+    "Request ID": "219198",
+    "Calendar info": "🅿️ Ledcor 3600 Sarcee Rd SW, Calgary",
+    "Start Date": "2026-07-02T08:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "(403) 781-5387",
+    "Signs Count": "BARRICADES + ARROW LEFT 5\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 3\nCONES 20\nNARROW TO THE LEFT SINGLE 1\nPEDESTRIAN LEFT 1\nPEDESTRIAN RIGHT 1\nBARRICADES + SIDEWALK CLOSED 2\nPARKING PROHIBITED 22\nWM 7",
+    "Project Title / Email Reference": "LTS Request for SU, Lane Closure - NGMR-126171",
+    "Job Address": "3600 Sarcee Rd SW, Calgary",
+    "Company": "Ledcor",
+    "Setup Duration": "Daytime Work (8:00 AM - 5:00 PM)",
+    "Requestor Name": "Cecilia Chan",
+    "End Date": "2026-07-10T17:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recvntkTAzI0s2qee",
+   "createdTime": "2026-06-19T15:41:40.000Z",
+   "fields": {
+    "Lon": -114.1560019,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.027189,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "4038620276",
+    "Request ID": "218849",
+    "Calendar info": "Kobi Construction Ltd 4816 30 Ave SW, Calgary",
+    "Start Date": "2026-07-01T06:00:00.000Z",
+    "Status": "Permit Approved",
+    "Site Contact Phone Number": "4038159596",
+    "Signs Count": "NO THROUGH TRAFFIC + LOCAL TRAFFIC ONLY - 2\nCA - CONSTRUCTION AHEAD - 2\nB BARRICADE - 2\nB - BARRICADES:RC - ROAD CLOSED - 4\nWM - 4",
+    "Job Address": "4816 30 Ave SW, Calgary",
+    "Company": "Kobi Construction Ltd",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Emma Franzmann",
+    "End Date": "2026-07-04T18:00:00.000Z",
+    "Closure Type": [
+     "Back lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recxZxOJ1DzktTUZu",
+   "createdTime": "2026-02-09T18:44:49.000Z",
+   "fields": {
+    "Lon": -114.01594,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "City of Calgary",
+    "Lat": 51.0360599,
+    "Impact Category": "2️⃣ Low",
+    "Requestor Phone Number": "(403) 399-5665",
+    "Request ID": "208472",
+    "Calendar info": "Eagle Crest Construction 1920 7 Ave SE, Calgary",
+    "Start Date": "2026-02-13T07:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 399-5665",
+    "Signs Count": "SIGNS\t3\nWM\t3\nBARRICADES + ARROW\t3\nCONES\t25\nCA - Construction Ahead\t1\nCE - Construction Ends\t1\nNTLS - NARROWS TO THE LEFT SINGLE LANE\t1",
+    "Project Title / Email Reference": "Lane Closure - Inglewood 740 - 1920 7ave SE",
+    "Job Address": "1920 7 Ave SE, Calgary",
+    "Company": "Eagle Crest Construction",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Hamed Mobarak",
+    "End Date": "2026-06-30T19:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure"
+    ]
+   }
+  },
+  {
+   "id": "recxbNQMz7OCb09mU",
+   "createdTime": "2026-03-06T16:06:50.000Z",
+   "fields": {
+    "Lon": -115.3200304,
+    "Sub-Status Field Operations": "24 Hours Setup (Field)",
+    "Municipality": "Town of Canmore",
+    "Lat": 51.05156470000001,
+    "Impact Category": "3️⃣ Medium",
+    "Requestor Phone Number": "(403) 369-8461",
+    "Request ID": "PBC",
+    "Calendar info": "🚨 Taylor Construction 107 Armstrong Pl, Canmore",
+    "Start Date": "2026-05-19T08:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 369-8461",
+    "Project Title / Email Reference": "Estimate & TMP for Canmore Project",
+    "Job Address": "107 Armstrong Pl, Canmore",
+    "Company": "Taylor Construction",
+    "Setup Duration": "24 Hours Set Up",
+    "Requestor Name": "Jeff Benn",
+    "End Date": "2027-01-24T19:00:00.000Z",
+    "Closure Type": [
+     "Work on edge of roadway",
+     "Two-way flagging operation"
+    ]
+   }
+  },
+  {
+   "id": "recyG2YlEdV4kk013",
+   "createdTime": "2026-06-16T22:07:50.000Z",
+   "fields": {
+    "Lon": -113.8712797,
+    "Sub-Status Field Operations": "Permit Approved(Field)",
+    "Municipality": "Town of High River",
+    "Lat": 50.57566019999999,
+    "Impact Category": "4️⃣ High",
+    "Requestor Phone Number": "(403) 470-8061",
+    "Request ID": "Submitted permit request to the city of High River",
+    "Calendar info": "🚨 🅿️ Solid West Construction Ltd. 810 CENTRE ST SE, HIGH RIVER.\nCentre St SE, High River",
+    "Start Date": "2026-06-30T08:00:00.000Z",
+    "Status": "Field",
+    "Site Contact Phone Number": "(403) 470-8061",
+    "Signs Count": "PHASE 1 \n\nBARRICADES + ARROW LEFT 10\nCONES 95\nCONSTRUCTION AHEAD 4\nCONSTRUCTION END 4\nNARROW TO THE LEFT 2 \nMANDATORY RIGHT 1\nMANDATORY AHEAD, RIGHT AND LEFT 1\nTURN ON RED PROHIBITED 2\nDOUBLE OBJECT MARKER 1\nPEDESTRIAN DETOUR RIGHT 1\nPEDESTRIAN DETOUR LEFT 1 \nSIDEWALK CLOSED 2 \n\nPHASE 2 \n\nBARRICADES + ARROW LEFT 4\nCONES 20\nCONSTRUCTION AHEAD 5\nCONSTRUCTION END 5\nNARROW TO THE LEFT SINGLE 2\nPARKING PROHIBITED 6\n\nPHASE 3 \n\nBARRICADES + ROAD CLOSED 1\nBARRICADES 1 \nCONES 5\nCONSTRUCTION AHEAD 3\nCONSTRUCTION END 2\nRIGHT TURN PROHIBITED 1\nLEFT TURN PROHIBITED 1 \nDETOUR AHEAD 5\nDETOUR RIGHT 4\nDETOUR LEFT 2\nPEDESTRIAN DETOUR RIGHT 1\nPEDESTRIAN DETOUR LEFT 1\nSIDEWALK CLOSED 2\n",
+    "Project Title / Email Reference": "Traffic Control - High River",
+    "Job Address": "810 CENTRE ST SE, HIGH RIVER.\nCentre St SE, High River",
+    "Company": "Solid West Construction Ltd.",
+    "Setup Duration": "Daytime Work (8:00 AM - 5:00 PM)",
+    "Requestor Name": "Johan Ramirez",
+    "End Date": "2026-06-30T17:00:00.000Z",
+    "Closure Type": [
+     "Single right lane closure",
+     "Single left lane closure",
+     "Two-way flagging operation"
+    ]
+   }
+  }
+ ]
+}

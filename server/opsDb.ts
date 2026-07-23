@@ -577,6 +577,7 @@ import {
   truckAssignments,
   permitExtractions,
   InsertPermitExtraction,
+  techDaySessions,
 } from "../drizzle/schema";
 
 const PHASES = ["Preparation", "Setup", "Pickup"] as const;
@@ -2137,4 +2138,181 @@ export async function upsertPermitExtraction(input: InsertPermitExtraction) {
   }
   const res = await d.insert(permitExtractions).values(input);
   return Number((res as any).insertId ?? 0);
+}
+
+/* ------------------- Technician day sessions (truck + gate) ------------------- */
+
+/** The technician's day session (warehouse check-in + truck) for a date. */
+export async function getDaySession(technicianName: string, date: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(techDaySessions)
+    .where(
+      and(
+        eq(techDaySessions.technicianName, technicianName),
+        eq(techDaySessions.date, date),
+      ),
+    )
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Start the day: record which truck the technician is driving today. */
+export async function startDaySession(input: {
+  technicianName: string;
+  date: string;
+  truckName: string | null;
+  truckCode: string | null;
+}) {
+  const d = await db();
+  const existing = await getDaySession(input.technicianName, input.date);
+  if (existing) {
+    await d
+      .update(techDaySessions)
+      .set({ truckName: input.truckName, truckCode: input.truckCode })
+      .where(eq(techDaySessions.id, existing.id));
+    return existing.id;
+  }
+  const res = await d.insert(techDaySessions).values(input);
+  return Number((res as any).insertId ?? 0);
+}
+
+/** End the day (check-out). Gating is enforced by the caller. */
+export async function endDaySession(technicianName: string, date: string) {
+  const d = await db();
+  await d
+    .update(techDaySessions)
+    .set({ checkOutAt: new Date() })
+    .where(
+      and(
+        eq(techDaySessions.technicianName, technicianName),
+        eq(techDaySessions.date, date),
+      ),
+    );
+}
+
+/** Day truck report for the coordinator: who drove what on a date. */
+export async function listDaySessions(date: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(techDaySessions)
+    .where(eq(techDaySessions.date, date));
+}
+
+/** Job ids for which this technician submitted a hazard assessment ON a date. */
+export async function hazardJobIdsForDay(technicianName: string, date: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(hazardAssessments)
+    .where(eq(hazardAssessments.technicianName, technicianName));
+  const ids = new Set<string>();
+  for (const r of rows) {
+    const k = new Date(r.submittedAt);
+    const key = `${k.getFullYear()}-${String(k.getMonth() + 1).padStart(2, "0")}-${String(k.getDate()).padStart(2, "0")}`;
+    if (key === date) ids.add(r.airtableJobId);
+  }
+  return ids;
+}
+
+/** Technician marks a job's work done (signs installed / picked up). */
+export async function setAssignmentCompleted(
+  airtableJobId: string,
+  technicianName: string,
+  completed: boolean,
+) {
+  const d = await db();
+  await d
+    .update(jobAssignments)
+    .set({ completedAt: completed ? new Date() : null })
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, airtableJobId),
+        eq(jobAssignments.technicianName, technicianName),
+      ),
+    );
+}
+
+/** Coordinator note to the technician on an assignment (per job+tech). */
+export async function setAssignmentNote(
+  airtableJobId: string,
+  technicianName: string,
+  note: string | null,
+) {
+  const d = await db();
+  await d
+    .update(jobAssignments)
+    .set({ note })
+    .where(
+      and(
+        eq(jobAssignments.airtableJobId, airtableJobId),
+        eq(jobAssignments.technicianName, technicianName),
+      ),
+    );
+}
+
+/** Full CONFIRMED assignment rows for a technician (note/time/completed). */
+export async function listConfirmedAssignmentRows(technicianName: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.technicianName, technicianName),
+        eq(jobAssignments.status, "confirmed"),
+      ),
+    );
+}
+
+/** All time logs whose check-in falls inside [start, end) — for payroll. */
+export async function listTimeLogsBetween(start: Date, end: Date) {
+  const d = await db();
+  return d
+    .select()
+    .from(timeLogs)
+    .where(and(gte(timeLogs.checkInAt, start), lt(timeLogs.checkInAt, end)));
+}
+
+/* ----------------------- Daily Dispatch (confirm + notify) ----------------------- */
+
+/** Confirm every tentative day-pinned assignment on a date (optionally only for
+ * ONE technician). Returns the technicians affected + the number confirmed. */
+export async function confirmAssignmentsForDate(
+  date: string,
+  technicianName?: string,
+) {
+  const d = await db();
+  const filter = technicianName
+    ? and(
+        eq(jobAssignments.scheduledDate, date),
+        eq(jobAssignments.status, "tentative"),
+        eq(jobAssignments.technicianName, technicianName),
+      )
+    : and(
+        eq(jobAssignments.scheduledDate, date),
+        eq(jobAssignments.status, "tentative"),
+      );
+  const rows = await d.select().from(jobAssignments).where(filter);
+  if (rows.length > 0) {
+    await d
+      .update(jobAssignments)
+      .set({ status: "confirmed", confirmedAt: new Date() })
+      .where(filter);
+  }
+  return {
+    confirmed: rows.length,
+    technicians: Array.from(new Set(rows.map((r) => r.technicianName))),
+  };
+}
+
+/** Day-schedule notifications already sent for a date (marker: __day__:<date>). */
+export async function listDayNotifications(date: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(notifications)
+    .where(eq(notifications.airtableJobId, `__day__:${date}`));
 }

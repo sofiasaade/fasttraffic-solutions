@@ -1,10 +1,17 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { MapView } from "@/components/Map";
+import OsmPermitMap, {
+  type OsmPermitMapHandle,
+} from "@/components/OsmPermitMap";
 import { trpc } from "@/lib/trpc";
 import { fmtDate, fmtTimeRange } from "@/lib/format";
 import { Loader2, MapPin, AlertTriangle, Building2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+
+// When the Manus Google-Maps proxy is not configured (e.g. running locally),
+// fall back to a free OpenStreetMap renderer with identical pins/popups.
+const USE_OSM_FALLBACK = !import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
 
 type MapJob = {
   id: string;
@@ -80,6 +87,7 @@ export default function PermitMap() {
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
+  const osmRef = useRef<OsmPermitMapHandle | null>(null);
   const [unlocated, setUnlocated] = useState<MapJob[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -240,6 +248,11 @@ export default function PermitMap() {
 
   // Focus a job from the side list.
   const focusJob = (j: MapJob) => {
+    if (USE_OSM_FALLBACK) {
+      osmRef.current?.focus(j.id);
+      setSelectedId(j.id);
+      return;
+    }
     const map = mapRef.current;
     if (!map) return;
     const marker = markersRef.current.find((m) => (m as any)._jobId === j.id);
@@ -368,6 +381,14 @@ export default function PermitMap() {
                           <div className="font-medium text-sm truncate flex items-center gap-1">
                             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
                             {j.company ?? "Job"}
+                            <a
+                              href={`/projects/${j.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              title="Open full project details (info, crew, plans)"
+                              className="ml-1 shrink-0 text-[11px] font-semibold text-muted-foreground hover:text-primary underline decoration-dotted"
+                            >
+                              details
+                            </a>
                           </div>
                           <div className="text-xs text-muted-foreground truncate">
                             {j.jobAddress ?? "No address"}
@@ -388,12 +409,23 @@ export default function PermitMap() {
 
         {/* Map */}
         <div className="flex-1 min-h-[360px]">
-          <MapView
-            className="w-full h-full"
-            initialCenter={DEFAULT_CENTER}
-            initialZoom={10}
-            onMapReady={onMapReady}
-          />
+          {USE_OSM_FALLBACK ? (
+            <OsmPermitMap
+              ref={osmRef}
+              jobs={filteredJobs}
+              themeFor={(j) => STATUS_THEME[statusKey(j.status)]}
+              popupHtml={infoHtml}
+              onSelect={setSelectedId}
+              onUnlocated={setUnlocated}
+            />
+          ) : (
+            <MapView
+              className="w-full h-full"
+              initialCenter={DEFAULT_CENTER}
+              initialZoom={10}
+              onMapReady={onMapReady}
+            />
+          )}
         </div>
       </div>
     </div>

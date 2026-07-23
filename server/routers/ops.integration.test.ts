@@ -128,6 +128,16 @@ vi.mock("../airtable", () => ({
 
 // ---- Mock opsDb (in-memory local store) ----
 vi.mock("../opsDb", () => ({
+  // Day-session / field-flow helpers (technician app)
+  listConfirmedAssignmentRows: vi.fn(async () => []),
+  hazardJobIdsForDay: vi.fn(async () => new Set<string>()),
+  getDaySession: vi.fn(async () => null),
+  startDaySession: vi.fn(async () => 1),
+  endDaySession: vi.fn(async () => {}),
+  listTruckCatalog: vi.fn(async () => []),
+  setAssignmentCompleted: vi.fn(async () => {}),
+  setAssignmentNote: vi.fn(async () => {}),
+  listTimeLogsBetween: vi.fn(async () => []),
   getHazardAssessment: vi.fn(async () => state.hazard),
   getOpenTimeLog: vi.fn(async () => state.openTimeLog),
   createTimeLog: vi.fn(async () => 1),

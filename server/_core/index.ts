@@ -9,6 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerScheduledRoutes } from "../scheduledRoutes";
+import { registerDevLogin } from "../devLogin";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -37,6 +38,15 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // LOCAL DEV ONLY: enables /api/dev-login so the app can be viewed without Manus OAuth.
+  // Local dev login is also allowed in production while ENABLE_DEV_LOGIN=true
+  // (the pilot sign-in until real per-user auth ships). Keep the URL private.
+  if (
+    process.env.NODE_ENV !== "production" ||
+    process.env.ENABLE_DEV_LOGIN === "true"
+  ) {
+    registerDevLogin(app);
+  }
   // tRPC API
   app.use(
     "/api/trpc",

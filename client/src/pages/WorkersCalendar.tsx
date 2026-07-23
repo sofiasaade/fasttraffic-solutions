@@ -13,6 +13,21 @@ import {
   Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
 import {
   WorkersDayTimeline,
@@ -144,6 +159,42 @@ export default function WorkersCalendar() {
   });
 
   const todayStr = ymd(new Date());
+  const utils = trpc.useUtils();
+
+  // Click-to-edit for an assigned chip: task, times, or remove it.
+  const [editing, setEditing] = useState<{
+    id: number;
+    label: string;
+    phase: string;
+    startTime: string;
+    endTime: string;
+  } | null>(null);
+  const updateScheduled = trpc.coordinator.updateScheduled.useMutation({
+    onSuccess: () => {
+      toast.success("Assignment updated");
+      setEditing(null);
+      utils.coordinator.workerWeek.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const removeScheduled = trpc.coordinator.removeScheduled.useMutation({
+    onSuccess: () => {
+      toast.success("Assignment removed");
+      setEditing(null);
+      utils.coordinator.workerWeek.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // How many distinct technicians have at least one assignment TODAY.
+  const workingTodayCount = useMemo(() => {
+    if (!data) return 0;
+    const set = new Set<string>();
+    for (const a of data.assignments) {
+      if (a.scheduledDate === todayStr) set.add(a.technicianName);
+    }
+    return set.size;
+  }, [data, todayStr]);
 
   // Index assignments by technician + date.
   const assignByTechDate = useMemo(() => {
@@ -401,8 +452,14 @@ export default function WorkersCalendar() {
           <div className="min-w-[900px]">
             {/* Column header */}
             <div className="grid grid-cols-[200px_repeat(7,minmax(0,1fr))] border-b border-border bg-muted/40 sticky top-0 z-10">
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
+              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                 Technician
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                  title="Technicians with at least one assignment today"
+                >
+                  {workingTodayCount} working today
+                </span>
               </div>
               {days.map((d) => {
                 const isToday = ymd(d) === todayStr;
@@ -486,11 +543,22 @@ export default function WorkersCalendar() {
                       {assigns.map((a) => (
                         <div
                           key={a.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() =>
+                            setEditing({
+                              id: a.id,
+                              label: `${a.company ?? a.municipality ?? "Job"}${a.jobAddress ? " — " + a.jobAddress : ""}`,
+                              phase: a.phase,
+                              startTime: a.startTime ?? "",
+                              endTime: a.endTime ?? "",
+                            })
+                          }
                           title={`${PHASE_LABEL[a.phase] ?? a.phase} · ${a.company ?? a.municipality ?? "Job"}${
                             a.jobAddress ? " — " + a.jobAddress : ""
-                          }${a.startTime ? ` (${a.startTime}${a.endTime ? "–" + a.endTime : ""})` : ""}`}
+                          }${a.startTime ? ` (${a.startTime}${a.endTime ? "–" + a.endTime : ""})` : ""} — click to edit`}
                           className={cn(
-                            "min-w-0 max-w-full rounded border px-1.5 py-1 text-[10px] leading-tight",
+                            "min-w-0 max-w-full rounded border px-1.5 py-1 text-[10px] leading-tight cursor-pointer hover:ring-2 hover:ring-primary/50 transition-shadow",
                             colorForJob(a.airtableJobId),
                             a.status === "confirmed"
                               ? "ring-1 ring-emerald-500"
@@ -521,6 +589,116 @@ export default function WorkersCalendar() {
           </div>
         </div>
       )}
+
+      {/* Edit an assigned chip: task, times, or remove the assignment. */}
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit assignment</DialogTitle>
+            <DialogDescription className="truncate">
+              {editing?.label}
+            </DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">
+                  Task
+                </div>
+                <Select
+                  value={editing.phase}
+                  onValueChange={(v) =>
+                    setEditing((e) => (e ? { ...e, phase: v } : e))
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[
+                      "Preparation",
+                      "Setup",
+                      "Set up aside",
+                      "No Parking",
+                      "Flagger",
+                      "Pickup",
+                    ].map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">
+                    Start time
+                  </div>
+                  <Input
+                    type="time"
+                    value={editing.startTime}
+                    onChange={(e) =>
+                      setEditing((s) =>
+                        s ? { ...s, startTime: e.target.value } : s,
+                      )
+                    }
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">
+                    End time
+                  </div>
+                  <Input
+                    type="time"
+                    value={editing.endTime}
+                    onChange={(e) =>
+                      setEditing((s) =>
+                        s ? { ...s, endTime: e.target.value } : s,
+                      )
+                    }
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={removeScheduled.isPending}
+                  onClick={() => removeScheduled.mutate({ id: editing.id })}
+                >
+                  Remove
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={updateScheduled.isPending}
+                    onClick={() =>
+                      updateScheduled.mutate({
+                        id: editing.id,
+                        phase: editing.phase as any,
+                        startTime: editing.startTime || null,
+                        endTime: editing.endTime || null,
+                      })
+                    }
+                  >
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

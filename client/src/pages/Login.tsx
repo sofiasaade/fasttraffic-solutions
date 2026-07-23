@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import BrandMark from "@/components/BrandMark";
 import { getLoginUrl } from "@/const";
 import {
   Cone,
@@ -25,10 +26,9 @@ export default function Login() {
         <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex items-center gap-3">
-          <img
-            src="/manus-storage/fts-icon-192_a254898a.png"
-            alt="Fast Traffic Solutions logo"
-            className="size-12 rounded-xl object-cover shadow-lg shadow-primary/30"
+          <BrandMark
+            className="size-12 rounded-xl shadow-lg shadow-primary/30"
+            iconClassName="size-6"
           />
           <div>
             <div className="text-xl font-extrabold tracking-tight">

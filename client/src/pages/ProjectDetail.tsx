@@ -231,6 +231,49 @@ export default function ProjectDetail() {
             )}
           </Card>
 
+          {/* Traffic-control plans (Airtable "Plan File" attachments) */}
+          {(job.planFile?.length ?? 0) > 0 && (
+            <Card>
+              <CardContent className="pt-4">
+                <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+                  <FileText className="size-4 text-primary" /> Plans (
+                  {job.planFile!.length})
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {job.planFile!.map((f: any, i: number) => (
+                    <a
+                      key={i}
+                      href={f.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-primary/50 hover:shadow-sm transition-all"
+                    >
+                      {f.thumbnails?.large?.url ? (
+                        <img
+                          src={f.thumbnails.large.url}
+                          alt=""
+                          className="size-12 rounded object-cover border border-border shrink-0"
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center size-12 rounded bg-primary/10 text-primary shrink-0">
+                          <FileText className="size-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium group-hover:text-primary">
+                          {f.filename ?? `Plan ${i + 1}`}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Open in new tab
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Crew by phase */}
           <Card>
             <CardHeader className="pb-2">

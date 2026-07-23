@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   Clock,
   History,
-  Cone,
   LogOut,
   Smartphone,
   Map as MapIcon,
@@ -14,25 +13,60 @@ import {
   Gauge,
   Users,
   AlertTriangle,
+  Wallet,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import GlobalProjectSearch from "@/components/GlobalProjectSearch";
+import BrandMark from "@/components/BrandMark";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
-  { href: "/day", label: "Day Timeline", icon: CalendarClock },
-  { href: "/workers", label: "Workers", icon: Users },
-  { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
-  { href: "/pending", label: "Pending Jobs", icon: AlertTriangle },
-  { href: "/map", label: "Permit Map", icon: MapIcon },
-  { href: "/alerts", label: "Change Alerts", icon: BellRing },
-  { href: "/overtime", label: "Overtime", icon: Clock },
-  { href: "/history", label: "Change History", icon: History },
+// Same destinations, same order — grouped visually like an enterprise console.
+const NAV_GROUPS: {
+  title: string;
+  items: { href: string; label: string; icon: typeof Gauge }[];
+}[] = [
+  {
+    title: "Operate",
+    items: [
+      { href: "/dashboard", label: "Dashboard", icon: Gauge },
+      { href: "/daily", label: "Daily Board", icon: CalendarClock },
+      { href: "/scheduler", label: "Scheduler", icon: CalendarRange },
+      { href: "/workers", label: "Workers", icon: Users },
+      { href: "/dispatch", label: "Dispatch Board", icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: "Monitor",
+    items: [
+      { href: "/pending", label: "Pending Jobs", icon: AlertTriangle },
+      { href: "/map", label: "Permit Map", icon: MapIcon },
+      { href: "/alerts", label: "Change Alerts", icon: BellRing },
+    ],
+  },
+  {
+    title: "Records",
+    items: [
+      { href: "/overtime", label: "Overtime", icon: Clock },
+      { href: "/payroll", label: "Payroll", icon: Wallet },
+      { href: "/history", label: "Change History", icon: History },
+    ],
+  },
 ];
+
+const NAV = NAV_GROUPS.flatMap((g) => g.items);
+
+function initials(name: string | null | undefined): string {
+  if (!name) return "C";
+  return name
+    .split(/\s+/)
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 export default function CoordinatorShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -49,15 +83,35 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
   });
   const pendingCount = pending.data?.count ?? 0;
 
+  const current = NAV.find(
+    (i) => location === i.href || location.startsWith(i.href + "/"),
+  );
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  const badgeFor = (href: string) => {
+    if (href === "/alerts" && alertCount > 0)
+      return { n: alertCount, cls: "bg-red-500" };
+    if (href === "/pending" && pendingCount > 0)
+      return { n: pendingCount, cls: "bg-rose-500" };
+    return null;
+  };
+
   return (
-    <div className="min-h-screen flex bg-background">
-      <aside className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+    <div className="min-h-screen flex bg-transparent">
+      <aside
+        className="hidden md:flex w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border shadow-[4px_0_24px_-12px_rgba(15,23,42,0.35)]"
+        style={{
+          backgroundImage:
+            "linear-gradient(180deg, oklch(0.38 0.125 272) 0%, oklch(0.35 0.12 272) 34%, oklch(0.3 0.11 273) 100%)",
+        }}
+      >
         <div className="flex items-center gap-2.5 px-5 h-16 border-b border-sidebar-border">
-          <img
-            src="/manus-storage/fts-icon-192_a254898a.png"
-            alt="Fast Traffic Solutions logo"
-            className="size-9 rounded-lg object-cover shrink-0 ring-1 ring-sidebar-border"
-          />
+          <BrandMark className="size-9" />
           <div className="leading-tight">
             <div className="font-extrabold tracking-tight">Fast Traffic</div>
             <div className="text-[11px] uppercase tracking-widest text-sidebar-foreground/60">
@@ -66,56 +120,82 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map((item) => {
-            const active = location === item.href || location.startsWith(item.href + "/");
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                )}
-              >
-                <Icon className="size-4.5" />
-                <span className="flex-1">{item.label}</span>
-                {item.href === "/alerts" && alertCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold">
-                    {alertCount > 99 ? "99+" : alertCount}
-                  </span>
-                )}
-                {item.href === "/pending" && pendingCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold">
-                    {pendingCount > 99 ? "99+" : pendingCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+        <nav className="flex-1 px-3 py-3 overflow-y-auto">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title} className="mb-4">
+              <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-sidebar-foreground/40 select-none">
+                {group.title}
+              </div>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const active =
+                    location === item.href || location.startsWith(item.href + "/");
+                  const Icon = item.icon;
+                  const badge = badgeFor(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors",
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+                      )}
+                    >
+                      {active && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-primary" />
+                      )}
+                      <Icon
+                        className={cn(
+                          "size-4.5 shrink-0",
+                          active ? "text-primary" : "text-sidebar-foreground/50",
+                        )}
+                      />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {badge && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-white text-[10px] font-bold",
+                            badge.cls,
+                          )}
+                        >
+                          {badge.n > 99 ? "99+" : badge.n}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
 
-          <Link
-            href="/app"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground transition-colors mt-4"
-          >
-            <Smartphone className="size-4.5" />
-            Technician App
-          </Link>
+          <div className="pt-1 mt-1 border-t border-sidebar-border/60">
+            <Link
+              href="/app"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground transition-colors mt-2"
+            >
+              <Smartphone className="size-4.5 text-sidebar-foreground/50" />
+              Technician App
+            </Link>
+          </div>
         </nav>
 
         <div className="p-3 border-t border-sidebar-border">
-          <div className="px-3 py-2 text-sm">
-            <div className="font-medium truncate">{user?.name ?? "Coordinator"}</div>
-            <div className="text-xs text-sidebar-foreground/50 truncate">
-              {user?.email}
+          <div className="flex items-center gap-2.5 px-2 py-2">
+            <div className="flex items-center justify-center size-8 rounded-full bg-sidebar-accent text-[11px] font-bold shrink-0">
+              {initials(user?.name)}
+            </div>
+            <div className="min-w-0 text-sm leading-tight">
+              <div className="font-medium truncate">{user?.name ?? "Coordinator"}</div>
+              <div className="text-[11px] text-sidebar-foreground/50 truncate">
+                {user?.email}
+              </div>
             </div>
           </div>
           <button
             onClick={() => logout()}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/60 transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-[13px] font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 transition-colors"
           >
             <LogOut className="size-4.5" />
             Sign out
@@ -125,17 +205,31 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
 
       {/* Main area with a persistent top bar holding the global project search */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Desktop top bar: global project search available on every window */}
-        <header className="hidden md:flex items-center gap-4 h-16 px-6 border-b border-border bg-card/60 backdrop-blur-sm">
-          <GlobalProjectSearch className="w-full max-w-md" />
+        {/* Desktop top bar: page context + global project search on every window */}
+        <header className="hidden md:flex items-center gap-4 h-16 px-6 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-40">
+          <div className="min-w-0">
+            <h1 className="text-[15px] font-bold leading-tight truncate">
+              {current?.label ?? "Fast Traffic OS"}
+            </h1>
+            <div className="text-[11px] text-muted-foreground">{today}</div>
+          </div>
+          <GlobalProjectSearch className="w-full max-w-md ml-auto" />
+          <Link
+            href="/alerts"
+            className="relative flex items-center justify-center size-9 rounded-lg border border-border bg-card hover:bg-accent transition-colors shrink-0"
+            aria-label="Change alerts"
+          >
+            <BellRing className="size-4 text-muted-foreground" />
+            {alertCount > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold">
+                {alertCount > 99 ? "99+" : alertCount}
+              </span>
+            )}
+          </Link>
         </header>
         <header className="md:hidden flex items-center justify-between h-14 px-4 bg-sidebar text-sidebar-foreground">
           <div className="flex items-center gap-2 font-bold">
-            <img
-              src="/manus-storage/fts-icon-192_a254898a.png"
-              alt="Fast Traffic Solutions logo"
-              className="size-6 rounded-md object-cover"
-            />{" "}
+            <BrandMark className="size-7" iconClassName="size-4" />
             Fast Traffic
           </div>
           <button onClick={() => logout()}>

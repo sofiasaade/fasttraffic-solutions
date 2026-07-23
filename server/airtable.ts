@@ -1,3 +1,4 @@
+import { readFileSync } from "fs";
 import { ENV } from "./_core/env";
 import {
   AF,
@@ -8,6 +9,22 @@ import {
 } from "../shared/airtableFields";
 
 const API_BASE = "https://api.airtable.com/v0";
+
+// LOCAL DEV: read-only snapshot of jobs pulled from Airtable (see server/airtableCache.json).
+// Used only when AIRTABLE_API_KEY is unset, so the app NEVER calls (or writes) Airtable locally.
+let _airtableCache: { records: any[] } | null = null;
+function loadAirtableCache(): { records: any[] } {
+  if (!_airtableCache) {
+    try {
+      _airtableCache = JSON.parse(
+        readFileSync(new URL("./airtableCache.json", import.meta.url), "utf8"),
+      );
+    } catch {
+      _airtableCache = { records: [] };
+    }
+  }
+  return _airtableCache!;
+}
 
 function authHeaders() {
   return {
@@ -30,6 +47,20 @@ export class AirtableError extends Error {
 }
 
 async function airtableFetch(url: string, init?: RequestInit): Promise<any> {
+  // LOCAL DEV: no Airtable key -> serve the read-only local snapshot, never hit the network.
+  if (!ENV.airtableApiKey) {
+    const cache = loadAirtableCache();
+    const single = url.match(/\/(rec[A-Za-z0-9]{14})(?:\?|$)/);
+    if (single) {
+      return (
+        cache.records.find((r: any) => r.id === single[1]) ?? {
+          id: single[1],
+          fields: {},
+        }
+      );
+    }
+    return { records: cache.records };
+  }
   const res = await fetch(url, {
     ...init,
     headers: { ...authHeaders(), ...(init?.headers ?? {}) },

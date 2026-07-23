@@ -4,7 +4,11 @@ import { adminProcedure, router } from "../_core/trpc";
 import { fetchMapJobs, fetchJobById } from "../airtable";
 import { AF, JobRecord } from "../../shared/airtableFields";
 import { parseNonWorkingDays } from "../../shared/nonWorkingDays";
-import { classifyJobForDay } from "../../shared/dashboardDay";
+import {
+  classifyJobForDay,
+  startHourFromSetupDuration,
+  timeBucketFromSetupDuration,
+} from "../../shared/dashboardDay";
 import { deriveAssignmentState } from "../../shared/jobStatus";
 import { getPermitSchedulesForJobs } from "../permitExtraction";
 import {
@@ -35,6 +39,10 @@ import {
 import {
   appendChangeHistory,
   createNotification,
+  confirmAssignmentsForDate,
+  listDayNotifications,
+  setAssignmentNote,
+  listTimeLogsBetween,
   getAssignmentsMap,
   getAssignmentsMapForDay,
   getDayPinnedAssignmentsMap,
@@ -326,7 +334,7 @@ export const coordinatorRouter = router({
       // to be prepared ahead of time. Cancelled/declined jobs are excluded.
       const prepWork: any[] = [];
       for (const j of merged) {
-        const b = classifyJobForDay(j.startDate, j.endDate, date, j.setupDuration);
+        const b = classifyJobForDay(j.startDate, j.endDate, date, j.setupDuration, j.subStatus);
         // Cancelled / declined jobs are surfaced ONLY in the "Starting today"
         // column (when they were supposed to start that day), so coordinators
         // can see what fell off. They never count as ongoing or pickup work.
@@ -637,6 +645,257 @@ export const coordinatorRouter = router({
       return { ok: true as const, job: merged, conflicts };
     }),
 
+  // Hours worked in the CURRENT WEEK per technician — shown next to each worker
+  // in the Scheduler so the coordinator can prevent overtime BEFORE assigning.
+  // (Overtime is weekly: 44 regular hours per week, resetting every Monday.)
+  techPeriodHours: adminProcedure.query(async () => {
+    const now = new Date();
+    const mon = new Date(now);
+    mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+    mon.setHours(0, 0, 0, 0);
+    const nextMon = new Date(mon);
+    nextMon.setDate(nextMon.getDate() + 7);
+    const threshold = await getOvertimeThreshold();
+    const logs = await listTimeLogsBetween(mon, nextMon);
+    const map = new Map<string, number>();
+    for (const l of logs) {
+      if (!l.hours) continue;
+      map.set(l.technicianName, (map.get(l.technicianName) ?? 0) + l.hours);
+    }
+    const sums = Array.from(map.entries()).map(([technicianName, hours]) => ({
+      technicianName,
+      hours: Math.round(hours * 100) / 100,
+    }));
+    return { threshold, sums };
+  }),
+
+  // Payroll: per active technician, hours per day for a week (Mon–Sun), with
+  // weekly regular vs overtime split (same threshold as the Overtime page).
+  payroll: adminProcedure
+    .input(z.object({ weekStart: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      // Resolve Monday of the requested (or current) week, local time.
+      const ref = input?.weekStart
+        ? new Date(input.weekStart + "T00:00:00")
+        : new Date();
+      const mon = new Date(ref);
+      mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+      mon.setHours(0, 0, 0, 0);
+      const nextMon = new Date(mon);
+      nextMon.setDate(nextMon.getDate() + 7);
+      const dayKeyOf = (dt: Date) =>
+        `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const days: string[] = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(mon);
+        d.setDate(d.getDate() + i);
+        days.push(dayKeyOf(d));
+      }
+      const [threshold, logs, techs] = await Promise.all([
+        getOvertimeThreshold(),
+        listTimeLogsBetween(mon, nextMon),
+        listTechnicians(),
+      ]);
+      const byTech = new Map<string, Record<string, number>>();
+      for (const l of logs) {
+        if (!l.checkInAt || !l.hours) continue;
+        const k = dayKeyOf(new Date(l.checkInAt));
+        const m = byTech.get(l.technicianName) ?? {};
+        m[k] = (m[k] ?? 0) + l.hours;
+        byTech.set(l.technicianName, m);
+      }
+      const rows = techs
+        .filter((t: any) => t.active)
+        .map((t: any) => {
+          const m = byTech.get(t.airtableName) ?? {};
+          const perDay = days.map((d) => Math.round((m[d] ?? 0) * 100) / 100);
+          const total = Math.round(perDay.reduce((a, b) => a + b, 0) * 100) / 100;
+          const regular = Math.min(total, threshold);
+          const overtime = Math.max(0, Math.round((total - threshold) * 100) / 100);
+          return {
+            technicianName: t.displayName ?? t.airtableName,
+            perDay,
+            total,
+            regular,
+            overtime,
+          };
+        })
+        .sort((a, b) => b.total - a.total);
+      return { weekStart: days[0], days, threshold, rows };
+    }),
+
+  // Technician-first day board: every active tech + the day's job pool, each
+  // job classified by phase (starting / ongoing daily / pickup) and by start
+  // time (before 9 / at 9 / after 9). Also returns who is already assigned to
+  // what that day so the UI can drop jobs onto technicians.
+  dayBoard: adminProcedure
+    .input(z.object({ date: z.string() }))
+    .query(async ({ input }) => {
+      const date = input.date;
+      const [jobs, techs, scheduled] = await Promise.all([
+        fetchMapJobs(),
+        listTechnicians(),
+        listScheduledAssignmentsForWeek(date, date),
+      ]);
+
+      // Classify each Airtable job for this day.
+      const pool = [] as any[];
+      for (const j of jobs as any[]) {
+        const b = classifyJobForDay(
+          j.startDate,
+          j.endDate,
+          date,
+          j.setupDuration,
+          j.subStatus,
+        );
+        const phase = b.startingToday
+          ? "starting"
+          : b.pickup
+            ? "pickup"
+            : b.ongoing
+              ? "ongoing"
+              : null;
+        if (!phase) continue; // job not active this day
+        pool.push({
+          id: j.id,
+          company: j.company,
+          jobAddress: j.jobAddress,
+          municipality: j.municipality,
+          setupDuration: j.setupDuration,
+          subStatus: j.subStatus,
+          startTime: startHourFromSetupDuration(j.setupDuration),
+          phase, // starting | ongoing | pickup
+          timeBucket: timeBucketFromSetupDuration(j.setupDuration), // before9 | at9 | after9 | notime
+        });
+      }
+
+      // Assignments pinned to this day, grouped by technician.
+      const assignmentsByTech: Record<string, any[]> = {};
+      for (const r of scheduled as any[]) {
+        (assignmentsByTech[r.technicianName] ??= []).push({
+          id: r.id,
+          jobId: r.airtableJobId,
+          phase: r.phase,
+          startTime: r.startTime,
+          endTime: r.endTime,
+          status: r.status,
+          company: (jobs as any[]).find((j) => j.id === r.airtableJobId)?.company ?? null,
+        });
+      }
+
+      return {
+        date,
+        technicians: techs.map((t: any) => ({
+          airtableName: t.airtableName,
+          displayName: t.displayName,
+          experienceLevel: t.experienceLevel,
+          assignments: assignmentsByTech[t.airtableName] ?? [],
+        })),
+        pool,
+      };
+    }),
+
+  // Confirm the whole day: every tentative assignment on the date becomes
+  // confirmed (ONLY then do technicians see their jobs), and each affected
+  // technician gets ONE in-app notification that their schedule is ready.
+  confirmDay: adminProcedure
+    .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .mutation(async ({ ctx, input }) => {
+      const { confirmed, technicians } = await confirmAssignmentsForDate(
+        input.date,
+      );
+      const already = new Set(
+        (await listDayNotifications(input.date)).map((n) => n.technicianName),
+      );
+      let notified = 0;
+      for (const t of technicians) {
+        if (already.has(t)) continue;
+        await createNotification({
+          technicianName: t,
+          airtableJobId: `__day__:${input.date}`,
+          type: "assigned",
+          title: "Your schedule is ready",
+          body: `Your assignments for ${input.date} are confirmed. Open My Jobs to see them.`,
+        });
+        notified++;
+      }
+      await appendChangeHistory({
+        airtableJobId: `__day__:${input.date}`,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? "Coordinator",
+        action: "confirm_day",
+        fieldName: input.date,
+        oldValue: null,
+        newValue: String(confirmed),
+        details: `Confirmed ${confirmed} assignment(s); notified ${notified} technician(s)`,
+      });
+      return { ok: true as const, confirmed, notified };
+    }),
+
+  // Confirm ONE technician's day (the check-mark button per technician).
+  confirmDayTech: adminProcedure
+    .input(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        technicianName: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { confirmed } = await confirmAssignmentsForDate(
+        input.date,
+        input.technicianName,
+      );
+      const already = new Set(
+        (await listDayNotifications(input.date)).map((n) => n.technicianName),
+      );
+      let notified = 0;
+      if (confirmed > 0 && !already.has(input.technicianName)) {
+        await createNotification({
+          technicianName: input.technicianName,
+          airtableJobId: `__day__:${input.date}`,
+          type: "assigned",
+          title: "Your schedule is ready",
+          body: `Your assignments for ${input.date} are confirmed. Open My Jobs to see them.`,
+        });
+        notified = 1;
+      }
+      await appendChangeHistory({
+        airtableJobId: `__day__:${input.date}`,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? "Coordinator",
+        action: "confirm_day_tech",
+        fieldName: input.technicianName,
+        oldValue: null,
+        newValue: String(confirmed),
+        details: null,
+      });
+      return { ok: true as const, confirmed, notified };
+    }),
+
+  // Leave a note for the technician on their assignment (shown in their app).
+  setAssignmentNote: adminProcedure
+    .input(
+      z.object({
+        jobId: z.string(),
+        technicianName: z.string(),
+        note: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await setAssignmentNote(input.jobId, input.technicianName, input.note);
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? "Coordinator",
+        action: "assignment_note",
+        fieldName: input.technicianName,
+        oldValue: null,
+        newValue: input.note,
+        details: null,
+      });
+      return { ok: true as const };
+    }),
+
   // Modify a job: end date and/or sub-status — stored LOCALLY as overrides.
   modifyJob: adminProcedure
     .input(
@@ -754,7 +1013,6 @@ export const coordinatorRouter = router({
       const ref = input?.date ? new Date(input.date) : new Date();
       const period = getPayPeriodFor(ref);
       const threshold = await getOvertimeThreshold();
-      const sums = await sumHoursInPeriod(period.start, period.end);
 
       const open = await listOpenTimeLogs();
       const liveByTech = new Map<string, number>();
@@ -771,20 +1029,45 @@ export const coordinatorRouter = router({
         }
       }
 
-      const byTech = new Map<string, number>();
-      for (const row of sums) {
-        byTech.set(row.technicianName, Number(row.total));
+      // WEEKLY overtime rule: each week of the pay period allows `threshold`
+      // regular hours; hours over that within a single week are OT, and the
+      // counter resets the next week. Bucket every log into week 1 or week 2.
+      const weekMs = 7 * 24 * 3600 * 1000;
+      const logs = await listTimeLogsBetween(period.start, period.end);
+      const weeksByTech = new Map<string, [number, number]>();
+      const bump = (t: string, wk: number, h: number) => {
+        const w = weeksByTech.get(t) ?? [0, 0];
+        w[wk === 0 ? 0 : 1] += h;
+        weeksByTech.set(t, w);
+      };
+      for (const l of logs) {
+        if (!l.checkInAt || !l.hours) continue;
+        const wk =
+          new Date(l.checkInAt).getTime() - period.start.getTime() < weekMs
+            ? 0
+            : 1;
+        bump(l.technicianName, wk, l.hours);
       }
       for (const [t, h] of Array.from(liveByTech.entries())) {
-        byTech.set(t, (byTech.get(t) ?? 0) + h);
+        // Live (open) logs count toward the current week.
+        const wk = now - period.start.getTime() < weekMs ? 0 : 1;
+        bump(t, wk, h);
       }
 
       const technicians = await listTechnicians();
       const statuses = technicians.map((tech) => {
-        const hours = byTech.get(tech.airtableName) ?? 0;
+        const [w1, w2] = weeksByTech.get(tech.airtableName) ?? [0, 0];
+        const overtime =
+          Math.max(0, w1 - threshold) + Math.max(0, w2 - threshold);
+        // Status bar tracks the WORST week against the weekly threshold.
+        const worst = Math.max(w1, w2);
         return {
-          ...computeOvertimeStatus(tech.displayName, hours, threshold),
+          ...computeOvertimeStatus(tech.displayName, worst, threshold),
           airtableName: tech.airtableName,
+          week1Hours: Math.round(w1 * 100) / 100,
+          week2Hours: Math.round(w2 * 100) / 100,
+          totalHours: Math.round((w1 + w2) * 100) / 100,
+          overtimeHours: Math.round(overtime * 100) / 100,
         };
       });
 

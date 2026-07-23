@@ -48,18 +48,21 @@ function Stat({
           : undefined
       }
       className={cn(
-        "rounded-2xl border border-border bg-card p-5 flex items-center gap-4",
-        onClick && "cursor-pointer hover:border-rose-300 hover:shadow-sm transition-all",
+        "group rounded-2xl border border-border bg-card p-5 flex items-center gap-4 transition-all duration-200",
+        onClick &&
+          "cursor-pointer hover:border-rose-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99]",
       )}
     >
       <div
-        className="flex items-center justify-center size-11 rounded-xl shrink-0"
+        className="flex items-center justify-center size-11 rounded-xl shrink-0 ring-1 ring-inset ring-black/5 transition-transform duration-200 group-hover:scale-105"
         style={{ background: `${accent}1a`, color: accent }}
       >
         <Icon className="size-5" />
       </div>
       <div className="min-w-0">
-        <div className="text-2xl font-extrabold leading-none">{value}</div>
+        <div className="text-2xl font-extrabold leading-none tabular-nums tracking-tight">
+          {value}
+        </div>
         <div className="text-xs text-muted-foreground mt-1 truncate">{label}</div>
       </div>
     </div>

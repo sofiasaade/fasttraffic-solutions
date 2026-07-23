@@ -36,9 +36,15 @@ function levelStyles(level: string) {
 
 export default function OvertimeDashboard() {
   const utils = trpc.useUtils();
-  const otQuery = trpc.coordinator.overtime.useQuery(undefined, {
-    refetchInterval: 60000,
-  });
+  // Pay-period navigation: offset in periods from the current one (14 days).
+  const [periodOffset, setPeriodOffset] = useState(0);
+  const refDate = new Date(Date.now() + periodOffset * 14 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const otQuery = trpc.coordinator.overtime.useQuery(
+    periodOffset === 0 ? undefined : { date: refDate },
+    { refetchInterval: 60000 },
+  );
   const [editing, setEditing] = useState(false);
   const [threshold, setThreshold] = useState("");
 
@@ -61,12 +67,45 @@ export default function OvertimeDashboard() {
         </h1>
       </div>
       {data && (
-        <p className="text-sm text-muted-foreground mb-5">
-          Pay period {new Date(data.periodStart).toLocaleDateString("en-CA")} –{" "}
-          {new Date(
-            new Date(data.periodEnd).getTime() - 86400000,
-          ).toLocaleDateString("en-CA")}
-        </p>
+        <div className="flex items-center gap-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setPeriodOffset((o) => o - 1)}
+            aria-label="Previous pay period"
+            className="flex items-center justify-center size-7 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground"
+          >
+            ‹
+          </button>
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {/* Period bounds are UTC-anchored — render in UTC so the label
+                matches the company payroll calendar (Mon → closing Sunday). */}
+            Pay period{" "}
+            {new Date(data.periodStart).toLocaleDateString("en-CA", {
+              timeZone: "UTC",
+            })}{" "}
+            –{" "}
+            {new Date(
+              new Date(data.periodEnd).getTime() - 86400000,
+            ).toLocaleDateString("en-CA", { timeZone: "UTC" })}
+          </p>
+          <button
+            type="button"
+            onClick={() => setPeriodOffset((o) => o + 1)}
+            aria-label="Next pay period"
+            className="flex items-center justify-center size-7 rounded-lg border border-border bg-card hover:bg-accent text-muted-foreground"
+          >
+            ›
+          </button>
+          {periodOffset !== 0 && (
+            <button
+              type="button"
+              onClick={() => setPeriodOffset(0)}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Current period
+            </button>
+          )}
+        </div>
       )}
 
       {/* Threshold control */}
@@ -75,7 +114,7 @@ export default function OvertimeDashboard() {
         <div className="flex-1">
           <div className="text-sm font-medium">Alberta overtime threshold</div>
           <div className="text-xs text-muted-foreground">
-            Hours per pay period before overtime
+            Regular hours per WEEK before overtime — resets every Monday
           </div>
         </div>
         {editing ? (
@@ -153,10 +192,23 @@ export default function OvertimeDashboard() {
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
                   <span>
                     {s.remaining >= 0
-                      ? `${s.remaining.toFixed(1)}h until overtime`
+                      ? `${s.remaining.toFixed(1)}h until overtime (worst week)`
                       : `${Math.abs(s.remaining).toFixed(1)}h over`}
                   </span>
-                  <span>{s.threshold}h</span>
+                  <span>{s.threshold}h/week</span>
+                </div>
+                {/* Weekly breakdown: OT resets each week (44h regular per week). */}
+                <div className="flex gap-3 text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                  <span>Week 1: {(s as any).week1Hours?.toFixed(1) ?? "0.0"}h</span>
+                  <span>Week 2: {(s as any).week2Hours?.toFixed(1) ?? "0.0"}h</span>
+                  <span className="font-semibold">
+                    Total: {(s as any).totalHours?.toFixed(1) ?? "0.0"}h
+                  </span>
+                  {((s as any).overtimeHours ?? 0) > 0 && (
+                    <span className="font-bold text-red-600">
+                      OT: {(s as any).overtimeHours.toFixed(1)}h
+                    </span>
+                  )}
                 </div>
               </div>
             );

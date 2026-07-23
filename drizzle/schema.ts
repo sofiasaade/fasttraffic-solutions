@@ -299,6 +299,10 @@ export const jobAssignments = mysqlTable("job_assignments", {
   status: varchar("status", { length: 16 }).default("tentative").notNull(),
   confirmedAt: timestamp("confirmedAt"),
   confirmedByName: varchar("confirmedByName", { length: 128 }),
+  /** Optional coordinator note for the technician (set when assigning). */
+  note: text("note"),
+  /** Set when the technician marks the work done (signs installed / picked up). */
+  completedAt: timestamp("completedAt"),
   createdByUserId: int("createdByUserId"),
   createdByName: varchar("createdByName", { length: 128 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -333,11 +337,33 @@ export const jobNotes = mysqlTable("job_notes", {
   airtableJobId: varchar("airtableJobId", { length: 32 }).notNull(),
   authorName: varchar("authorName", { length: 128 }).notNull(),
   authorRole: varchar("authorRole", { length: 32 }).notNull(),
+  /** Note kind: general field note or an incident report ("novedad") about
+   * signs — stolen / lost / damaged. */
+  category: varchar("category", { length: 16 }).default("general").notNull(),
   note: text("note").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type JobNote = typeof jobNotes.$inferSelect;
+
+/**
+ * One row per technician per day: warehouse check-in with the truck they will
+ * drive that day, and the end-of-day check-out. Check-out is gated on having a
+ * hazard assessment submitted (today) for every job worked that day.
+ */
+export const techDaySessions = mysqlTable("tech_day_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  /** Local date YYYY-MM-DD. One session per technician per day. */
+  date: varchar("date", { length: 10 }).notNull(),
+  truckName: varchar("truckName", { length: 128 }),
+  truckCode: varchar("truckCode", { length: 32 }),
+  checkInAt: timestamp("checkInAt").defaultNow().notNull(),
+  checkOutAt: timestamp("checkOutAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TechDaySession = typeof techDaySessions.$inferSelect;
 export type InsertJobNote = typeof jobNotes.$inferInsert;
 
 /**

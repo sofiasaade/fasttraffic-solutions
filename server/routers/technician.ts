@@ -3,7 +3,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { fetchJobById } from "../airtable";
 import { JobRecord } from "../../shared/airtableFields";
-import { deriveZone } from "../../shared/opsLogic";
+import { deriveZone, getPayPeriodFor } from "../../shared/opsLogic";
 import { storageGetSignedUrl, storagePut } from "../storage";
 import {
   appendChangeHistory,
@@ -13,10 +13,18 @@ import {
   createJobNote,
   createJobPhoto,
   createTimeLog,
+  endDaySession,
+  getDaySession,
   getHazardAssessment,
   getJobOverride,
   getOpenTimeLog,
+  getOvertimeThreshold,
   getTechnicianByName,
+  hazardJobIdsForDay,
+  listConfirmedAssignmentRows,
+  listTruckCatalog,
+  setAssignmentCompleted,
+  startDaySession,
   getTechnicianByUserId,
   linkTechnicianToUser,
   listJobIdsForTechnician,
@@ -24,12 +32,18 @@ import {
   listJobPhotos,
   listNotificationsForTechnician,
   listTechnicians,
+  listTimeLogsForTechnician,
   markAllNotificationsRead,
   markNotificationRead,
   seedTechnicians,
 } from "../opsDb";
 
 const phaseSchema = z.enum(["Preparation", "Setup", "Pickup"]);
+
+/** Local YYYY-MM-DD (no timezone drift). */
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 async function resolveTechnician(userId: number) {
   return getTechnicianByUserId(userId);
@@ -93,6 +107,60 @@ export const technicianRouter = router({
     return tech ?? null;
   }),
 
+  // A technician's OWN hours: current pay period regular vs overtime, plus a
+  // list of recent time-log entries. Read-only; reuses the same pay-period and
+  // overtime-threshold rules the coordinator Overtime page uses, so the numbers
+  // agree. Only ever returns the signed-in technician's own logs.
+  myHours: protectedProcedure
+    .input(z.object({ date: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const tech = await resolveTechnician(ctx.user.id);
+      if (!tech) return null;
+      const ref = input?.date ? new Date(input.date) : new Date();
+      const period = getPayPeriodFor(ref);
+      const threshold = await getOvertimeThreshold();
+
+      const logs = await listTimeLogsForTechnician(tech.airtableName);
+      const inPeriod = logs.filter((l) => {
+        const t = l.checkInAt ? new Date(l.checkInAt).getTime() : 0;
+        return t >= period.start.getTime() && t < period.end.getTime();
+      });
+      const periodHours = inPeriod.reduce((n, l) => n + (l.hours ?? 0), 0);
+      // WEEKLY overtime rule: 44 regular hours per week, resetting each week.
+      const weekMs = 7 * 24 * 3600 * 1000;
+      let w1 = 0;
+      let w2 = 0;
+      for (const l of inPeriod) {
+        const t = new Date(l.checkInAt!).getTime();
+        if (t - period.start.getTime() < weekMs) w1 += l.hours ?? 0;
+        else w2 += l.hours ?? 0;
+      }
+      const regular = Math.min(w1, threshold) + Math.min(w2, threshold);
+      const overtime =
+        Math.max(0, w1 - threshold) + Math.max(0, w2 - threshold);
+
+      return {
+        technicianName: tech.displayName ?? tech.airtableName,
+        period: {
+          start: period.start.toISOString(),
+          end: period.end.toISOString(),
+        },
+        threshold,
+        totalHours: periodHours,
+        regularHours: regular,
+        overtimeHours: overtime,
+        openLog: logs.find((l) => l.checkInAt && !l.checkOutAt) ?? null,
+        recent: logs.slice(0, 20).map((l) => ({
+          id: l.id,
+          airtableJobId: l.airtableJobId,
+          phase: l.phase,
+          checkInAt: l.checkInAt ? new Date(l.checkInAt).toISOString() : null,
+          checkOutAt: l.checkOutAt ? new Date(l.checkOutAt).toISOString() : null,
+          hours: l.hours ?? null,
+        })),
+      };
+    }),
+
   roster: protectedProcedure.query(async () => {
     await seedTechnicians();
     return listTechnicians();
@@ -117,16 +185,47 @@ export const technicianRouter = router({
     const jobIds = Array.from(byJob.keys());
     if (jobIds.length === 0) return [];
 
+    // Assignment metadata (scheduled time, coordinator note, completion) and
+    // whether TODAY's hazard assessment is already submitted per job.
+    const today = localDayKey(new Date());
+    const [rows, hazardsDone] = await Promise.all([
+      listConfirmedAssignmentRows(tech.airtableName),
+      hazardJobIdsForDay(tech.airtableName, today),
+    ]);
+
     const results = [];
     for (const jobId of jobIds) {
       try {
         const job = await fetchJobById(jobId);
         const phases = byJob.get(jobId) ?? [];
-        results.push(await buildMyJob(job, tech.airtableName, phases));
+        const mine = rows.filter((r) => r.airtableJobId === jobId);
+        // Prefer TODAY's day-pinned row for the displayed time — a tech doing
+        // several jobs a day is ordered by the hour each one happens.
+        const timed =
+          mine.find((r) => r.scheduledDate === today && r.startTime) ??
+          mine.find((r) => r.startTime) ??
+          null;
+        const noted = mine.find((r) => r.note) ?? null;
+        results.push({
+          ...(await buildMyJob(job, tech.airtableName, phases)),
+          assignedStartTime: timed?.startTime ?? null,
+          assignedEndTime: timed?.endTime ?? null,
+          coordinatorNote: noted?.note ?? null,
+          completedAt: mine.find((r) => r.completedAt)?.completedAt ?? null,
+          hazardDoneToday: hazardsDone.has(jobId),
+        });
       } catch {
         // Skip jobs that can't be fetched from Airtable.
       }
     }
+    // Order the technician's schedule by assigned start time (jobs without a
+    // time go last, then by start date).
+    results.sort((a: any, b: any) => {
+      const ta = a.assignedStartTime ?? "99:99";
+      const tb = b.assignedStartTime ?? "99:99";
+      if (ta !== tb) return ta.localeCompare(tb);
+      return (a.startDate ?? "").localeCompare(b.startDate ?? "");
+    });
     return results;
   }),
 
@@ -245,6 +344,152 @@ export const technicianRouter = router({
       return { ok: true as const, hours: Math.round(hours * 100) / 100 };
     }),
 
+  // ---- Day session: warehouse check-in with truck + gated end-of-day ----
+
+  // Everything the tech app needs for the day bar: session (truck), the truck
+  // catalog to pick from, and the hazard/completion state of today's jobs.
+  dayStatus: protectedProcedure.query(async ({ ctx }) => {
+    const tech = await resolveTechnician(ctx.user.id);
+    if (!tech) return null;
+    const today = localDayKey(new Date());
+    const [session, trucks, hazardsDone, rows] = await Promise.all([
+      getDaySession(tech.airtableName, today),
+      listTruckCatalog(),
+      hazardJobIdsForDay(tech.airtableName, today),
+      listConfirmedAssignmentRows(tech.airtableName),
+    ]);
+    // Today's jobs = confirmed assignments whose job window covers today.
+    const jobIds = Array.from(new Set(rows.map((r) => r.airtableJobId)));
+    const todaysJobs: {
+      jobId: string;
+      company: string | null;
+      hazardDone: boolean;
+      completed: boolean;
+    }[] = [];
+    for (const jobId of jobIds) {
+      try {
+        const job = await fetchJobById(jobId);
+        const start = (job.startDate ?? "").slice(0, 10);
+        const end = (job.endDate ?? "").slice(0, 10) || start;
+        if (!start || today < start || today > end) continue;
+        todaysJobs.push({
+          jobId,
+          company: job.company ?? null,
+          hazardDone: hazardsDone.has(jobId),
+          completed: rows.some(
+            (r) => r.airtableJobId === jobId && r.completedAt != null,
+          ),
+        });
+      } catch {
+        // Skip jobs we can't fetch.
+      }
+    }
+    const missingHazards = todaysJobs.filter((j) => !j.hazardDone);
+    return {
+      date: today,
+      session: session
+        ? {
+            truckName: session.truckName,
+            truckCode: session.truckCode,
+            checkInAt: session.checkInAt,
+            checkOutAt: session.checkOutAt,
+          }
+        : null,
+      trucks: trucks.map((t: any) => ({
+        name: t.name,
+        code: t.code ?? null,
+        ref: t.ref ?? null,
+      })),
+      todaysJobs,
+      missingHazardCount: missingHazards.length,
+      canCheckOut: missingHazards.length === 0,
+    };
+  }),
+
+  // Arrive at the warehouse: pick the truck you'll drive today.
+  startDay: protectedProcedure
+    .input(z.object({ truckName: z.string().min(1), truckCode: z.string().nullable().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const tech = await resolveTechnician(ctx.user.id);
+      if (!tech)
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not a technician" });
+      const today = localDayKey(new Date());
+      await startDaySession({
+        technicianName: tech.airtableName,
+        date: today,
+        truckName: input.truckName,
+        truckCode: input.truckCode ?? null,
+      });
+      await appendChangeHistory({
+        airtableJobId: "__day__",
+        actorUserId: ctx.user.id,
+        actorName: tech.displayName,
+        action: "day_check_in",
+        fieldName: "truck",
+        oldValue: null,
+        newValue: `${input.truckName}${input.truckCode ? ` (${input.truckCode})` : ""}`,
+        details: `Day ${today}`,
+      });
+      return { ok: true as const };
+    }),
+
+  // End-of-day check-out. BLOCKED until every job worked today has a hazard
+  // assessment submitted today.
+  endDay: protectedProcedure.mutation(async ({ ctx }) => {
+    const tech = await resolveTechnician(ctx.user.id);
+    if (!tech)
+      throw new TRPCError({ code: "FORBIDDEN", message: "Not a technician" });
+    const today = localDayKey(new Date());
+    const [hazardsDone, rows] = await Promise.all([
+      hazardJobIdsForDay(tech.airtableName, today),
+      listConfirmedAssignmentRows(tech.airtableName),
+    ]);
+    const missing: string[] = [];
+    for (const jobId of Array.from(new Set(rows.map((r) => r.airtableJobId)))) {
+      try {
+        const job = await fetchJobById(jobId);
+        const start = (job.startDate ?? "").slice(0, 10);
+        const end = (job.endDate ?? "").slice(0, 10) || start;
+        if (!start || today < start || today > end) continue;
+        if (!hazardsDone.has(jobId)) missing.push(job.company ?? jobId);
+      } catch {
+        // ignore
+      }
+    }
+    if (missing.length > 0) {
+      return { ok: false as const, missingHazards: missing };
+    }
+    await endDaySession(tech.airtableName, today);
+    return { ok: true as const, missingHazards: [] as string[] };
+  }),
+
+  // Technician marks a job's work done (signs installed / picked up). Returns
+  // hazardMissing so the UI can raise the reminder alarm immediately.
+  completeJob: protectedProcedure
+    .input(z.object({ jobId: z.string(), completed: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const tech = await resolveTechnician(ctx.user.id);
+      if (!tech)
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not a technician" });
+      await setAssignmentCompleted(input.jobId, tech.airtableName, input.completed);
+      const today = localDayKey(new Date());
+      const hazardsDone = await hazardJobIdsForDay(tech.airtableName, today);
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: tech.displayName,
+        action: input.completed ? "job_completed" : "job_uncompleted",
+        fieldName: "completedAt",
+        oldValue: null,
+        newValue: input.completed ? new Date().toISOString() : null,
+        details: null,
+      });
+      return {
+        ok: true as const,
+        hazardMissing: input.completed && !hazardsDone.has(input.jobId),
+      };
+    }),
+
   // Upload a field photo -> LOCAL storage + job_photos (Airtable read-only).
   uploadPhoto: protectedProcedure
     .input(
@@ -295,7 +540,14 @@ export const technicianRouter = router({
 
   // Add a field note -> LOCAL job_notes (Airtable read-only).
   addFieldNote: protectedProcedure
-    .input(z.object({ jobId: z.string(), note: z.string().min(1) }))
+    .input(
+      z.object({
+        jobId: z.string(),
+        note: z.string().min(1),
+        // "novedades": incident reports about signs — stolen / lost / damaged.
+        category: z.enum(["general", "stolen", "lost", "damaged"]).optional(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const tech = await resolveTechnician(ctx.user.id);
       if (!tech)
@@ -305,6 +557,7 @@ export const technicianRouter = router({
         airtableJobId: input.jobId,
         authorName: tech.displayName,
         authorRole: "technician",
+        category: input.category ?? "general",
         note: input.note,
       });
 
