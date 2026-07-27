@@ -65,12 +65,12 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  }
+  // In hosted environments (Railway, etc.) PORT is injected and the router
+  // targets exactly that port — bind to it directly, no scanning/drift. Only
+  // fall back to a free-port search for local dev when PORT isn't set.
+  const port = process.env.PORT
+    ? parseInt(process.env.PORT)
+    : await findAvailablePort(3000);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
