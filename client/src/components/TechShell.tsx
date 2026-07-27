@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Cone, ClipboardList, Bell, LogOut, Clock, Users } from "lucide-react";
+import { Cone, ClipboardList, Bell, LogOut, Clock, Users, ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -32,13 +32,24 @@ export default function TechShell({
           </div>
           <div className="flex items-center gap-1">
             {cameFromRoster && (
-              <a
-                href="/api/dev-login?back=roster"
-                title="Switch technician"
-                className="p-2 rounded-lg hover:bg-sidebar-accent"
-              >
-                <Users className="size-5" />
-              </a>
+              <>
+                {/* Back to the coordinator console */}
+                <a
+                  href="/api/dev-login"
+                  title="Back to coordinator console"
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-sidebar-accent"
+                >
+                  <ArrowLeft className="size-4" /> Coordinator
+                </a>
+                {/* Switch to another technician */}
+                <a
+                  href="/api/dev-login?back=roster"
+                  title="Switch technician"
+                  className="p-2 rounded-lg hover:bg-sidebar-accent"
+                >
+                  <Users className="size-5" />
+                </a>
+              </>
             )}
             <Link
               href="/app/notifications"
