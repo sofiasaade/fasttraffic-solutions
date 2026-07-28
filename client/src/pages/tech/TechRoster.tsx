@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { Loader2, ChevronRight, Users } from "lucide-react";
+import { Loader2, ChevronRight, ArrowLeft, Users } from "lucide-react";
 import BrandMark from "@/components/BrandMark";
 import { Badge } from "@/components/ui/badge";
 
@@ -15,9 +15,19 @@ export default function TechRoster() {
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-md mx-auto">
       <header className="sticky top-0 z-20 bg-sidebar text-sidebar-foreground">
-        <div className="flex items-center gap-2 h-14 px-4 font-bold">
-          <BrandMark className="size-7" iconClassName="size-4" />
-          Technician App
+        <div className="flex items-center justify-between h-14 px-4">
+          <div className="flex items-center gap-2 font-bold">
+            <BrandMark className="size-7" iconClassName="size-4" />
+            Technician App
+          </div>
+          {/* Back to the coordinator console (before picking a technician). */}
+          <a
+            href="/dashboard"
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium hover:bg-sidebar-accent"
+            title="Back to coordinator console"
+          >
+            <ArrowLeft className="size-4" /> Coordinator
+          </a>
         </div>
       </header>
 
