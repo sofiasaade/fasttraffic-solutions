@@ -33,9 +33,14 @@ export type OsmPermitMapHandle = {
 
 const DEFAULT_CENTER: [number, number] = [51.0447, -114.0719]; // Calgary
 
-function pinHtml(bg: string, border: string): string {
-  const size = 24;
-  return `<div style="width:${size}px;height:${size}px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);background:${bg};outline:1.5px solid ${border}"></div>`;
+function pinHtml(bg: string, _border: string): string {
+  // Google-style teardrop pin with a white dot — crisper than a flat circle.
+  return `<div style="position:relative;width:26px;height:36px;filter:drop-shadow(0 3px 3px rgba(0,0,0,0.35))">
+    <svg width="26" height="36" viewBox="0 0 26 36" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13 0C5.8 0 0 5.8 0 13c0 9.2 13 23 13 23s13-13.8 13-23C26 5.8 20.2 0 13 0z" fill="${bg}"/>
+      <circle cx="13" cy="13" r="5" fill="#fff"/>
+    </svg>
+  </div>`;
 }
 
 type Props<J extends OsmPermitJob> = {
@@ -68,8 +73,9 @@ function OsmPermitMapInner<J extends OsmPermitJob>(
       zoom: 10,
       scrollWheelZoom: true,
     });
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      maxZoom: 20,
+      subdomains: "abcd",
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
@@ -103,9 +109,9 @@ function OsmPermitMapInner<J extends OsmPermitJob>(
       const icon = L.divIcon({
         className: "",
         html: pinHtml(t.bg, t.border),
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-        popupAnchor: [0, -13],
+        iconSize: [26, 36],
+        iconAnchor: [13, 36],
+        popupAnchor: [0, -34],
       });
       const marker = L.marker([j.lat, j.lon], {
         icon,
