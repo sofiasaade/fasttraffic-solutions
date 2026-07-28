@@ -40,10 +40,12 @@ export async function seedTechnicians() {
   const d = await db();
   for (const name of TECHNICIANS) {
     const trimmed = name.trim();
+    // Insert-if-missing ONLY. Never overwrite displayName/level/active on
+    // existing rows — the coordinator curates those from the console.
     await d
       .insert(technicians)
       .values({ airtableName: name, displayName: trimmed })
-      .onDuplicateKeyUpdate({ set: { displayName: trimmed } });
+      .onDuplicateKeyUpdate({ set: { airtableName: name } });
   }
 }
 

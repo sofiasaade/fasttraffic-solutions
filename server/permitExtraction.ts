@@ -124,9 +124,85 @@ function normTime(v: string | null | undefined): string | null {
  *     start/effective" keywords.
  * Scanned (image-only) PDFs return null gracefully.
  */
+/**
+ * Positional extraction (preferred): read the PDF's text WITH x/y coordinates
+ * and reconstruct the Calgary "Permit Valid From / To" table row by row. The
+ * flat text stream scrambles column order; positions never lie.
+ */
+async function extractByPosition(
+  buf: Uint8Array,
+): Promise<PermitSchedule | null> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  try {
+    for (let p = 1; p <= Math.min(doc.numPages, 4); p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      const items = (tc.items as any[])
+        .map((i) => ({
+          s: String(i.str ?? "").trim(),
+          x: Math.round(i.transform[4]),
+          y: Math.round(i.transform[5]),
+        }))
+        .filter((i) => i.s);
+      const anchorFrom = items.find((i) => /Permit\s*Valid\s*From/i.test(i.s));
+      if (!anchorFrom) continue;
+      const anchorTo = items.find((i) => /Permit\s*Valid\s*To/i.test(i.s));
+
+      // The VALUES live in the row just below each anchor/header row (~16pt).
+      const rowBelow = (y: number) =>
+        items.filter((i) => i.y < y - 4 && i.y >= y - 26);
+      const pick = (row: typeof items) => ({
+        date:
+          row.find((i) => /^\d{4}[-\/]\d{2}[-\/]\d{2}$/.test(i.s))?.s ?? null,
+        time: row.find((i) => /^\d{1,2}:\d{2}$/.test(i.s))?.s ?? null,
+        day:
+          row.find((i) =>
+            /^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/i.test(
+              i.s,
+            ),
+          )?.s ?? null,
+      });
+      const from = pick(rowBelow(anchorFrom.y));
+      const to = anchorTo ? pick(rowBelow(anchorTo.y)) : { date: null, time: null, day: null };
+      if (!from.date && !to.date) continue;
+
+      const all = items.map((i) => i.s).join(" ");
+      const permitNumber =
+        all.match(/\b([A-Z]{2,3}-\d{2}-\d{4,})\b/)?.[1] ?? null;
+      const nd = all.match(/Number\s*Of\s*Days[\s\S]{0,60}?(\d{1,3})\b/i);
+
+      return {
+        permitNumber,
+        validFromDate: from.date ? normDate(from.date) : null,
+        validFromTime: from.time ? normTime(from.time) : null,
+        validFromDay: from.day,
+        validToDate: to.date ? normDate(to.date) : null,
+        validToTime: to.time ? normTime(to.time) : null,
+        validToDay: to.day,
+        numberOfDays: nd ? Number(nd[1]) : null,
+      };
+    }
+    return null;
+  } finally {
+    await doc.destroy().catch(() => {});
+  }
+}
+
 async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null> {
   const { PDFParse } = await import("pdf-parse");
   const buf = Buffer.from(await (await fetch(fileUrl)).arrayBuffer());
+
+  // Positional table read first — exact for the Calgary Street Use form.
+  try {
+    const positional = await extractByPosition(new Uint8Array(buf));
+    if (positional && (positional.validFromDate || positional.validToDate)) {
+      return positional;
+    }
+  } catch {
+    // fall through to the flat-text heuristic
+  }
+
   const parser = new PDFParse({ data: new Uint8Array(buf) });
   const text = (await parser.getText()).text ?? "";
   if (text.trim().length < 50) return null; // image-only scan — nothing to read
