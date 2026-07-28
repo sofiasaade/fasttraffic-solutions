@@ -51,6 +51,13 @@ const TIME_GROUPS = [
   { key: "notime", label: "No set time", icon: CircleHelp },
 ] as const;
 
+// Pool sections by day phase — assign per category.
+const POOL_PHASES = [
+  { key: "starting", label: "Starting today", color: "#ea580c" },
+  { key: "ongoing", label: "Ongoing daily", color: "#2563eb" },
+  { key: "pickup", label: "Pick up", color: "#16a34a" },
+] as const;
+
 const TASKS = [
   "Preparation",
   "Setup",
@@ -150,15 +157,27 @@ export default function DailyBoard() {
     return m;
   }, [d?.technicians]);
 
-  const poolByTime = useMemo(() => {
-    const groups: Record<string, any[]> = { before9: [], at9: [], after9: [], notime: [] };
+  // Pool grouped first by PHASE (starting / ongoing / pickup), then by time.
+  const poolByPhase = useMemo(() => {
+    const empty = () => ({ before9: [], at9: [], after9: [], notime: [] }) as Record<string, any[]>;
+    const groups: Record<string, Record<string, any[]>> = {
+      starting: empty(),
+      ongoing: empty(),
+      pickup: empty(),
+    };
     const ql = poolFilter.trim().toLowerCase();
     for (const j of d?.pool ?? []) {
       if (ql && !`${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase().includes(ql)) continue;
-      groups[j.timeBucket]?.push(j);
+      groups[j.phase]?.[j.timeBucket]?.push(j);
     }
     return groups;
   }, [d?.pool, poolFilter]);
+
+  const phaseCounts = useMemo(() => {
+    const c: Record<string, number> = { starting: 0, ongoing: 0, pickup: 0 };
+    for (const j of d?.pool ?? []) c[j.phase] = (c[j.phase] ?? 0) + 1;
+    return c;
+  }, [d?.pool]);
 
   const onDropOnTech = (e: React.DragEvent, techName: string) => {
     e.preventDefault();
@@ -272,13 +291,30 @@ export default function DailyBoard() {
               />
             </div>
             <div className="overflow-y-auto p-3 space-y-4 flex-1 min-h-0 max-h-[70vh]">
-              {TIME_GROUPS.map((g) => {
-                const jobs = poolByTime[g.key] ?? [];
-                if (jobs.length === 0) return null;
-                const Icon = g.icon;
-                return (
-                  <div key={g.key}>
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground mb-1.5 sticky top-0 bg-card/95 py-0.5">
+              {POOL_PHASES.map((ph) => (
+                <div key={ph.key}>
+                  <div
+                    className="flex items-center gap-2 mb-2 pb-1 border-b-2"
+                    style={{ borderColor: ph.color }}
+                  >
+                    <span className="size-3 rounded-full" style={{ background: ph.color }} />
+                    <span className="text-sm font-extrabold">{ph.label}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({phaseCounts[ph.key] ?? 0})
+                    </span>
+                  </div>
+                  {(phaseCounts[ph.key] ?? 0) === 0 && (
+                    <div className="text-[11px] text-muted-foreground mb-3 ml-1">
+                      Nothing in this section today.
+                    </div>
+                  )}
+                  {TIME_GROUPS.map((g) => {
+                    const jobs = poolByPhase[ph.key]?.[g.key] ?? [];
+                    if (jobs.length === 0) return null;
+                    const Icon = g.icon;
+                    return (
+                  <div key={g.key} className="mb-2 ml-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground mb-1.5">
                       <Icon className="size-3.5" /> {g.label}
                       <span className="text-muted-foreground/60">({jobs.length})</span>
                     </div>
@@ -362,8 +398,10 @@ export default function DailyBoard() {
                       })}
                     </div>
                   </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              ))}
               {(d?.pool.length ?? 0) === 0 && (
                 <div className="text-sm text-muted-foreground text-center py-8">
                   No active jobs for this day.
