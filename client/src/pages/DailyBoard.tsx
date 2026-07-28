@@ -51,12 +51,18 @@ const TIME_GROUPS = [
   { key: "notime", label: "No set time", icon: CircleHelp },
 ] as const;
 
-// Pool sections by day phase — assign per category.
+// Pool sections by day phase — assign per category. 24-hour jobs get their
+// OWN section (they only appear on install day and pickup day; the badge on
+// each card still says which of the two it is).
 const POOL_PHASES = [
   { key: "starting", label: "Starting today", color: "#ea580c" },
   { key: "ongoing", label: "Ongoing daily", color: "#2563eb" },
   { key: "pickup", label: "Pick up", color: "#16a34a" },
+  { key: "h24", label: "24 Hours", color: "#d97706" },
 ] as const;
+
+const is24h = (setupDuration: string | null | undefined) =>
+  /24\s*hour/i.test(setupDuration ?? "");
 
 const TASKS = [
   "Preparation",
@@ -157,25 +163,28 @@ export default function DailyBoard() {
     return m;
   }, [d?.technicians]);
 
-  // Pool grouped first by PHASE (starting / ongoing / pickup), then by time.
+  // Pool grouped first by SECTION (starting / ongoing / pickup / 24-hours),
+  // then by time. 24-hour jobs are pulled out into their own section.
+  const sectionOf = (j: any) => (is24h(j.setupDuration) ? "h24" : j.phase);
   const poolByPhase = useMemo(() => {
     const empty = () => ({ before9: [], at9: [], after9: [], notime: [] }) as Record<string, any[]>;
     const groups: Record<string, Record<string, any[]>> = {
       starting: empty(),
       ongoing: empty(),
       pickup: empty(),
+      h24: empty(),
     };
     const ql = poolFilter.trim().toLowerCase();
     for (const j of d?.pool ?? []) {
       if (ql && !`${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase().includes(ql)) continue;
-      groups[j.phase]?.[j.timeBucket]?.push(j);
+      groups[sectionOf(j)]?.[j.timeBucket]?.push(j);
     }
     return groups;
   }, [d?.pool, poolFilter]);
 
   const phaseCounts = useMemo(() => {
-    const c: Record<string, number> = { starting: 0, ongoing: 0, pickup: 0 };
-    for (const j of d?.pool ?? []) c[j.phase] = (c[j.phase] ?? 0) + 1;
+    const c: Record<string, number> = { starting: 0, ongoing: 0, pickup: 0, h24: 0 };
+    for (const j of d?.pool ?? []) c[sectionOf(j)] = (c[sectionOf(j)] ?? 0) + 1;
     return c;
   }, [d?.pool]);
 

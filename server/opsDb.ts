@@ -51,7 +51,13 @@ export async function seedTechnicians() {
 
 export async function listTechnicians() {
   const d = await db();
-  return d.select().from(technicians).orderBy(technicians.displayName);
+  // Only ACTIVE technicians — deactivated workers disappear from every
+  // assignment surface (Daily Board, Scheduler, Workers, tech roster).
+  return d
+    .select()
+    .from(technicians)
+    .where(eq(technicians.active, true))
+    .orderBy(technicians.displayName);
 }
 
 export async function getTechnicianByUserId(userId: number) {
