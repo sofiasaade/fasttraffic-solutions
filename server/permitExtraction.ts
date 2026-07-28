@@ -84,73 +84,116 @@ const SYSTEM_PROMPT =
   "Number and Number Of Days when present. If a value is missing, return null " +
   "for it. Return JSON only.";
 
-/** Extract one SU permit PDF via the LLM. Returns parsed schedule. */
+const MONTHS: Record<string, string> = {
+  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+};
+function normDate(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const s = v.trim();
+  const iso = s.match(/(\d{4})[-\/](\d{2})[-\/](\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  // Long form e.g. "June 12, 2026" / "Jul 27 2026"
+  const m = s.match(/([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m) {
+    const mon = MONTHS[m[1].slice(0, 3).toLowerCase()];
+    if (mon) return `${m[3]}-${mon}-${m[2].padStart(2, "0")}`;
+  }
+  return null;
+}
+function normTime(v: string | null | undefined): string | null {
+  if (!v) return null;
+  const s = v.trim();
+  const ampm = s.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (ampm) {
+    let h = Number(ampm[1]);
+    const ap = ampm[3].toUpperCase();
+    if (ap === "PM" && h !== 12) h += 12;
+    if (ap === "AM" && h === 12) h = 0;
+    return `${String(h).padStart(2, "0")}:${ampm[2]}`;
+  }
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+}
+
+/**
+ * Extract one SU permit PDF by READING ITS TEXT — free, no AI/API key.
+ *  1. Calgary layout: the "Permit Valid From / Permit Valid To" table.
+ *  2. Other municipalities: generic date+time patterns near "valid/from/
+ *     start/effective" keywords.
+ * Scanned (image-only) PDFs return null gracefully.
+ */
 async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null> {
-  const resp = await invokeLLM({
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "Extract the permit schedule from this Street Use Permit PDF.",
-          },
-          {
-            type: "file_url",
-            file_url: { url: fileUrl, mime_type: "application/pdf" },
-          },
-        ],
-      },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "permit_schedule", strict: true, schema: PERMIT_SCHEMA },
-    },
-  });
-  const raw = resp.choices?.[0]?.message?.content ?? "{}";
-  const parsed = JSON.parse(typeof raw === "string" ? raw : "{}");
-  const MONTHS: Record<string, string> = {
-    jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
-    jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
-  };
-  const normDate = (v: unknown): string | null => {
-    if (typeof v !== "string") return null;
-    const s = v.trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-    // Long form fallback e.g. "June 12, 2026" (in case the LLM didn't normalize).
-    const m = s.match(/([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
-    if (m) {
-      const mon = MONTHS[m[1].slice(0, 3).toLowerCase()];
-      if (mon) return `${m[3]}-${mon}-${m[2].padStart(2, "0")}`;
+  const { PDFParse } = await import("pdf-parse");
+  const buf = Buffer.from(await (await fetch(fileUrl)).arrayBuffer());
+  const parser = new PDFParse({ data: new Uint8Array(buf) });
+  const text = (await parser.getText()).text ?? "";
+  if (text.trim().length < 50) return null; // image-only scan — nothing to read
+
+  const permitNumber =
+    text.match(/\b([A-Z]{2,3}-\d{2}-\d{4,})\b/)?.[1] ?? null;
+
+  const DAY_RE = /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/g;
+  const DATE_RE = /\d{4}[-\/]\d{2}[-\/]\d{2}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}/g;
+  const TIME_RE = /\b\d{1,2}:\d{2}(?:\s*(?:AM|PM))?\b/gi;
+
+  // 1) Calgary table layout: the "Permit Valid From/To" block, cut at "CHARGE"
+  //    so rush-hour restriction ranges further down don't pollute the times.
+  const i = text.search(/Permit\s*Valid\s*From/i);
+  let win = "";
+  if (i >= 0) {
+    const end = text.indexOf("CHARGE", i);
+    win = text.slice(i, end > i ? Math.min(end, i + 800) : i + 500);
+  }
+
+  // 2) Fallback for other municipalities: window around valid/start keywords.
+  if (!win) {
+    const k = text.search(/\b(valid|effective|start(?:s|ing)?|from)\b/i);
+    win = k >= 0 ? text.slice(Math.max(0, k - 100), k + 700) : text.slice(0, 900);
+  }
+
+  const dates = (win.match(DATE_RE) ?? []).map((d) => normDate(d)).filter(Boolean) as string[];
+  const times = (win.match(TIME_RE) ?? []).map((t) => normTime(t)).filter(Boolean) as string[];
+  const days = win.match(DAY_RE) ?? [];
+
+  if (dates.length === 0 && times.length === 0) return null;
+
+  // Calgary quirk: when the table shows only ONE time it is the *Valid To*
+  // time; the daily START hour lives in the "Traffic Control Setup" section
+  // as a standalone time (ranges like "15:00 - 18:00 …" are restrictions).
+  let fromTime: string | null = null;
+  let toTime: string | null = null;
+  if (times.length >= 2) {
+    fromTime = times[0];
+    toTime = times[1];
+  } else if (times.length === 1) {
+    toTime = times[0];
+  }
+  if (!fromTime) {
+    const s = text.search(/Traffic\s*Control\s*Setup/i);
+    if (s >= 0) {
+      const setupWin = text
+        .slice(s, s + 400)
+        // strip "HH:MM - HH:MM …" restriction ranges before matching
+        .replace(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/g, " ");
+      const t = setupWin.match(/\b\d{1,2}:\d{2}\b/);
+      if (t) fromTime = normTime(t[0]);
     }
-    return null;
-  };
-  const normTime = (v: unknown): string | null => {
-    if (typeof v !== "string") return null;
-    const s = v.trim();
-    // 12-hour fallback e.g. "7:00 AM", "6:00 PM" (in case the LLM didn't normalize).
-    const ampm = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-    if (ampm) {
-      let h = Number(ampm[1]);
-      const ap = ampm[3].toUpperCase();
-      if (ap === "PM" && h !== 12) h += 12;
-      if (ap === "AM" && h === 12) h = 0;
-      return `${String(h).padStart(2, "0")}:${ampm[2]}`;
-    }
-    const m = s.match(/^(\d{1,2}):(\d{2})/);
-    if (!m) return null;
-    return `${m[1].padStart(2, "0")}:${m[2]}`;
-  };
+  }
+
   return {
-    permitNumber: typeof parsed.permitNumber === "string" ? parsed.permitNumber : null,
-    validFromDate: normDate(parsed.validFromDate),
-    validFromTime: normTime(parsed.validFromTime),
-    validFromDay: typeof parsed.validFromDay === "string" ? parsed.validFromDay : null,
-    validToDate: normDate(parsed.validToDate),
-    validToTime: normTime(parsed.validToTime),
-    validToDay: typeof parsed.validToDay === "string" ? parsed.validToDay : null,
-    numberOfDays: Number.isInteger(parsed.numberOfDays) ? parsed.numberOfDays : null,
+    permitNumber,
+    validFromDate: dates[0] ?? null,
+    validFromTime: fromTime,
+    validFromDay: days[0] ?? null,
+    validToDate: dates[1] ?? dates[0] ?? null,
+    validToTime: toTime,
+    validToDay: days[1] ?? days[0] ?? null,
+    numberOfDays: (() => {
+      const m = win.match(/Number\s*Of\s*Days[\s\S]{0,60}?(\d{1,3})/i);
+      return m ? Number(m[1]) : null;
+    })(),
   };
 }
 
