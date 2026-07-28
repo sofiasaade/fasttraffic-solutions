@@ -78,6 +78,17 @@ export default function DailyBoard() {
     start: string;
     end: string;
   } | null>(null);
+  // Click an assigned chip → edit its task/time/note.
+  const [editing, setEditing] = useState<{
+    id: number;
+    jobId: string;
+    techName: string;
+    company: string;
+    task: string;
+    start: string;
+    end: string;
+    note: string;
+  } | null>(null);
 
   const utils = trpc.useUtils();
   const q = trpc.coordinator.dayBoard.useQuery({ date });
@@ -92,6 +103,8 @@ export default function DailyBoard() {
     onSuccess: () => utils.coordinator.dayBoard.invalidate(),
     onError: (e) => toast.error(e.message),
   });
+  const updateScheduled = trpc.coordinator.updateScheduled.useMutation();
+  const setAssignmentNote = trpc.coordinator.setAssignmentNote.useMutation();
   const confirmDay = trpc.coordinator.confirmDay.useMutation({
     onSuccess: (r) => {
       toast.success(
@@ -394,11 +407,6 @@ export default function DailyBoard() {
                         {t.assignments.map((a) => (
                           <span
                             key={a.id}
-                            title={
-                              a.status === "confirmed"
-                                ? "Confirmed — visible to the technician"
-                                : "Tentative — NOT visible to the technician yet"
-                            }
                             className={cn(
                               "group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]",
                               a.status === "confirmed"
@@ -406,17 +414,41 @@ export default function DailyBoard() {
                                 : "border-dashed border-amber-400 bg-amber-50",
                             )}
                           >
-                            <span
-                              className="size-1.5 rounded-full"
-                              style={{
-                                background:
-                                  a.phase === "Pickup" ? "#16a34a" : "#2563eb",
-                              }}
-                            />
-                            <span className="max-w-36 truncate">{a.company ?? a.jobId}</span>
-                            {a.startTime && (
-                              <span className="text-muted-foreground">{a.startTime}</span>
-                            )}
+                            <button
+                              onClick={() =>
+                                setEditing({
+                                  id: a.id,
+                                  jobId: a.jobId,
+                                  techName: t.airtableName,
+                                  company: a.company ?? a.jobId,
+                                  task: a.phase,
+                                  start: a.startTime ?? "",
+                                  end: a.endTime ?? "",
+                                  note: (a as any).note ?? "",
+                                })
+                              }
+                              className="inline-flex items-center gap-1 hover:text-primary"
+                              title="Edit time / task / note"
+                            >
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{
+                                  background:
+                                    a.phase === "Pickup" ? "#16a34a" : "#2563eb",
+                                }}
+                              />
+                              <span className="max-w-36 truncate">
+                                {a.company ?? a.jobId}
+                              </span>
+                              {a.startTime && (
+                                <span className="text-muted-foreground">
+                                  {a.startTime}
+                                </span>
+                              )}
+                              {(a as any).note && (
+                                <span title="Has a note">📝</span>
+                              )}
+                            </button>
                             <button
                               onClick={() => removeScheduled.mutate({ id: a.id })}
                               className="text-muted-foreground/60 hover:text-red-600"
@@ -438,6 +470,109 @@ export default function DailyBoard() {
 
       {/* Drop dialog: choose the TASK and the TIME before saving — a worker
           doing several jobs a day gets each one at its own hour. */}
+      {/* Edit an already-assigned chip: task / time / note. */}
+      {editing && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setEditing(null)}
+        >
+          <div
+            className="bg-card w-full max-w-sm rounded-2xl shadow-xl p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="font-bold">{editing.company}</div>
+            <div className="text-xs text-muted-foreground mb-3">
+              → {editing.techName} · {prettyDay(date)}
+            </div>
+
+            <div className="text-xs font-medium text-muted-foreground mb-1">Task</div>
+            <div className="grid grid-cols-3 gap-1.5 mb-3">
+              {TASKS.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setEditing((p) => (p ? { ...p, task: t } : p))}
+                  className={cn(
+                    "rounded-lg border px-2 py-1.5 text-[11px] font-medium transition-colors",
+                    editing.task === t
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:bg-accent",
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">Start time</div>
+                <input type="time" value={editing.start}
+                  onChange={(e) => setEditing((p) => (p ? { ...p, start: e.target.value } : p))}
+                  className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm" />
+              </div>
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">End time</div>
+                <input type="time" value={editing.end}
+                  onChange={(e) => setEditing((p) => (p ? { ...p, end: e.target.value } : p))}
+                  className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm" />
+              </div>
+            </div>
+
+            <div className="text-xs font-medium text-muted-foreground mb-1">
+              Note for the technician
+            </div>
+            <textarea
+              value={editing.note}
+              onChange={(e) => setEditing((p) => (p ? { ...p, note: e.target.value } : p))}
+              placeholder="e.g. client asked not to block the driveway…"
+              rows={2}
+              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-sm mb-4"
+            />
+
+            <div className="flex justify-between gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600"
+                onClick={() => {
+                  removeScheduled.mutate({ id: editing.id });
+                  setEditing(null);
+                }}
+              >
+                <X className="size-4 mr-1" /> Remove
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditing(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={updateScheduled.isPending}
+                  onClick={async () => {
+                    await updateScheduled.mutateAsync({
+                      id: editing.id,
+                      phase: editing.task as any,
+                      startTime: editing.start || null,
+                      endTime: editing.end || null,
+                    });
+                    await setAssignmentNote.mutateAsync({
+                      jobId: editing.jobId,
+                      technicianName: editing.techName,
+                      note: editing.note.trim() || null,
+                    });
+                    toast.success("Assignment updated");
+                    setEditing(null);
+                    utils.coordinator.dayBoard.invalidate();
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pending && (
         <div
           className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"

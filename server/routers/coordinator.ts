@@ -779,6 +779,7 @@ export const coordinatorRouter = router({
           startTime: r.startTime,
           endTime: r.endTime,
           status: r.status,
+          note: r.note ?? null,
           company: (jobs as any[]).find((j) => j.id === r.airtableJobId)?.company ?? null,
         });
       }
@@ -789,7 +790,11 @@ export const coordinatorRouter = router({
           airtableName: t.airtableName,
           displayName: t.displayName,
           experienceLevel: t.experienceLevel,
-          assignments: assignmentsByTech[t.airtableName] ?? [],
+          // Ordered by assigned start time (jobs without a time go last).
+          assignments: (assignmentsByTech[t.airtableName] ?? []).sort(
+            (a: any, b: any) =>
+              (a.startTime ?? "99:99").localeCompare(b.startTime ?? "99:99"),
+          ),
         })),
         pool,
       };
