@@ -1,16 +1,47 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import BrandMark from "@/components/BrandMark";
-import { getLoginUrl } from "@/const";
+import { toast } from "sonner";
 import {
-  Cone,
   Users,
   Smartphone,
   ShieldCheck,
   Clock,
-  ArrowRight,
+  Loader2,
+  HardHat,
+  UserCog,
 } from "lucide-react";
 
 export default function Login() {
+  const [role, setRole] = useState<"coordinator" | "tech">("coordinator");
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    if (!/^\d{4,8}$/.test(pin)) {
+      toast.error("Enter your PIN.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/pin-login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: role === "tech" ? "tech" : "coordinator", pin }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        window.location.href = data.redirect;
+      } else {
+        toast.error(data.error ?? "Wrong PIN.");
+        setBusy(false);
+      }
+    } catch {
+      toast.error("Sign-in failed.");
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-sidebar text-sidebar-foreground grid lg:grid-cols-[1.1fr_1fr]">
       {/* Left: brand + value prop */}
@@ -64,26 +95,56 @@ export default function Login() {
       <div className="flex items-center justify-center p-8 bg-background text-foreground">
         <div className="w-full max-w-sm">
           <div className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-            Welcome back
+            Sign in
           </div>
-          <h2 className="text-2xl font-bold mb-1">Sign in to continue</h2>
-          <p className="text-muted-foreground text-sm mb-8">
-            Coordinators land on the dispatch board. Technicians get their
-            mobile job list.
-          </p>
+          <h2 className="text-2xl font-bold mb-4">Enter your PIN</h2>
 
-          <Button
-            size="lg"
-            className="w-full group"
-            onClick={() => (window.location.href = getLoginUrl())}
-          >
-            Continue with Manus
-            <ArrowRight className="size-4 ml-1 transition-transform group-hover:translate-x-0.5" />
+          {/* Role toggle */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl mb-4">
+            <button
+              onClick={() => setRole("coordinator")}
+              className={
+                "flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors " +
+                (role === "coordinator"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground")
+              }
+            >
+              <UserCog className="size-4" /> Coordinator
+            </button>
+            <button
+              onClick={() => setRole("tech")}
+              className={
+                "flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition-colors " +
+                (role === "tech"
+                  ? "bg-card shadow-sm text-foreground"
+                  : "text-muted-foreground")
+              }
+            >
+              <HardHat className="size-4" /> Technician
+            </button>
+          </div>
+
+          <input
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            placeholder="••••"
+            className="w-full h-14 text-center text-2xl tracking-[0.4em] font-bold rounded-xl border border-border bg-background mb-4"
+          />
+
+          <Button size="lg" className="w-full" disabled={busy} onClick={submit}>
+            {busy && <Loader2 className="size-4 animate-spin mr-1" />}
+            {role === "coordinator" ? "Enter console" : "Open my jobs"}
           </Button>
 
           <p className="text-xs text-muted-foreground mt-6 leading-relaxed">
-            Your role is detected automatically. On first sign-in, technicians
-            pick their name from the roster to link their account.
+            {role === "coordinator"
+              ? "Coordinator PIN opens the full console."
+              : "Your personal PIN opens only your jobs — ask your coordinator for it."}
           </p>
         </div>
       </div>

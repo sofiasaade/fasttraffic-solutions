@@ -2316,3 +2316,38 @@ export async function listDayNotifications(date: string) {
     .from(notifications)
     .where(eq(notifications.airtableJobId, `__day__:${date}`));
 }
+
+/* ----------------------------- PIN auth ------------------------------ */
+
+/** Find an active technician by their login PIN. */
+export async function getTechnicianByPin(pin: string) {
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(technicians)
+    .where(and(eq(technicians.pin, pin), eq(technicians.active, true)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Technicians with their PINs (coordinator "Team PINs" screen). */
+export async function listTechniciansWithPins() {
+  const d = await db();
+  return d.select().from(technicians).orderBy(technicians.displayName);
+}
+
+/** Regenerate a technician's PIN, avoiding collisions. */
+export async function resetTechnicianPin(airtableName: string): Promise<string> {
+  const d = await db();
+  const all = await d.select().from(technicians);
+  const used = new Set(all.map((t) => t.pin).filter(Boolean) as string[]);
+  let p = "";
+  do {
+    p = String(Math.floor(1000 + Math.random() * 9000));
+  } while (used.has(p));
+  await d
+    .update(technicians)
+    .set({ pin: p })
+    .where(eq(technicians.airtableName, airtableName));
+  return p;
+}

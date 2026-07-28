@@ -61,6 +61,9 @@ import {
   listJobPhotos,
   listOpenTimeLogs,
   listTechnicians,
+  listTechniciansWithPins,
+  resetTechnicianPin,
+  getSetting,
   getOvertimeThreshold,
   seedTechnicians,
   setTechnicianLevel,
@@ -888,6 +891,40 @@ export const coordinatorRouter = router({
         details: null,
       });
       return { ok: true as const, confirmed, notified };
+    }),
+
+  // Team PINs: every technician's login PIN + the coordinator PIN.
+  teamPins: adminProcedure.query(async () => {
+    const [techs, coordinatorPin] = await Promise.all([
+      listTechniciansWithPins(),
+      getSetting("coordinator_pin"),
+    ]);
+    return {
+      coordinatorPin: coordinatorPin ?? null,
+      technicians: techs
+        .filter((t: any) => t.active)
+        .map((t: any) => ({
+          airtableName: t.airtableName,
+          displayName: t.displayName,
+          pin: t.pin ?? null,
+        })),
+    };
+  }),
+
+  // Reset one technician's PIN (returns the new one).
+  resetTechPin: adminProcedure
+    .input(z.object({ technicianName: z.string() }))
+    .mutation(async ({ input }) => {
+      const pin = await resetTechnicianPin(input.technicianName);
+      return { ok: true as const, pin };
+    }),
+
+  // Change the coordinator PIN.
+  setCoordinatorPin: adminProcedure
+    .input(z.object({ pin: z.string().regex(/^\d{4,8}$/) }))
+    .mutation(async ({ input }) => {
+      await setSetting("coordinator_pin", input.pin);
+      return { ok: true as const };
     }),
 
   // Leave a note for the technician on their assignment (shown in their app).

@@ -14,6 +14,7 @@ import {
   Users,
   AlertTriangle,
   Wallet,
+  KeyRound,
 } from "lucide-react";
 import { useSession } from "@/contexts/SessionContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -50,6 +51,7 @@ const NAV_GROUPS: {
     items: [
       { href: "/overtime", label: "Overtime", icon: Clock },
       { href: "/payroll", label: "Payroll", icon: Wallet },
+      { href: "/team-pins", label: "Team PINs", icon: KeyRound },
       { href: "/history", label: "Change History", icon: History },
     ],
   },

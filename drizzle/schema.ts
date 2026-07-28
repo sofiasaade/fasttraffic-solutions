@@ -44,6 +44,8 @@ export const technicians = mysqlTable("technicians", {
   displayName: varchar("displayName", { length: 128 }).notNull(),
   userId: int("userId"),
   phone: varchar("phone", { length: 32 }),
+  /** 4-digit login PIN (auto-generated; coordinator can reset). */
+  pin: varchar("pin", { length: 8 }),
   zones: text("zones"),
   experienceLevel: mysqlEnum("experienceLevel", [
     "apprentice",

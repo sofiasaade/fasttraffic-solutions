@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import DispatchBoard from "./pages/DispatchBoard";
 import OvertimeDashboard from "./pages/OvertimeDashboard";
 import Payroll from "./pages/Payroll";
+import TeamPins from "./pages/TeamPins";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
@@ -104,6 +105,11 @@ function Router() {
           <Route path="/payroll">
             <CoordinatorShell>
               <Payroll />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/team-pins">
+            <CoordinatorShell>
+              <TeamPins />
             </CoordinatorShell>
           </Route>
           <Route path="/alerts">
