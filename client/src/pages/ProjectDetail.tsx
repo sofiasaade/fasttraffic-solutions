@@ -231,48 +231,89 @@ export default function ProjectDetail() {
             )}
           </Card>
 
-          {/* Traffic-control plans (Airtable "Plan File" attachments) */}
-          {(job.planFile?.length ?? 0) > 0 && (
-            <Card>
-              <CardContent className="pt-4">
-                <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-                  <FileText className="size-4 text-primary" /> Plans (
-                  {job.planFile!.length})
+          {/* Documents: Traffic Management Plan + Street Use Permit (SU-…),
+              split out from the Airtable "Plan File" attachments. */}
+          {(() => {
+            const files = (job.planFile ?? []) as any[];
+            if (files.length === 0) return null;
+            const isPermit = (f: any) =>
+              /^su[-_\s]/i.test(f.filename ?? "") ||
+              /street\s*use/i.test(f.filename ?? "");
+            const permits = files.filter(isPermit);
+            const plans = files.filter((f) => !isPermit(f));
+
+            const FileLink = ({ f, i, label }: any) => (
+              <a
+                key={i}
+                href={f.url}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-primary/50 hover:shadow-sm transition-all"
+              >
+                {f.thumbnails?.large?.url ? (
+                  <img
+                    src={f.thumbnails.large.url}
+                    alt=""
+                    className="size-12 rounded object-cover border border-border shrink-0"
+                  />
+                ) : (
+                  <div className="flex items-center justify-center size-12 rounded bg-primary/10 text-primary shrink-0">
+                    <FileText className="size-5" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium group-hover:text-primary">
+                    {f.filename ?? label}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Open in new tab
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {job.planFile!.map((f: any, i: number) => (
-                    <a
-                      key={i}
-                      href={f.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-primary/50 hover:shadow-sm transition-all"
-                    >
-                      {f.thumbnails?.large?.url ? (
-                        <img
-                          src={f.thumbnails.large.url}
-                          alt=""
-                          className="size-12 rounded object-cover border border-border shrink-0"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center size-12 rounded bg-primary/10 text-primary shrink-0">
-                          <FileText className="size-5" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium group-hover:text-primary">
-                          {f.filename ?? `Plan ${i + 1}`}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Open in new tab
-                        </div>
+              </a>
+            );
+
+            return (
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  <div>
+                    <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+                      <FileText className="size-4 text-primary" /> Traffic
+                      Management Plan{plans.length !== 1 ? "s" : ""} ({plans.length})
+                    </div>
+                    {plans.length ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {plans.map((f, i) => (
+                          <FileLink key={i} f={f} i={i} label={`Plan ${i + 1}`} />
+                        ))}
                       </div>
-                    </a>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                    ) : (
+                      <div className="text-xs text-muted-foreground">
+                        No plan attached yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+                      <FileText className="size-4 text-emerald-600" /> Street Use
+                      Permit{permits.length !== 1 ? "s" : ""} ({permits.length})
+                    </div>
+                    {permits.length ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {permits.map((f, i) => (
+                          <FileLink key={i} f={f} i={i} label={`SU permit ${i + 1}`} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">
+                        No SU- permit attached yet.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Crew by phase */}
           <Card>

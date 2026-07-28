@@ -766,7 +766,17 @@ export const coordinatorRouter = router({
           startTime: startHourFromSetupDuration(j.setupDuration),
           phase, // starting | ongoing | pickup
           timeBucket: timeBucketFromSetupDuration(j.setupDuration), // before9 | at9 | after9 | notime
+          planFile: (j as any).planFile ?? [],
         });
+      }
+
+      // City-permit start time per job (from the permit extraction). This is the
+      // real "valid from" hour on the city permit — shown next to each job.
+      const permitMap = await getPermitSchedulesForJobs(
+        pool.map((p) => ({ id: p.id, planFile: p.planFile })),
+      );
+      for (const p of pool) {
+        p.permitStartTime = permitMap.get(p.id)?.validFromTime ?? null;
       }
 
       // Assignments pinned to this day, grouped by technician.

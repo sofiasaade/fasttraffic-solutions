@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,8 @@ import {
   CircleHelp,
   GripVertical,
   Check,
+  FileText,
+  Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -308,7 +311,41 @@ export default function DailyBoard() {
                               <div className="text-[11px] text-muted-foreground truncate">
                                 {j.jobAddress ?? j.municipality ?? ""}
                               </div>
+                              {(() => {
+                                // Prefer the parsed city-permit time; else the
+                                // work-hours window from Airtable "Setup Duration".
+                                const range = (j.setupDuration ?? "").match(
+                                  /\(([^)]*\d[^)]*)\)/,
+                                )?.[1];
+                                const shown = j.permitStartTime || range;
+                                if (!shown) return null;
+                                return (
+                                  <div
+                                    className="text-[11px] font-semibold text-primary flex items-center gap-1 mt-0.5"
+                                    title={
+                                      j.permitStartTime
+                                        ? "City permit valid-from time"
+                                        : "Work hours (Airtable)"
+                                    }
+                                  >
+                                    <Landmark className="size-3 shrink-0" />
+                                    <span className="truncate">
+                                      {j.permitStartTime ? `Permit ${j.permitStartTime}` : shown}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
+                            {/* Project details + plans */}
+                            <Link
+                              href={`/projects/${j.id}`}
+                              draggable={false}
+                              onClick={(e) => e.stopPropagation()}
+                              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-primary shrink-0"
+                              title="Project details & plans"
+                            >
+                              <FileText className="size-4" />
+                            </Link>
                             {n > 0 && (
                               <span
                                 className="text-[10px] font-bold text-red-700 bg-red-100 border border-red-200 rounded-full px-2 py-0.5 shrink-0"

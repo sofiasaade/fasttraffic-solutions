@@ -192,13 +192,25 @@ export default function JobDetail() {
               </Button>
             </a>
           )}
-          {job.planFile?.[0]?.url && (
-            <a href={job.planFile[0].url} target="_blank" rel="noreferrer">
-              <Button size="sm" variant="outline">
-                <FileText className="size-4 mr-1" /> Plan
-              </Button>
-            </a>
-          )}
+          {(() => {
+            // Technicians need the Traffic Management Plan — the plan file, not
+            // the SU- street-use permit. Prefer a non-SU attachment.
+            const files = (job.planFile ?? []) as any[];
+            const tmp =
+              files.find(
+                (f) =>
+                  !/^su[-_\s]/i.test(f.filename ?? "") &&
+                  !/street\s*use/i.test(f.filename ?? ""),
+              ) ?? files[0];
+            if (!tmp?.url) return null;
+            return (
+              <a href={tmp.url} target="_blank" rel="noreferrer">
+                <Button size="sm">
+                  <FileText className="size-4 mr-1" /> Traffic Management Plan
+                </Button>
+              </a>
+            );
+          })()}
         </div>
       </div>
 
