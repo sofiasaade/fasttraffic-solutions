@@ -12,6 +12,7 @@ import {
   Sun,
   CircleHelp,
   GripVertical,
+  Hourglass,
   Check,
   FileText,
   Landmark,
@@ -44,21 +45,21 @@ const PHASE_META: Record<string, { label: string; dot: string; badge: string }> 
   pickup: { label: "Pick up", dot: "#16a34a", badge: "bg-green-100 text-green-700" },
 };
 
+// Time subgroups inside each phase section. 24-hour jobs get their own TIME
+// group ("24 Hours") instead of an hour bucket.
 const TIME_GROUPS = [
   { key: "before9", label: "Before 9:00", icon: Sunrise },
   { key: "at9", label: "9:00", icon: Clock },
+  { key: "h24", label: "24 Hours", icon: Hourglass },
   { key: "after9", label: "After 9:00", icon: Sun },
   { key: "notime", label: "No set time", icon: CircleHelp },
 ] as const;
 
-// Pool sections by day phase — assign per category. 24-hour jobs get their
-// OWN section (they only appear on install day and pickup day; the badge on
-// each card still says which of the two it is).
+// Pool sections by day phase — assign per category.
 const POOL_PHASES = [
   { key: "starting", label: "Starting today", color: "#ea580c" },
   { key: "ongoing", label: "Ongoing daily", color: "#2563eb" },
   { key: "pickup", label: "Pick up", color: "#16a34a" },
-  { key: "h24", label: "24 Hours", color: "#d97706" },
 ] as const;
 
 const is24h = (setupDuration: string | null | undefined) =>
@@ -163,28 +164,28 @@ export default function DailyBoard() {
     return m;
   }, [d?.technicians]);
 
-  // Pool grouped first by SECTION (starting / ongoing / pickup / 24-hours),
-  // then by time. 24-hour jobs are pulled out into their own section.
-  const sectionOf = (j: any) => (is24h(j.setupDuration) ? "h24" : j.phase);
+  // Pool grouped by PHASE section, then by TIME. 24-hour jobs fall into the
+  // "24 Hours" time group inside their phase section.
+  const timeKeyOf = (j: any) => (is24h(j.setupDuration) ? "h24" : j.timeBucket);
   const poolByPhase = useMemo(() => {
-    const empty = () => ({ before9: [], at9: [], after9: [], notime: [] }) as Record<string, any[]>;
+    const empty = () =>
+      ({ before9: [], at9: [], h24: [], after9: [], notime: [] }) as Record<string, any[]>;
     const groups: Record<string, Record<string, any[]>> = {
       starting: empty(),
       ongoing: empty(),
       pickup: empty(),
-      h24: empty(),
     };
     const ql = poolFilter.trim().toLowerCase();
     for (const j of d?.pool ?? []) {
       if (ql && !`${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase().includes(ql)) continue;
-      groups[sectionOf(j)]?.[j.timeBucket]?.push(j);
+      groups[j.phase]?.[timeKeyOf(j)]?.push(j);
     }
     return groups;
   }, [d?.pool, poolFilter]);
 
   const phaseCounts = useMemo(() => {
-    const c: Record<string, number> = { starting: 0, ongoing: 0, pickup: 0, h24: 0 };
-    for (const j of d?.pool ?? []) c[sectionOf(j)] = (c[sectionOf(j)] ?? 0) + 1;
+    const c: Record<string, number> = { starting: 0, ongoing: 0, pickup: 0 };
+    for (const j of d?.pool ?? []) c[j.phase] = (c[j.phase] ?? 0) + 1;
     return c;
   }, [d?.pool]);
 
