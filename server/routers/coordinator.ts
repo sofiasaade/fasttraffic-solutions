@@ -772,6 +772,7 @@ export const coordinatorRouter = router({
       // Assignments pinned to this day, grouped by technician.
       const assignmentsByTech: Record<string, any[]> = {};
       for (const r of scheduled as any[]) {
+        const jobRec = (jobs as any[]).find((j) => j.id === r.airtableJobId);
         (assignmentsByTech[r.technicianName] ??= []).push({
           id: r.id,
           jobId: r.airtableJobId,
@@ -780,7 +781,9 @@ export const coordinatorRouter = router({
           endTime: r.endTime,
           status: r.status,
           note: r.note ?? null,
-          company: (jobs as any[]).find((j) => j.id === r.airtableJobId)?.company ?? null,
+          company: jobRec?.company ?? null,
+          // Airtable "Sub-Status Field Operations" — drives the chip color.
+          subStatus: jobRec?.subStatus ?? null,
         });
       }
 

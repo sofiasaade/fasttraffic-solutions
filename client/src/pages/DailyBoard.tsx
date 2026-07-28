@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { subStatusColor } from "@shared/subStatusColors";
 
 function dayKeyLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -297,7 +298,11 @@ export default function DailyBoard() {
                             title="Drag onto a technician"
                           >
                             <GripVertical className="size-4 text-muted-foreground/50 shrink-0" />
-                            <span className="size-2.5 rounded-full shrink-0" style={{ background: meta.dot }} />
+                            <span
+                              className="size-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+                              title={j.subStatus ?? undefined}
+                              style={{ background: subStatusColor(j.subStatus).bg }}
+                            />
                             <div className="min-w-0 flex-1">
                               <div className="text-sm font-medium truncate">{j.company ?? "Job"}</div>
                               <div className="text-[11px] text-muted-foreground truncate">
@@ -431,10 +436,12 @@ export default function DailyBoard() {
                               title="Edit time / task / note"
                             >
                               <span
-                                className="size-1.5 rounded-full"
+                                className="size-2 rounded-full ring-1 ring-black/10"
+                                title={(a as any).subStatus ?? undefined}
                                 style={{
-                                  background:
-                                    a.phase === "Pickup" ? "#16a34a" : "#2563eb",
+                                  background: subStatusColor(
+                                    (a as any).subStatus,
+                                  ).bg,
                                 }}
                               />
                               <span className="max-w-36 truncate">
