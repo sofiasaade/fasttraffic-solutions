@@ -289,12 +289,20 @@ export const coordinatorRouter = router({
       getJobOverridesMap(ids),
       getAssignmentStatusMap(ids),
     ]);
-    return jobs.map((j) =>
+    const merged = jobs.map((j) =>
       withAssignmentState(
         mergeJob(j, assignMap.get(j.id), overrideMap.get(j.id)),
         statusMap.get(j.id),
       ),
     );
+    // City-permit start time so the Scheduler can order jobs by real start hour.
+    const permitMap = await getPermitSchedulesForJobs(
+      merged.map((j) => ({ id: j.id, planFile: (j as any).planFile ?? [] })),
+    );
+    for (const j of merged) {
+      (j as any).permitStartTime = permitMap.get(j.id)?.validFromTime ?? null;
+    }
+    return merged;
   }),
 
   // Dashboard day view: classify jobs for a given date into
@@ -411,6 +419,12 @@ export const coordinatorRouter = router({
         const hasPermit = !!sched && (!!sched.validFromTime || !!sched.validFromDate);
         (j as any).hasPermit = hasPermit;
         if (!(j as any).isCancelled && !hasPermit) missingPermit += 1;
+      }
+      // Pickup jobs also carry the permit start time so the column can be
+      // ordered earliest-first like the other sections.
+      for (const j of pickup) {
+        (j as any).permitStartTime =
+          permitMap.get(j.id)?.validFromTime ?? null;
       }
 
       // Aggregate equipment needs (Custom Signs / Arrow Boards / Message Boards)

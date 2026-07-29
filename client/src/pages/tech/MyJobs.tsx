@@ -13,7 +13,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { fmtDate, dayKey, fmtTimeRange } from "@/lib/format";
+import { fmtDate, dayKey, fmtTimeRange, fmtTime12 } from "@/lib/format";
 import type { MyJob } from "@/lib/jobTypes";
 import DayBar from "./DayBar";
 import TechDayMap from "@/components/TechDayMap";
@@ -52,9 +52,9 @@ function JobRow({ job }: { job: MyJob }) {
           {/* Assigned start time — the schedule order key */}
           {(job as any).assignedStartTime && (
             <Badge className="text-[11px]">
-              {(job as any).assignedStartTime}
+              {fmtTime12((job as any).assignedStartTime)}
               {(job as any).assignedEndTime
-                ? `–${(job as any).assignedEndTime}`
+                ? ` – ${fmtTime12((job as any).assignedEndTime)}`
                 : ""}
             </Badge>
           )}

@@ -13,6 +13,7 @@ import {
   Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fmtTime12Range } from "@/lib/format";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -556,7 +557,7 @@ export default function WorkersCalendar() {
                           }
                           title={`${PHASE_LABEL[a.phase] ?? a.phase} · ${a.company ?? a.municipality ?? "Job"}${
                             a.jobAddress ? " — " + a.jobAddress : ""
-                          }${a.startTime ? ` (${a.startTime}${a.endTime ? "–" + a.endTime : ""})` : ""} — click to edit`}
+                          }${a.startTime ? ` (${fmtTime12Range(a.startTime, a.endTime)})` : ""} — click to edit`}
                           className={cn(
                             "min-w-0 max-w-full rounded border px-1.5 py-1 text-[10px] leading-tight cursor-pointer hover:ring-2 hover:ring-primary/50 transition-shadow",
                             colorForJob(a.airtableJobId),

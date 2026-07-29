@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { fmtTime12, fmtTime12Range } from "@/lib/format";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import { BillingNotesButton } from "@/components/BillingNotes";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
@@ -61,7 +62,25 @@ import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
-import { classifyJobForDay, is24HourSetup } from "@shared/dashboardDay";
+import {
+  classifyJobForDay,
+  is24HourSetup,
+  startHourFromSetupDuration,
+} from "@shared/dashboardDay";
+
+/**
+ * Minutes-from-midnight a job really starts: city-permit time first, then the
+ * hour in the Airtable work-hours text. No readable time sorts last (stable).
+ */
+function jobStartMinutes(j: any): number {
+  const t = j.permitStartTime;
+  if (t) {
+    const [h, m] = String(t).split(":").map(Number);
+    if (!Number.isNaN(h)) return h * 60 + (m || 0);
+  }
+  const h = startHourFromSetupDuration(j.setupDuration);
+  return h === null ? 24 * 60 + 1 : h * 60;
+}
 import { subStatusColor, normalizeSubStatus } from "@shared/subStatusColors";
 import { SUB_STATUS_OPTIONS } from "@shared/airtableFields";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
@@ -404,7 +423,7 @@ function WorkerChip({
       draggable={draggable}
       onDragStart={onDragStart}
       title={`${row.technicianName} • ${row.phase}${
-        row.startTime ? ` • ${row.startTime}-${row.endTime ?? ""}` : ""
+        row.startTime ? ` • ${fmtTime12Range(row.startTime, row.endTime)}` : ""
       }${assignedAt ? ` • assigned ${assignedAt}` : ""} — ${
         confirmed ? "confirmed" : "tentative"
       }${onEdit ? " • click to edit task/time" : ""}`}
@@ -445,7 +464,7 @@ function WorkerChip({
         {row.technicianName}
         {row.startTime && (
           <span className="ml-1 font-medium whitespace-nowrap">
-            {row.startTime}–{row.endTime ?? ""}
+            {fmtTime12Range(row.startTime, row.endTime)}
           </span>
         )}
         {assignedAt && (
@@ -968,6 +987,10 @@ export default function Scheduler() {
       const startKey = (j.startDate || "").slice(0, 10);
       if (hasPrep && startKey && startKey > selectedDayKey) map.prep.push(j);
     }
+    // Earliest start of day first inside every phase section.
+    for (const list of Object.values(map)) {
+      list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
+    }
     return map;
   }, [weekJobs, selectedDayKey]);
   const dayPhaseCount = useMemo(
@@ -1009,6 +1032,10 @@ export default function Scheduler() {
         if (b.ongoing) add(is24HourSetup(j.setupDuration, j.subStatus) ? "ongoing24" : "ongoing", j);
         if (hasPrep && startKey && startKey > dk) add("prep", j);
       }
+    }
+    // Earliest start of day first inside every phase section.
+    for (const list of Object.values(map)) {
+      list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
     }
     return map;
   }, [weekJobs, dayKeys]);

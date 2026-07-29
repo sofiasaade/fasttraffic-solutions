@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { fmtTime12Range } from "@/lib/format";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -905,7 +906,7 @@ function TimelineBlock({
         : "bg-slate-100 text-slate-800 border-slate-300";
   const span =
     block.startTime && block.endTime
-      ? `${block.startTime}–${block.endTime}`
+      ? fmtTime12Range(block.startTime, block.endTime)
       : "";
   return (
     <div

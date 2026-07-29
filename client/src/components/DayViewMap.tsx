@@ -3,6 +3,7 @@ import { MapView } from "@/components/Map";
 import OsmDayMap from "@/components/OsmDayMap";
 import { Loader2, AlertTriangle, MapPinned } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fmtTime12 } from "@/lib/format";
 
 // When the Manus Google-Maps proxy is not configured (e.g. running locally),
 // fall back to a free OpenStreetMap renderer with identical pins/popups.
@@ -130,7 +131,7 @@ export default function DayViewMap({
       <div style="font-size:11px;color:#64748b">${escapeHtml(
         shortDate(j.startDate),
       )} → ${escapeHtml(shortDate(j.endDate))}${
-        j.permitStartTime ? ` · ${escapeHtml(j.permitStartTime)}` : ""
+        j.permitStartTime ? ` · ${escapeHtml(fmtTime12(j.permitStartTime))}` : ""
       }</div>
       <div style="margin-top:6px">${badges}</div>
     </div>`;

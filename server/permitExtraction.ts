@@ -17,6 +17,7 @@ import {
   type AttachmentLike,
   type PermitSchedule,
 } from "../shared/permitSchedule";
+import { pickPlans } from "../shared/planDocs";
 
 function rowToSchedule(r: PermitExtractionRow): PermitSchedule {
   return {
@@ -274,6 +275,187 @@ async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null>
 }
 
 /**
+ * "JUL 29" (no year) -> ISO date. The TMP setup block omits the year, so pick
+ * the year that puts the date within ±6 months of today.
+ */
+function monthDayToIso(mon: string, day: string | number): string | null {
+  const m = MONTHS[mon.slice(0, 3).toLowerCase()];
+  const d = Number(day);
+  if (!m || !d || d > 31) return null;
+  const now = new Date();
+  let year = now.getFullYear();
+  const mk = (y: number) => new Date(y, Number(m) - 1, d);
+  const HALF_YEAR = 183 * 24 * 3600 * 1000;
+  if (mk(year).getTime() - now.getTime() > HALF_YEAR) year -= 1;
+  else if (now.getTime() - mk(year).getTime() > HALF_YEAR) year += 1;
+  return `${year}-${m}-${String(d).padStart(2, "0")}`;
+}
+
+const WEEKDAY_RE =
+  /(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)/i;
+
+/** Parse one "SETUP: WEDNESDAY 12:00 JUL 29" style line from the TMP. */
+function parsePlanLine(line: string): {
+  day: string | null;
+  time: string | null;
+  date: string | null;
+} | null {
+  const time = line.match(/\b(\d{1,2}:\d{2})\b/);
+  if (!time) return null;
+  // Unfilled template blocks read "00:00 JAN 00" — not a real schedule.
+  if (time[1] === "00:00") return null;
+  const day = line.match(WEEKDAY_RE);
+  const md = line.match(/\b([A-Za-z]{3,9})\.?\s+(\d{1,2})\b(?!:)/g) ?? [];
+  // Last "MON DD" token that is a real month (skips the weekday word).
+  let date: string | null = null;
+  for (const tok of md) {
+    const m = tok.match(/([A-Za-z]{3,9})\.?\s+(\d{1,2})/);
+    if (m && MONTHS[m[1].slice(0, 3).toLowerCase()]) {
+      date = monthDayToIso(m[1], m[2]);
+    }
+  }
+  return { day: day ? day[1] : null, time: normTime(time[1]), date };
+}
+
+/**
+ * Traffic Management Plan fallback: FTS plans carry a "SETUP INFORMATION"
+ * block (SETUP: <weekday> <HH:MM> <MON DD> / PICKUP: …). Used when the job has
+ * no readable Street Use permit. Reads text positionally (same-row items) with
+ * a flat-text fallback.
+ */
+async function extractPlanSetup(fileUrl: string): Promise<PermitSchedule | null> {
+  const buf = Buffer.from(await (await fetch(fileUrl)).arrayBuffer());
+
+  // Positional pass: join items sharing a row (y) so columns read left→right.
+  let setupLine: string | null = null;
+  let pickupLine: string | null = null;
+  try {
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
+    for (let p = 1; p <= doc.numPages && !setupLine; p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      const items = (tc.items as any[])
+        .filter((i) => typeof i.str === "string" && i.str.trim())
+        .map((i) => ({ s: i.str.trim(), x: i.transform[4], y: i.transform[5] }));
+      const rowOf = (y: number) =>
+        items
+          .filter((i) => Math.abs(i.y - y) < 4)
+          .sort((a, b) => a.x - b.x)
+          .map((i) => i.s)
+          .join(" ");
+      const sa = items.find((i) => /^SET\s*-?\s*UP\s*:|^SETUP\s*:/i.test(i.s));
+      if (sa) setupLine = rowOf(sa.y);
+      const pa = items.find((i) => /^PICK\s*-?\s*UP\s*:|^PICKUP\s*:/i.test(i.s));
+      if (pa) pickupLine = rowOf(pa.y);
+    }
+  } catch {
+    // fall through to flat text
+  }
+
+  if (!setupLine) {
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: new Uint8Array(buf) });
+    const text = (await parser.getText()).text ?? "";
+    const i = text.search(/SETUP\s*INFORMATION/i);
+    const win = i >= 0 ? text.slice(i, i + 500) : text;
+    const s = win.match(/SET\s*-?\s*UP\s*:?[^\n]{0,80}/i);
+    const p = win.match(/PICK\s*-?\s*UP\s*:?[^\n]{0,80}/i);
+    setupLine = s ? s[0] : null;
+    pickupLine = p ? p[0] : null;
+  }
+
+  const setup = setupLine ? parsePlanLine(setupLine) : null;
+  const pickup = pickupLine ? parsePlanLine(pickupLine) : null;
+  if (!setup && !pickup) return null;
+
+  return {
+    permitNumber: null,
+    validFromDate: setup?.date ?? null,
+    validFromTime: setup?.time ?? null,
+    validFromDay: setup?.day ?? null,
+    validToDate: pickup?.date ?? null,
+    validToTime: pickup?.time ?? null,
+    validToDay: pickup?.day ?? null,
+    numberOfDays: null,
+  };
+}
+
+/**
+ * Cached plan-fallback schedule for a job. Rows share the permit_extractions
+ * cache, keyed by a "plan:"-prefixed filename so they never collide with real
+ * permit rows.
+ */
+async function planFallbackSchedule(
+  jobId: string,
+  attachments: AttachmentLike[] | null | undefined,
+  cachedByName: Map<string, PermitExtractionRow>,
+): Promise<PermitSchedule | null> {
+  // Only PDF plans carry the SETUP INFORMATION block — skip images etc.
+  const plan = (
+    pickPlans((attachments ?? []) as { filename?: string | null }[]) as AttachmentLike[]
+  ).find((p) => /\.pdf$/i.test(p.filename ?? ""));
+  if (!plan?.url) return null;
+  const name = `plan:${plan.filename ?? plan.url}`;
+  const hit = cachedByName.get(name);
+  if (hit) return hit.parseStatus === "ok" ? rowToSchedule(hit) : null;
+  try {
+    const sched = await extractPlanSetup(plan.url);
+    if (sched && (sched.validFromTime || sched.validFromDate)) {
+      await upsertPermitExtraction({
+        airtableJobId: jobId,
+        filename: name,
+        fileUrl: plan.url,
+        permitNumber: null,
+        validFromDate: sched.validFromDate ?? null,
+        validFromTime: sched.validFromTime ?? null,
+        validFromDay: sched.validFromDay ?? null,
+        validToDate: sched.validToDate ?? null,
+        validToTime: sched.validToTime ?? null,
+        validToDay: sched.validToDay ?? null,
+        numberOfDays: null,
+        parseStatus: "ok",
+        rawJson: JSON.stringify(sched),
+      });
+      return sched;
+    }
+    await upsertPermitExtraction({
+      airtableJobId: jobId,
+      filename: name,
+      fileUrl: plan.url,
+      parseStatus: "error",
+    });
+    return null;
+  } catch {
+    await upsertPermitExtraction({
+      airtableJobId: jobId,
+      filename: name,
+      fileUrl: plan.url,
+      parseStatus: "error",
+    });
+    return null;
+  }
+}
+
+/** Fill schedule holes (time/date/day) from the plan-derived schedule. */
+function mergeWithPlan(
+  sched: PermitSchedule | null | undefined,
+  plan: PermitSchedule | null,
+): PermitSchedule | null {
+  if (!plan) return sched ?? null;
+  if (!sched) return plan;
+  return {
+    ...sched,
+    validFromDate: sched.validFromDate ?? plan.validFromDate,
+    validFromTime: sched.validFromTime ?? plan.validFromTime,
+    validFromDay: sched.validFromDay ?? plan.validFromDay,
+    validToDate: sched.validToDate ?? plan.validToDate,
+    validToTime: sched.validToTime ?? plan.validToTime,
+    validToDay: sched.validToDay ?? plan.validToDay,
+  };
+}
+
+/**
  * For one job: select SU permits, extract any that are not yet cached, and
  * return the schedule of the most-current permit (or null if none).
  */
@@ -282,11 +464,15 @@ export async function getJobPermitSchedule(
   attachments: AttachmentLike[] | null | undefined,
 ): Promise<PermitSchedule | null> {
   const permits = selectStreetUsePermits(attachments);
-  if (permits.length === 0) return null;
 
   const cacheMap = await getPermitExtractionsMap([jobId]);
   const cached = cacheMap.get(jobId) ?? [];
   const cachedByName = new Map(cached.map((r) => [r.filename, r]));
+
+  if (permits.length === 0) {
+    // No SU permit at all: the TMP setup block is the only schedule source.
+    return planFallbackSchedule(jobId, attachments, cachedByName);
+  }
 
   const schedules: Record<string, PermitSchedule | undefined> = {};
   for (const p of permits) {
@@ -329,9 +515,14 @@ export async function getJobPermitSchedule(
   }
 
   const best = pickMostCurrentPermit(permits, schedules);
-  if (!best) return null;
-  const bestName = best.filename ?? best.url;
-  return schedules[bestName] ?? null;
+  const bestName = best ? (best.filename ?? best.url) : null;
+  const sched = bestName ? (schedules[bestName] ?? null) : null;
+  if (sched?.validFromTime) return sched;
+  // Permit unreadable or missing its start time: fill from the TMP setup block.
+  return mergeWithPlan(
+    sched,
+    await planFallbackSchedule(jobId, attachments, cachedByName),
+  );
 }
 
 /**
@@ -342,15 +533,19 @@ export async function getPermitSchedulesForJobs(
   jobs: { id: string; planFile: AttachmentLike[] | null | undefined }[],
 ): Promise<Map<string, PermitSchedule>> {
   const result = new Map<string, PermitSchedule>();
-  const withPermits = jobs
-    .map((j) => ({ id: j.id, permits: selectStreetUsePermits(j.planFile) }))
-    .filter((j) => j.permits.length > 0);
-  if (withPermits.length === 0) return result;
+  const withDocs = jobs
+    .map((j) => ({
+      id: j.id,
+      planFile: j.planFile,
+      permits: selectStreetUsePermits(j.planFile),
+    }))
+    .filter((j) => j.permits.length > 0 || (j.planFile?.length ?? 0) > 0);
+  if (withDocs.length === 0) return result;
 
-  const ids = withPermits.map((j) => j.id);
+  const ids = withDocs.map((j) => j.id);
   const cacheMap = await getPermitExtractionsMap(ids);
 
-  for (const { id, permits } of withPermits) {
+  for (const { id, permits, planFile } of withDocs) {
     const cached = cacheMap.get(id) ?? [];
     const cachedByName = new Map(cached.map((r) => [r.filename, r]));
     const schedules: Record<string, PermitSchedule | undefined> = {};
@@ -394,11 +589,16 @@ export async function getPermitSchedulesForJobs(
     }
 
     const best = pickMostCurrentPermit(permits, schedules);
-    if (best) {
-      const bestName = best.filename ?? best.url;
-      const sched = schedules[bestName];
-      if (sched) result.set(id, sched);
+    const bestName = best ? (best.filename ?? best.url) : null;
+    let sched = bestName ? (schedules[bestName] ?? null) : null;
+    if (!sched?.validFromTime) {
+      // Permit unreadable or missing a start time: TMP setup block fallback.
+      sched = mergeWithPlan(
+        sched,
+        await planFallbackSchedule(id, planFile, cachedByName),
+      );
     }
+    if (sched) result.set(id, sched);
   }
 
   return result;

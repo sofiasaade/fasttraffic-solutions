@@ -75,6 +75,21 @@ type DayJob = {
   prepCrew?: string[];
 };
 
+/**
+ * Minutes-from-midnight of a job's real start (city-permit time). Jobs with
+ * no readable time sort last; the sort is stable so their order is unchanged.
+ */
+function startMinutesOf(j: DayJob): number {
+  const m = (j.permitStartTime ?? "").match(/^(\d{1,2}):(\d{2})/);
+  if (m) return Number(m[1]) * 60 + Number(m[2]);
+  return 24 * 60 + 1;
+}
+
+/** Earliest start first. */
+function sortByStart(list: DayJob[]): DayJob[] {
+  return [...list].sort((a, b) => startMinutesOf(a) - startMinutesOf(b));
+}
+
 /** Format an HH:MM (24h) permit time into a friendly 12h label. */
 function prettyTime(t: string | null | undefined): string | null {
   if (!t) return null;
@@ -328,7 +343,7 @@ function Section({
             No jobs
           </div>
         ) : (
-          jobs.map((j) => (
+          sortByStart(jobs).map((j) => (
             <JobCard
               key={j.id}
               job={j}
@@ -370,7 +385,7 @@ function BucketedSection({
     { key: "unknown", label: "Time not in permit", icon: HelpCircle, color: "#64748b" },
   ];
   const byBucket = (b: string) =>
-    jobs.filter((j) => (j.nineAmBucket ?? "unknown") === b);
+    sortByStart(jobs.filter((j) => (j.nineAmBucket ?? "unknown") === b));
 
   return (
     <div className="rounded-2xl border border-border bg-card/50 p-4 flex flex-col min-h-[140px]">

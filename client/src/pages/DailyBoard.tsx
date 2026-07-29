@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { subStatusColor } from "@shared/subStatusColors";
+import { fmtTime12 } from "@/lib/format";
 
 function dayKeyLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -48,10 +49,10 @@ const PHASE_META: Record<string, { label: string; dot: string; badge: string }> 
 // Time subgroups inside each phase section. 24-hour jobs get their own TIME
 // group ("24 Hours") instead of an hour bucket.
 const TIME_GROUPS = [
-  { key: "before9", label: "Before 9:00", icon: Sunrise },
-  { key: "at9", label: "9:00", icon: Clock },
+  { key: "before9", label: "Before 9:00 AM", icon: Sunrise },
+  { key: "at9", label: "9:00 AM", icon: Clock },
   { key: "h24", label: "24 Hours", icon: Hourglass },
-  { key: "after9", label: "After 9:00", icon: Sun },
+  { key: "after9", label: "After 9:00 AM", icon: Sun },
   { key: "notime", label: "No set time", icon: CircleHelp },
 ] as const;
 
@@ -436,7 +437,7 @@ export default function DailyBoard() {
                                   >
                                     <Landmark className="size-3 shrink-0" />
                                     <span className="truncate">
-                                      {j.permitStartTime ? `Permit ${j.permitStartTime}` : shown}
+                                      {j.permitStartTime ? `Permit ${fmtTime12(j.permitStartTime)}` : shown}
                                     </span>
                                   </div>
                                 );
@@ -594,7 +595,7 @@ export default function DailyBoard() {
                               </span>
                               {a.startTime && (
                                 <span className="text-muted-foreground">
-                                  {a.startTime}
+                                  {fmtTime12(a.startTime)}
                                 </span>
                               )}
                               {(a as any).note && (

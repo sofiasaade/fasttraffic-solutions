@@ -27,6 +27,28 @@ export function fmtTimeRange(setupDuration: string | null): string {
   return m ? m[1] : setupDuration;
 }
 
+/** "19:00" -> "7:00 PM" (falls back to the input if it isn't HH:MM). */
+export function fmtTime12(t: string | null | undefined): string {
+  if (!t) return "";
+  const m = String(t).match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return String(t);
+  let h = Number(m[1]);
+  const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${ap}`;
+}
+
+/** "07:00","15:00" -> "7:00 AM – 3:00 PM". */
+export function fmtTime12Range(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): string {
+  const s = fmtTime12(start);
+  const e = fmtTime12(end);
+  if (s && e) return `${s} – ${e}`;
+  return s || e;
+}
+
 export function dayKey(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);

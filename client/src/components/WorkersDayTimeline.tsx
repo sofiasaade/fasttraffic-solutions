@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { fmtTime12Range } from "@/lib/format";
 import { GraduationCap } from "lucide-react";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
 
@@ -255,7 +256,7 @@ export function WorkersDayTimeline({
                         key={a.id}
                         title={`${PHASE_LABEL[a.phase] ?? a.phase} · ${a.company ?? a.municipality ?? "Job"}${
                           a.jobAddress ? " — " + a.jobAddress : ""
-                        } (${a.startTime}–${a.endTime})`}
+                        } (${fmtTime12Range(a.startTime, a.endTime)})`}
                         className={cn(
                           "absolute top-1.5 bottom-1.5 rounded border px-1.5 py-0.5 text-[10px] leading-tight text-white overflow-hidden shadow-sm",
                           colorForJob(a.airtableJobId),
@@ -269,8 +270,7 @@ export function WorkersDayTimeline({
                         }}
                       >
                         <div className="font-semibold truncate">
-                          {PHASE_LABEL[a.phase] ?? a.phase} · {a.startTime}–
-                          {a.endTime}
+                          {PHASE_LABEL[a.phase] ?? a.phase} · {fmtTime12Range(a.startTime, a.endTime)}
                         </div>
                         <div className="truncate opacity-95">
                           {a.company ?? a.municipality ?? "Job"}

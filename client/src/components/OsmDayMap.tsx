@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { DayMarker } from "@/components/DayViewMap";
+import { fmtTime12 } from "@/lib/format";
 
 /**
  * OpenStreetMap (Leaflet) fallback renderer for the Dashboard "Day map".
@@ -50,7 +51,7 @@ function popupHtml(j: DayMarker, buckets: DayMarker["bucket"][]): string {
     <div style="font-size:12px;color:#475569;margin-bottom:6px">${escapeHtml(j.jobAddress ?? "")}</div>
     <div style="font-size:11px;color:#64748b">${escapeHtml(shortDate(j.startDate))} → ${escapeHtml(
       shortDate(j.endDate),
-    )}${j.permitStartTime ? ` · ${escapeHtml(j.permitStartTime)}` : ""}</div>
+    )}${j.permitStartTime ? ` · ${escapeHtml(fmtTime12(j.permitStartTime))}` : ""}</div>
     <div style="margin-top:6px">${badges}</div>
   </div>`;
 }
