@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { subStatusColor } from "@shared/subStatusColors";
+import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 import { toast } from "sonner";
 import {
@@ -236,11 +237,9 @@ export default function ProjectDetail() {
           {(() => {
             const files = (job.planFile ?? []) as any[];
             if (files.length === 0) return null;
-            const isPermit = (f: any) =>
-              /^su[-_\s]/i.test(f.filename ?? "") ||
-              /street\s*use/i.test(f.filename ?? "");
-            const permits = files.filter(isPermit);
-            const plans = files.filter((f) => !isPermit(f));
+            const plans = pickPlans(files);
+            const permits = pickPermits(files);
+            const others = pickOtherDocs(files);
 
             const FileLink = ({ f, i, label }: any) => (
               <a
@@ -295,13 +294,14 @@ export default function ProjectDetail() {
 
                   <div>
                     <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-                      <FileText className="size-4 text-emerald-600" /> Street Use
-                      Permit{permits.length !== 1 ? "s" : ""} ({permits.length})
+                      <FileText className="size-4 text-emerald-600" /> City
+                      Permit{permits.length !== 1 ? "s" : ""} (SU / NP) (
+                      {permits.length})
                     </div>
                     {permits.length ? (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {permits.map((f, i) => (
-                          <FileLink key={i} f={f} i={i} label={`SU permit ${i + 1}`} />
+                          <FileLink key={i} f={f} i={i} label={`Permit ${i + 1}`} />
                         ))}
                       </div>
                     ) : (
@@ -310,6 +310,20 @@ export default function ProjectDetail() {
                       </div>
                     )}
                   </div>
+
+                  {others.length > 0 && (
+                    <div>
+                      <div className="mb-2 flex items-center gap-2 text-sm font-bold text-muted-foreground">
+                        <FileText className="size-4" /> Other documents (
+                        {others.length})
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {others.map((f, i) => (
+                          <FileLink key={i} f={f} i={i} label={`Document ${i + 1}`} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

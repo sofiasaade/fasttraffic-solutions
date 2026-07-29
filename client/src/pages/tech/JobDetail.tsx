@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import MiniJobMap from "@/components/MiniJobMap";
+import { pickPlans } from "@shared/planDocs";
 import {
   Select,
   SelectContent,
@@ -193,18 +194,12 @@ export default function JobDetail() {
             </a>
           )}
           {(() => {
-            // Technicians need the Traffic Management Plan — the plan file, not
-            // the SU- street-use permit. Prefer a non-SU attachment.
-            const files = (job.planFile ?? []) as any[];
-            const tmp =
-              files.find(
-                (f) =>
-                  !/^su[-_\s]/i.test(f.filename ?? "") &&
-                  !/street\s*use/i.test(f.filename ?? ""),
-              ) ?? files[0];
-            if (!tmp?.url) return null;
+            // Technicians need the Traffic Management Plan ONLY — never the
+            // SU-/NP- permits or the bare-number application PDFs.
+            const plan = pickPlans((job.planFile ?? []) as any[])[0];
+            if (!plan?.url) return null;
             return (
-              <a href={tmp.url} target="_blank" rel="noreferrer">
+              <a href={plan.url} target="_blank" rel="noreferrer">
                 <Button size="sm">
                   <FileText className="size-4 mr-1" /> Traffic Management Plan
                 </Button>

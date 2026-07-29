@@ -180,6 +180,22 @@ export default function DailyBoard() {
       if (ql && !`${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase().includes(ql)) continue;
       groups[j.phase]?.[timeKeyOf(j)]?.push(j);
     }
+    // Earliest start first inside every group: city-permit time wins, then the
+    // Airtable work-hours start; jobs without any time go last.
+    const startMinutes = (j: any) => {
+      const t = j.permitStartTime;
+      if (t) {
+        const [h, mm] = String(t).split(":").map(Number);
+        if (!Number.isNaN(h)) return h * 60 + (mm || 0);
+      }
+      if (typeof j.startTime === "number") return j.startTime * 60;
+      return 24 * 60 + 1;
+    };
+    for (const ph of Object.values(groups)) {
+      for (const arr of Object.values(ph)) {
+        arr.sort((a, b) => startMinutes(a) - startMinutes(b));
+      }
+    }
     return groups;
   }, [d?.pool, poolFilter]);
 
