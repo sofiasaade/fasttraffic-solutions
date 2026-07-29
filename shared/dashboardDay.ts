@@ -70,18 +70,31 @@ export function classifyJobForDay(
   if (!start) return result;
   if (start === day) result.startingToday = true;
   if (end === day) result.pickup = true;
-  // Ongoing only for recurring every-day setups, strictly between start/end.
-  // A job counts as recurring if EITHER its Setup Duration says so OR its
-  // Field-Operations sub-status is "Daily Setup (Field)" — some daily jobs
-  // carry a generic duration like "Daytime Work…".
+  // Ongoing, strictly between start/end, when EITHER:
+  //  - it's a recurring every-day setup (Setup Duration says Daily/Several, or
+  //    sub-status is "Daily Setup (Field)"), OR
+  //  - it's a 24-HOUR setup (duration or sub-status) — signs stay installed,
+  //    so coordinators want it visible every day of its window (it lands in
+  //    the "24 Hours" time group on the boards).
   if (
     start < day &&
     day < end &&
-    (isRecurringDailySetup(setupDuration) || isDailySetupSubStatus(subStatus))
+    (isRecurringDailySetup(setupDuration) ||
+      isDailySetupSubStatus(subStatus) ||
+      is24HourSetup(setupDuration, subStatus))
   ) {
     result.ongoing = true;
   }
   return result;
+}
+
+/** Whether the job is a 24-hour setup — by Setup Duration OR sub-status
+ * (e.g. "24 Hours Set Up" / "24 Hours Setup (Field)"). */
+export function is24HourSetup(
+  setupDuration?: string | null,
+  subStatus?: string | null,
+): boolean {
+  return /24\s*hour/i.test(setupDuration ?? "") || /24\s*hour/i.test(subStatus ?? "");
 }
 
 /**

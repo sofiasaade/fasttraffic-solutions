@@ -62,8 +62,10 @@ const POOL_PHASES = [
   { key: "pickup", label: "Pick up", color: "#16a34a" },
 ] as const;
 
-const is24h = (setupDuration: string | null | undefined) =>
-  /24\s*hour/i.test(setupDuration ?? "");
+const is24h = (
+  setupDuration: string | null | undefined,
+  subStatus?: string | null,
+) => /24\s*hour/i.test(setupDuration ?? "") || /24\s*hour/i.test(subStatus ?? "");
 
 const TASKS = [
   "Preparation",
@@ -166,7 +168,8 @@ export default function DailyBoard() {
 
   // Pool grouped by PHASE section, then by TIME. 24-hour jobs fall into the
   // "24 Hours" time group inside their phase section.
-  const timeKeyOf = (j: any) => (is24h(j.setupDuration) ? "h24" : j.timeBucket);
+  const timeKeyOf = (j: any) =>
+    is24h(j.setupDuration, j.subStatus) ? "h24" : j.timeBucket;
   const poolByPhase = useMemo(() => {
     const empty = () =>
       ({ before9: [], at9: [], h24: [], after9: [], notime: [] }) as Record<string, any[]>;

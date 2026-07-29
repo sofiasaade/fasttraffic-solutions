@@ -45,16 +45,30 @@ describe("classifyJobForDay", () => {
     expect(b.pickup).toBe(false);
   });
 
-  it("does NOT mark a 24-hour job as ongoing on in-between days", () => {
+  // Business rule (coordinator, Jul 2026): 24-hour jobs stay VISIBLE as
+  // ongoing on in-between days — signs remain installed, so the boards show
+  // them in the "24 Hours" group for their whole window.
+  it("marks a 24-hour job as ongoing on in-between days", () => {
     const b = classifyJobForDay(
       "2026-06-09",
       "2026-06-14",
       DAY,
       "24 Hours Set Up",
     );
-    expect(b.ongoing).toBe(false);
+    expect(b.ongoing).toBe(true);
     expect(b.startingToday).toBe(false);
     expect(b.pickup).toBe(false);
+  });
+
+  it("marks ongoing when only the SUB-STATUS says 24 Hours (duration generic)", () => {
+    const b = classifyJobForDay(
+      "2026-06-09",
+      "2026-06-14",
+      DAY,
+      "Daytime Work (7:00 AM - 5:00 PM)",
+      "24 Hours Setup (Field)",
+    );
+    expect(b.ongoing).toBe(true);
   });
 
   it("still shows a 24-hour job on the day it starts", () => {
