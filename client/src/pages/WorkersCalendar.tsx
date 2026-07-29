@@ -621,6 +621,7 @@ export default function WorkersCalendar() {
                       "Set up aside",
                       "No Parking",
                       "Flagger",
+                      "Check up",
                       "Pickup",
                     ].map((t) => (
                       <SelectItem key={t} value={t}>

@@ -134,6 +134,7 @@ const taskSchema = z.enum([
   "Set up aside",
   "No Parking",
   "Flagger",
+  "Check up",
   "Pickup",
 ]);
 

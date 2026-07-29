@@ -61,7 +61,7 @@ import { albertaHolidaysForYears } from "@shared/albertaHolidays";
 import { parseNonWorkingDays, nonWorkingReason } from "@shared/nonWorkingDays";
 import type { DispatchJob as Job } from "@/lib/jobTypes";
 import { isCancelledJob } from "@shared/jobStatus";
-import { classifyJobForDay } from "@shared/dashboardDay";
+import { classifyJobForDay, is24HourSetup } from "@shared/dashboardDay";
 import { subStatusColor, normalizeSubStatus } from "@shared/subStatusColors";
 import { SUB_STATUS_OPTIONS } from "@shared/airtableFields";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
@@ -195,12 +195,22 @@ function setupDurationShade(value: string | null | undefined): {
 // Jobs can be grouped either by permit STATUS (default) or by the Day-View
 // PHASE buckets: Prep work / Starting / Ongoing / Pick up. The phase grouping
 // reuses classifyJobForDay so it stays identical to the Dashboard.
-type PhaseKey = "prep" | "starting" | "ongoing" | "pickup";
-// Titles and colors match the Dashboard Day view columns exactly.
+type PhaseKey = "prep" | "starting" | "ongoing" | "ongoing24" | "pickup";
+// Titles/colors match the Dashboard Day view; ONGOING is split by the
+// Field-Operations sub-status (Daily Setup vs 24 Hours Setup).
 const PHASE_SECTIONS: { key: PhaseKey; title: string; dot: string }[] = [
   { key: "prep", title: "Prep work", dot: "#7c3aed" },
   { key: "starting", title: "Starting today", dot: "#ea580c" },
-  { key: "ongoing", title: "Ongoing (daily)", dot: "#2563eb" },
+  {
+    key: "ongoing",
+    title: "Daily Setup (Field)",
+    dot: subStatusColor("Daily Setup (Field)").bg,
+  },
+  {
+    key: "ongoing24",
+    title: "24 Hours Setup (Field)",
+    dot: subStatusColor("24 Hours Setup (Field)").bg,
+  },
   { key: "pickup", title: "Pick up today", dot: "#16a34a" },
 ];
 
@@ -941,7 +951,7 @@ export default function Scheduler() {
   // Uses the same classifyJobForDay logic as the Dashboard so the Scheduler's
   // phase columns match the Dashboard exactly.
   const groupedDayPhase = useMemo(() => {
-    const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], pickup: [] };
+    const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], ongoing24: [], pickup: [] };
     for (const j of weekJobs) {
       const cancelled = isCancelledJob(j);
       const b = classifyJobForDay(j.startDate, j.endDate, selectedDayKey, j.setupDuration, j.subStatus);
@@ -952,7 +962,7 @@ export default function Scheduler() {
       }
       if (b.startingToday) map.starting.push(j);
       if (b.pickup) map.pickup.push(j);
-      if (b.ongoing) map.ongoing.push(j);
+      if (b.ongoing) map[is24HourSetup(j.setupDuration, j.subStatus) ? "ongoing24" : "ongoing"].push(j);
       // Prep work: has a Preparation tech AND the job starts AFTER the selected day.
       const hasPrep = (j.techPrep?.length ?? 0) > 0;
       const startKey = (j.startDate || "").slice(0, 10);
@@ -965,6 +975,7 @@ export default function Scheduler() {
       groupedDayPhase.prep.length +
       groupedDayPhase.starting.length +
       groupedDayPhase.ongoing.length +
+      groupedDayPhase.ongoing24.length +
       groupedDayPhase.pickup.length,
     [groupedDayPhase],
   );
@@ -974,9 +985,9 @@ export default function Scheduler() {
   // starts one day and is picked up another). We test every day in the range and
   // place the job in a column if it matches that phase on ANY day of the range.
   const groupedWeekPhase = useMemo(() => {
-    const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], pickup: [] };
+    const map: Record<PhaseKey, Job[]> = { prep: [], starting: [], ongoing: [], ongoing24: [], pickup: [] };
     const seen: Record<PhaseKey, Set<string>> = {
-      prep: new Set(), starting: new Set(), ongoing: new Set(), pickup: new Set(),
+      prep: new Set(), starting: new Set(), ongoing: new Set(), ongoing24: new Set(), pickup: new Set(),
     };
     const add = (key: PhaseKey, j: Job) => {
       if (seen[key].has(j.id)) return;
@@ -995,7 +1006,7 @@ export default function Scheduler() {
         }
         if (b.startingToday) add("starting", j);
         if (b.pickup) add("pickup", j);
-        if (b.ongoing) add("ongoing", j);
+        if (b.ongoing) add(is24HourSetup(j.setupDuration, j.subStatus) ? "ongoing24" : "ongoing", j);
         if (hasPrep && startKey && startKey > dk) add("prep", j);
       }
     }

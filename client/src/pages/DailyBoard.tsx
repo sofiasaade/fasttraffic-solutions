@@ -55,10 +55,21 @@ const TIME_GROUPS = [
   { key: "notime", label: "No set time", icon: CircleHelp },
 ] as const;
 
-// Pool sections by day phase — assign per category.
+// Pool sections. ONGOING is split by the Airtable Field-Operations sub-status
+// — "Daily Setup (Field)" vs "24 Hours Setup (Field)" — per the coordinator's
+// workflow; each section is then grouped by installation hour.
 const POOL_PHASES = [
   { key: "starting", label: "Starting today", color: "#ea580c" },
-  { key: "ongoing", label: "Ongoing daily", color: "#2563eb" },
+  {
+    key: "ongoingDaily",
+    label: "Daily Setup (Field)",
+    color: subStatusColor("Daily Setup (Field)").bg,
+  },
+  {
+    key: "ongoing24h",
+    label: "24 Hours Setup (Field)",
+    color: subStatusColor("24 Hours Setup (Field)").bg,
+  },
   { key: "pickup", label: "Pick up", color: "#16a34a" },
 ] as const;
 
@@ -73,6 +84,7 @@ const TASKS = [
   "Set up aside",
   "No Parking",
   "Flagger",
+  "Check up",
   "Pickup",
 ] as const;
 
@@ -83,6 +95,7 @@ const TASK_TIMES: Record<string, { start: string; end: string }> = {
   "Set up aside": { start: "07:00", end: "15:00" },
   "No Parking": { start: "07:00", end: "09:00" },
   Flagger: { start: "07:00", end: "17:00" },
+  "Check up": { start: "10:00", end: "11:00" },
   Pickup: { start: "15:00", end: "17:00" },
 };
 
@@ -166,22 +179,45 @@ export default function DailyBoard() {
     return m;
   }, [d?.technicians]);
 
-  // Pool grouped by PHASE section, then by TIME. 24-hour jobs fall into the
-  // "24 Hours" time group inside their phase section.
-  const timeKeyOf = (j: any) =>
-    is24h(j.setupDuration, j.subStatus) ? "h24" : j.timeBucket;
+  // Pool grouped by SECTION, then by installation TIME.
+  // Ongoing splits by Field-Ops sub-status: Daily Setup vs 24 Hours Setup.
+  // In Starting/Pickup, 24-hour jobs land in the "24 Hours" time group.
+  const sectionOf = (j: any) =>
+    j.phase === "ongoing"
+      ? is24h(j.setupDuration, j.subStatus)
+        ? "ongoing24h"
+        : "ongoingDaily"
+      : j.phase;
+  // Install-hour bucket: the city-permit start time wins over the Airtable
+  // work-hours text (24-hour jobs often have no hour in their work hours).
+  const bucketOf = (j: any) => {
+    const t = j.permitStartTime;
+    if (t) {
+      const h = Number(String(t).split(":")[0]);
+      if (!Number.isNaN(h)) return h < 9 ? "before9" : h === 9 ? "at9" : "after9";
+    }
+    return j.timeBucket;
+  };
+  const timeKeyOf = (j: any, section: string) =>
+    section === "ongoing24h"
+      ? bucketOf(j) // inside the 24h section, group by install hour
+      : is24h(j.setupDuration, j.subStatus)
+        ? "h24"
+        : bucketOf(j);
   const poolByPhase = useMemo(() => {
     const empty = () =>
       ({ before9: [], at9: [], h24: [], after9: [], notime: [] }) as Record<string, any[]>;
     const groups: Record<string, Record<string, any[]>> = {
       starting: empty(),
-      ongoing: empty(),
+      ongoingDaily: empty(),
+      ongoing24h: empty(),
       pickup: empty(),
     };
     const ql = poolFilter.trim().toLowerCase();
     for (const j of d?.pool ?? []) {
       if (ql && !`${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase().includes(ql)) continue;
-      groups[j.phase]?.[timeKeyOf(j)]?.push(j);
+      const s = sectionOf(j);
+      groups[s]?.[timeKeyOf(j, s)]?.push(j);
     }
     // Earliest start first inside every group: city-permit time wins, then the
     // Airtable work-hours start; jobs without any time go last.
@@ -203,8 +239,13 @@ export default function DailyBoard() {
   }, [d?.pool, poolFilter]);
 
   const phaseCounts = useMemo(() => {
-    const c: Record<string, number> = { starting: 0, ongoing: 0, pickup: 0 };
-    for (const j of d?.pool ?? []) c[j.phase] = (c[j.phase] ?? 0) + 1;
+    const c: Record<string, number> = {
+      starting: 0,
+      ongoingDaily: 0,
+      ongoing24h: 0,
+      pickup: 0,
+    };
+    for (const j of d?.pool ?? []) c[sectionOf(j)] = (c[sectionOf(j)] ?? 0) + 1;
     return c;
   }, [d?.pool]);
 

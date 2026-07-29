@@ -4,6 +4,7 @@ import DayViewMap, { type DayMarker } from "@/components/DayViewMap";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { subStatusColor } from "@shared/subStatusColors";
+import { is24HourSetup } from "@shared/dashboardDay";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -21,6 +22,7 @@ import {
   CheckCircle2,
   Users,
   Wrench,
+  Hourglass,
 } from "lucide-react";
 
 function toKey(d: Date): string {
@@ -442,6 +444,16 @@ export default function DashboardDay({
   // Clicking a job opens its full Project Detail view.
   const onJob = (id: string) => navigate(`/projects/${id}`);
 
+  // Ongoing splits by the Airtable Field-Operations sub-status: "Daily Setup
+  // (Field)" vs "24 Hours Setup (Field)". Each section then groups by hour.
+  const ongoingAll = (data?.ongoing as DayJob[]) ?? [];
+  const ongoingDaily = ongoingAll.filter(
+    (j) => !is24HourSetup(j.setupDuration ?? null, j.subStatus),
+  );
+  const ongoing24h = ongoingAll.filter((j) =>
+    is24HourSetup(j.setupDuration ?? null, j.subStatus),
+  );
+
   // Build map markers from all three buckets. Single-day jobs naturally appear
   // in both startingToday and pickup; DayViewMap de-dupes by id for the map.
   const mapMarkers = useMemo<DayMarker[]>(() => {
@@ -530,14 +542,24 @@ export default function DashboardDay({
           isLoading={isLoading}
           onJob={onJob}
         />
-        <BucketedSection
-          title="Ongoing (daily)"
-          accent="#2563eb"
-          icon={CalendarRange}
-          jobs={(data?.ongoing as DayJob[]) ?? []}
-          isLoading={isLoading}
-          onJob={onJob}
-        />
+        <div className="space-y-4">
+          <BucketedSection
+            title="Daily Setup (Field)"
+            accent={subStatusColor("Daily Setup (Field)").bg}
+            icon={CalendarRange}
+            jobs={ongoingDaily}
+            isLoading={isLoading}
+            onJob={onJob}
+          />
+          <BucketedSection
+            title="24 Hours Setup (Field)"
+            accent={subStatusColor("24 Hours Setup (Field)").bg}
+            icon={Hourglass}
+            jobs={ongoing24h}
+            isLoading={isLoading}
+            onJob={onJob}
+          />
+        </div>
         <Section
           icon={PackageCheck}
           title="Pick up today"

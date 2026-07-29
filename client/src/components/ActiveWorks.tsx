@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { fmtDate } from "@/lib/format";
 import {
@@ -77,11 +77,17 @@ const GROUPS: GroupDef[] = [
 ];
 
 function JobTable({ jobs, dot }: { jobs: MapJob[]; dot: string }) {
+  const [, navigate] = useLocation();
   return (
     <table className="w-full text-sm">
       <tbody className="divide-y divide-border">
         {jobs.map((j) => (
-          <tr key={j.id} className="hover:bg-accent/50 transition-colors">
+          <tr
+            key={j.id}
+            onClick={() => navigate(`/projects/${j.id}`)}
+            className="hover:bg-accent/50 transition-colors cursor-pointer"
+            title="Open project details"
+          >
             <td className="px-5 py-2.5 font-medium w-[28%]">
               <span className="flex items-center gap-1.5">
                 <span
