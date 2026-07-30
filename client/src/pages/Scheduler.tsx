@@ -81,6 +81,16 @@ function jobStartMinutes(j: any): number {
   const h = startHourFromSetupDuration(j.setupDuration);
   return h === null ? 24 * 60 + 1 : h * 60;
 }
+
+/** Pick up sections order by when the permit ENDS (the pickup hour). */
+function jobPickupMinutes(j: any): number {
+  const t = j.permitEndTime;
+  if (t) {
+    const [h, m] = String(t).split(":").map(Number);
+    if (!Number.isNaN(h)) return h * 60 + (m || 0);
+  }
+  return 24 * 60 + 1;
+}
 import { subStatusColor, normalizeSubStatus } from "@shared/subStatusColors";
 import { SUB_STATUS_OPTIONS } from "@shared/airtableFields";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
@@ -987,10 +997,11 @@ export default function Scheduler() {
       const startKey = (j.startDate || "").slice(0, 10);
       if (hasPrep && startKey && startKey > selectedDayKey) map.prep.push(j);
     }
-    // Earliest start of day first inside every phase section.
+    // Earliest first inside every phase section; Pick up orders by end time.
     for (const list of Object.values(map)) {
       list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
     }
+    map.pickup.sort((a, b) => jobPickupMinutes(a) - jobPickupMinutes(b));
     return map;
   }, [weekJobs, selectedDayKey]);
   const dayPhaseCount = useMemo(
@@ -1033,10 +1044,11 @@ export default function Scheduler() {
         if (hasPrep && startKey && startKey > dk) add("prep", j);
       }
     }
-    // Earliest start of day first inside every phase section.
+    // Earliest first inside every phase section; Pick up orders by end time.
     for (const list of Object.values(map)) {
       list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
     }
+    map.pickup.sort((a, b) => jobPickupMinutes(a) - jobPickupMinutes(b));
     return map;
   }, [weekJobs, dayKeys]);
 

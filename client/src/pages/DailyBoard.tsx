@@ -189,10 +189,14 @@ export default function DailyBoard() {
         ? "ongoing24h"
         : "ongoingDaily"
       : j.phase;
-  // Install-hour bucket: the city-permit start time wins over the Airtable
+  // The hour a card lives by: Pick up cards use the permit END time (when the
+  // signs come down); every other section uses the start time.
+  const cardTimeOf = (j: any, section: string) =>
+    section === "pickup" ? j.permitEndTime : j.permitStartTime;
+  // Install-hour bucket: the city-permit time wins over the Airtable
   // work-hours text (24-hour jobs often have no hour in their work hours).
-  const bucketOf = (j: any) => {
-    const t = j.permitStartTime;
+  const bucketOf = (j: any, section: string) => {
+    const t = cardTimeOf(j, section);
     if (t) {
       const h = Number(String(t).split(":")[0]);
       if (!Number.isNaN(h)) return h < 9 ? "before9" : h === 9 ? "at9" : "after9";
@@ -201,10 +205,10 @@ export default function DailyBoard() {
   };
   const timeKeyOf = (j: any, section: string) =>
     section === "ongoing24h"
-      ? bucketOf(j) // inside the 24h section, group by install hour
+      ? bucketOf(j, section) // inside the 24h section, group by install hour
       : is24h(j.setupDuration, j.subStatus)
         ? "h24"
-        : bucketOf(j);
+        : bucketOf(j, section);
   const poolByPhase = useMemo(() => {
     const empty = () =>
       ({ before9: [], at9: [], h24: [], after9: [], notime: [] }) as Record<string, any[]>;
@@ -220,10 +224,10 @@ export default function DailyBoard() {
       const s = sectionOf(j);
       groups[s]?.[timeKeyOf(j, s)]?.push(j);
     }
-    // Earliest start first inside every group: city-permit time wins, then the
-    // Airtable work-hours start; jobs without any time go last.
-    const startMinutes = (j: any) => {
-      const t = j.permitStartTime;
+    // Earliest first inside every group: city-permit time wins (END time in
+    // Pick up), then the Airtable work-hours start; no-time jobs go last.
+    const cardMinutes = (j: any, section: string) => {
+      const t = cardTimeOf(j, section);
       if (t) {
         const [h, mm] = String(t).split(":").map(Number);
         if (!Number.isNaN(h)) return h * 60 + (mm || 0);
@@ -231,9 +235,9 @@ export default function DailyBoard() {
       if (typeof j.startTime === "number") return j.startTime * 60;
       return 24 * 60 + 1;
     };
-    for (const ph of Object.values(groups)) {
+    for (const [section, ph] of Object.entries(groups)) {
       for (const arr of Object.values(ph)) {
-        arr.sort((a, b) => startMinutes(a) - startMinutes(b));
+        arr.sort((a, b) => cardMinutes(a, section) - cardMinutes(b, section));
       }
     }
     return groups;
@@ -419,25 +423,34 @@ export default function DailyBoard() {
                                 {j.jobAddress ?? j.municipality ?? ""}
                               </div>
                               {(() => {
-                                // Prefer the parsed city-permit time; else the
-                                // work-hours window from Airtable "Setup Duration".
+                                // Prefer the parsed city-permit time (END time
+                                // on Pick up cards); else the work-hours window
+                                // from Airtable "Setup Duration".
+                                const isPickup = ph.key === "pickup";
+                                const permitT = isPickup
+                                  ? (j as any).permitEndTime
+                                  : j.permitStartTime;
                                 const range = (j.setupDuration ?? "").match(
                                   /\(([^)]*\d[^)]*)\)/,
                                 )?.[1];
-                                const shown = j.permitStartTime || range;
+                                const shown = permitT || range;
                                 if (!shown) return null;
                                 return (
                                   <div
                                     className="text-[11px] font-semibold text-primary flex items-center gap-1 mt-0.5"
                                     title={
-                                      j.permitStartTime
-                                        ? "City permit valid-from time"
+                                      permitT
+                                        ? isPickup
+                                          ? "City permit valid-to time (pickup)"
+                                          : "City permit valid-from time"
                                         : "Work hours (Airtable)"
                                     }
                                   >
                                     <Landmark className="size-3 shrink-0" />
                                     <span className="truncate">
-                                      {j.permitStartTime ? `Permit ${fmtTime12(j.permitStartTime)}` : shown}
+                                      {permitT
+                                        ? `${isPickup ? "Pickup" : "Permit"} ${fmtTime12(permitT)}`
+                                        : shown}
                                     </span>
                                   </div>
                                 );

@@ -301,6 +301,7 @@ export const coordinatorRouter = router({
     );
     for (const j of merged) {
       (j as any).permitStartTime = permitMap.get(j.id)?.validFromTime ?? null;
+      (j as any).permitEndTime = permitMap.get(j.id)?.validToTime ?? null;
     }
     return merged;
   }),
@@ -419,12 +420,6 @@ export const coordinatorRouter = router({
         const hasPermit = !!sched && (!!sched.validFromTime || !!sched.validFromDate);
         (j as any).hasPermit = hasPermit;
         if (!(j as any).isCancelled && !hasPermit) missingPermit += 1;
-      }
-      // Pickup jobs also carry the permit start time so the column can be
-      // ordered earliest-first like the other sections.
-      for (const j of pickup) {
-        (j as any).permitStartTime =
-          permitMap.get(j.id)?.validFromTime ?? null;
       }
 
       // Aggregate equipment needs (Custom Signs / Arrow Boards / Message Boards)
@@ -795,6 +790,8 @@ export const coordinatorRouter = router({
       );
       for (const p of pool) {
         p.permitStartTime = permitMap.get(p.id)?.validFromTime ?? null;
+        // Pickup cards group/sort by when the permit ENDS (pickup time).
+        (p as any).permitEndTime = permitMap.get(p.id)?.validToTime ?? null;
       }
 
       // Assignments pinned to this day, grouped by technician.

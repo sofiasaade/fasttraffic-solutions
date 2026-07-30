@@ -80,7 +80,11 @@ type DayJob = {
  * no readable time sort last; the sort is stable so their order is unchanged.
  */
 function startMinutesOf(j: DayJob): number {
-  const m = (j.permitStartTime ?? "").match(/^(\d{1,2}):(\d{2})/);
+  // Pickup-column jobs have their start time stripped, so they fall through
+  // to the permit END time (the scheduled pickup hour).
+  const m = (j.permitStartTime ?? j.permitEndTime ?? "").match(
+    /^(\d{1,2}):(\d{2})/,
+  );
   if (m) return Number(m[1]) * 60 + Number(m[2]);
   return 24 * 60 + 1;
 }
@@ -469,6 +473,14 @@ export default function DashboardDay({
     is24HourSetup(j.setupDuration ?? null, j.subStatus),
   );
 
+  // Pick up column: cards show/sort by the permit END time (pickup hour), so
+  // strip the start time — single-day jobs share their object with "Starting
+  // today", which annotates it.
+  const pickupJobs = ((data?.pickup as DayJob[]) ?? []).map((j) => ({
+    ...j,
+    permitStartTime: null,
+  }));
+
   // Build map markers from all three buckets. Single-day jobs naturally appear
   // in both startingToday and pickup; DayViewMap de-dupes by id for the map.
   const mapMarkers = useMemo<DayMarker[]>(() => {
@@ -579,7 +591,7 @@ export default function DashboardDay({
           icon={PackageCheck}
           title="Pick up today"
           accent="#16a34a"
-          jobs={(data?.pickup as DayJob[]) ?? []}
+          jobs={pickupJobs}
           isLoading={isLoading}
           onJob={onJob}
         />
