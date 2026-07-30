@@ -923,6 +923,10 @@ export default function Scheduler() {
       const section = STATUS_SECTIONS.find((s) => s.status === j.status);
       if (section) map[section.key].push(j);
     }
+    // Earliest permit start first inside every status section.
+    for (const list of Object.values(map)) {
+      list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
+    }
     return map;
   }, [weekJobs]);
 
@@ -955,6 +959,10 @@ export default function Scheduler() {
       }
       const section = STATUS_SECTIONS.find((sec) => sec.status === j.status);
       if (section) map[section.key].push(j);
+    }
+    // Earliest permit start first inside every status section.
+    for (const list of Object.values(map)) {
+      list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
     }
     return map;
   }, [weekJobs, selectedDayKey]);
@@ -1071,6 +1079,10 @@ export default function Scheduler() {
       if (!(selectedDayKey >= s && selectedDayKey <= e)) continue;
       (map[subKeyFor(j)] ??= []).push(j);
     }
+    // Earliest permit start first inside every sub-status section.
+    for (const list of Object.values(map)) {
+      list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
+    }
     return map;
   }, [weekJobs, selectedDayKey, subKeyFor]);
   const daySubCount = useMemo(
@@ -1083,6 +1095,10 @@ export default function Scheduler() {
     for (const s of SUBSTATUS_SECTIONS) map[s.key] = [];
     for (const j of weekJobs) {
       (map[subKeyFor(j)] ??= []).push(j);
+    }
+    // Earliest permit start first inside every sub-status section.
+    for (const list of Object.values(map)) {
+      list.sort((a, b) => jobStartMinutes(a) - jobStartMinutes(b));
     }
     return map;
   }, [weekJobs, subKeyFor]);
