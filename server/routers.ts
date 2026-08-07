@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { coordinatorRouter } from "./routers/coordinator";
 import { technicianRouter } from "./routers/technician";
+import { accountingRouter } from "./routers/accounting";
 import { getTechnicianByUserId } from "./opsDb";
 
 export const appRouter = router({
@@ -34,6 +35,7 @@ export const appRouter = router({
     }),
   }),
   coordinator: coordinatorRouter,
+  accounting: accountingRouter,
   technician: technicianRouter,
 });
 

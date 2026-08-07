@@ -227,6 +227,56 @@ export async function fetchJobById(recordId: string): Promise<JobRecord> {
   return mapRecordToJob(data);
 }
 
+// ---- Accounting (read-only) ----
+// Jobs that carry any billing info (Estimate/Invoice, PO #, or Permit Cost).
+// Includes Billed/closed jobs, which the map/dispatch fetches exclude.
+export async function fetchAccountingJobs(): Promise<import("../shared/airtableFields").AccountingJob[]> {
+  const formula = `OR({${AF.estimateInvoice}}!='',{${AF.poNumber}}!='',{${AF.permitCost}}!='')`;
+  const wanted = [
+    AF.company, AF.jobAddress, AF.startDate, AF.endDate, AF.status,
+    AF.estimateInvoice, AF.poNumber, AF.permitCost, AF.acq, AF.planCharge,
+    AF.setUpCharge, AF.rentalCharge, AF.scheduleCharge, AF.arrowBoards,
+    AF.messageBoards, AF.deliveryCharge, AF.numberOfDays,
+  ];
+
+  const records: any[] = [];
+  let offset: string | undefined = undefined;
+  do {
+    const params = new URLSearchParams();
+    params.set("filterByFormula", formula);
+    params.set("pageSize", "100");
+    for (const f of wanted) params.append("fields[]", f);
+    if (offset) params.set("offset", offset);
+    const data: any = await airtableFetch(`${baseUrl()}?${params.toString()}`);
+    records.push(...(data.records ?? []));
+    offset = data.offset;
+  } while (offset);
+
+  return records.map((r) => {
+    const f = r.fields ?? {};
+    return {
+      id: r.id,
+      company: asString(f[AF.company]),
+      jobAddress: asString(f[AF.jobAddress]),
+      startDate: asString(f[AF.startDate]),
+      endDate: asString(f[AF.endDate]),
+      status: asString(f[AF.status]),
+      estimateInvoice: asString(f[AF.estimateInvoice]),
+      poNumber: asString(f[AF.poNumber]),
+      permitCost: asString(f[AF.permitCost]),
+      acq: asString(f[AF.acq]),
+      planCharge: asString(f[AF.planCharge]),
+      setUpCharge: asString(f[AF.setUpCharge]),
+      rentalCharge: asString(f[AF.rentalCharge]),
+      scheduleCharge: asString(f[AF.scheduleCharge]),
+      arrowBoards: asString(f[AF.arrowBoards]),
+      messageBoards: asString(f[AF.messageBoards]),
+      deliveryCharge: asString(f[AF.deliveryCharge]),
+      numberOfDays: asString(f[AF.numberOfDays]),
+    };
+  });
+}
+
 // Fetch only jobs that contain a given technician in any phase field.
 export async function fetchJobsForTechnician(
   technician: string,

@@ -29,7 +29,42 @@ export const AF = {
   calendarInfo: "Calendar info",
   signsCount: "Signs Count",
   clientMessage: "Client message",
+  // ---- Accounting (read-only, shown in the Accounting window) ----
+  estimateInvoice: "Estimate / Invoice",
+  poNumber: "PO #",
+  permitCost: "Permit Cost",
+  acq: "ACQ",
+  planCharge: "PLAN",
+  setUpCharge: "SET-UP",
+  rentalCharge: "RENTAL",
+  scheduleCharge: "SCHEDULE",
+  arrowBoards: "Arrow Boards",
+  messageBoards: "Message Boards",
+  deliveryCharge: "Delivery",
+  numberOfDays: "Number of Days",
 } as const;
+
+/** Slim record for the Accounting window — Airtable billing info only. */
+export interface AccountingJob {
+  id: string;
+  company: string | null;
+  jobAddress: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  status: string | null;
+  estimateInvoice: string | null;
+  poNumber: string | null;
+  permitCost: string | null;
+  acq: string | null;
+  planCharge: string | null;
+  setUpCharge: string | null;
+  rentalCharge: string | null;
+  scheduleCharge: string | null;
+  arrowBoards: string | null;
+  messageBoards: string | null;
+  deliveryCharge: string | null;
+  numberOfDays: string | null;
+}
 
 // Statuses that appear on the Coordinator Dispatch Board
 export const DISPATCH_STATUSES = ["Field", "Permit Approved"] as const;

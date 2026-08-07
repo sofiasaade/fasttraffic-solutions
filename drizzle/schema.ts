@@ -637,3 +637,45 @@ export const permitExtractions = mysqlTable("permit_extractions", {
 
 export type PermitExtraction = typeof permitExtractions.$inferSelect;
 export type InsertPermitExtraction = typeof permitExtractions.$inferInsert;
+
+/**
+ * Accounting: invoices ("facturas / cobros") raised against a project.
+ * Airtable stays READ-ONLY — invoices live only in this DB. Amounts are in
+ * cents to avoid float drift; GST defaults to Alberta's 5%.
+ */
+export const invoices = mysqlTable("invoices", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Human number, e.g. FTS-INV-0007 (unique, auto-assigned). */
+  invoiceNumber: varchar("invoiceNumber", { length: 32 }).notNull(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }),
+  clientName: varchar("clientName", { length: 256 }).notNull(),
+  jobAddress: varchar("jobAddress", { length: 512 }),
+  /** YYYY-MM-DD */
+  issueDate: varchar("issueDate", { length: 10 }).notNull(),
+  dueDate: varchar("dueDate", { length: 10 }),
+  /** draft -> sent -> paid (void = cancelled). */
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  subtotalCents: int("subtotalCents").notNull().default(0),
+  gstRate: double("gstRate").notNull().default(5),
+  gstCents: int("gstCents").notNull().default(0),
+  totalCents: int("totalCents").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = typeof invoices.$inferInsert;
+
+export const invoiceItems = mysqlTable("invoice_items", {
+  id: int("id").autoincrement().primaryKey(),
+  invoiceId: int("invoiceId").notNull(),
+  description: varchar("description", { length: 512 }).notNull(),
+  quantity: double("quantity").notNull().default(1),
+  unitCents: int("unitCents").notNull().default(0),
+  amountCents: int("amountCents").notNull().default(0),
+  sortOrder: int("sortOrder").notNull().default(0),
+});
+
+export type InvoiceItem = typeof invoiceItems.$inferSelect;
+export type InsertInvoiceItem = typeof invoiceItems.$inferInsert;

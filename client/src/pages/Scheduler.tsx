@@ -45,6 +45,7 @@ import {
   Map as MapIcon,
   ChevronsUpDown,
   Construction,
+  Landmark,
   Ban,
   Receipt,
   Check,
@@ -1632,6 +1633,18 @@ export default function Scheduler() {
                 >
                   <Clock className="size-3 shrink-0" />
                   {sd.label}
+                </span>
+              )}
+              {((job as any).permitStartTime || (job as any).permitEndTime) && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-700"
+                  title="City permit start – end time (the schedule order key)"
+                >
+                  <Landmark className="size-3 shrink-0" />
+                  {fmtTime12Range(
+                    (job as any).permitStartTime,
+                    (job as any).permitEndTime,
+                  )}
                 </span>
               )}
             </div>
