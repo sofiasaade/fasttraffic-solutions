@@ -68,7 +68,6 @@ export default function Accounting() {
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<"airtable" | "invoices">("airtable");
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
 
   // Accounting has its own PIN on top of the coordinator session.
   const lockQ = trpc.accounting.lockStatus.useQuery();
@@ -126,20 +125,11 @@ export default function Accounting() {
           .includes(ql),
       );
     }
-    if (statusFilter !== "all") {
-      rows = rows.filter((r) => (r.status ?? "") === statusFilter);
-    }
     // Newest first by start date.
     return [...rows].sort((a, b) =>
       (b.startDate ?? "").localeCompare(a.startDate ?? ""),
     );
-  }, [airtableQ.data, q, statusFilter]);
-
-  const airtableStatuses = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of airtableQ.data ?? []) if (r.status) set.add(r.status);
-    return Array.from(set).sort();
-  }, [airtableQ.data]);
+  }, [airtableQ.data, q]);
 
   // ---- New invoice dialog ----
   const [creating, setCreating] = useState<{
@@ -331,19 +321,6 @@ export default function Accounting() {
                 className="pl-8 h-9"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-[210px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {airtableStatuses.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <span className="text-xs text-muted-foreground tabular-nums">
               {airtableQ.isLoading ? "…" : `${airtableRows.length} projects`}
             </span>

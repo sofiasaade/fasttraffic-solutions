@@ -228,10 +228,10 @@ export async function fetchJobById(recordId: string): Promise<JobRecord> {
 }
 
 // ---- Accounting (read-only) ----
-// Jobs that carry any billing info (Estimate/Invoice, PO #, or Permit Cost).
-// Includes Billed/closed jobs, which the map/dispatch fetches exclude.
+// Only jobs ready to be billed — Airtable Status "Job Completed - Ready to
+// Bill". These are the projects the accounting window invoices from.
 export async function fetchAccountingJobs(): Promise<import("../shared/airtableFields").AccountingJob[]> {
-  const formula = `OR({${AF.estimateInvoice}}!='',{${AF.poNumber}}!='',{${AF.permitCost}}!='')`;
+  const formula = `{${AF.status}}='Job Completed - Ready to Bill'`;
   const wanted = [
     AF.company, AF.jobAddress, AF.startDate, AF.endDate, AF.status,
     AF.estimateInvoice, AF.poNumber, AF.permitCost, AF.acq, AF.planCharge,
