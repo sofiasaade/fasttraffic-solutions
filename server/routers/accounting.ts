@@ -121,19 +121,18 @@ export const accountingRouter = router({
   suggestQuote: accountingProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
-      const [{ fetchJobById, fetchJobRawFields }, { buildQuote }, { parseSignCount }] =
+      const [{ fetchJobById, fetchJobRawFields }, { buildQuote, parseEquipment }] =
         await Promise.all([
           import("../airtable"),
           import("../../shared/pricingRules"),
-          import("../../shared/signCount"),
         ]);
       const job = await fetchJobById(input.jobId);
       const raw = await fetchJobRawFields(input.jobId);
       const rawMap = new Map(raw.map((f) => [f.name.toLowerCase(), f.value]));
       const rawGet = (name: string) => rawMap.get(name.toLowerCase()) ?? null;
 
-      const tally = parseSignCount(job.signsCount ?? null);
-      const signs = tally.customSigns;
+      const equipment = parseEquipment(job.signsCount ?? null);
+      const signs = equipment.totalSigns;
 
       // Days: Airtable "Number of Days" first, else inclusive date span.
       let days = Number(rawGet("Number of Days")) || 0;
@@ -162,9 +161,9 @@ export const accountingRouter = router({
         const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
         return Number.isFinite(n) ? n : 0;
       };
-      const arrowBoards = Math.max(tally.arrowBoards, num(rawGet("Arrow Boards")));
+      const arrowBoards = Math.max(equipment.arrowBoards, num(rawGet("Arrow Boards")));
       const messageBoards = Math.max(
-        tally.messageBoards,
+        equipment.messageBoards,
         num(rawGet("Message Boards")),
       );
 
@@ -175,6 +174,7 @@ export const accountingRouter = router({
 
       const quote = buildQuote({
         company: job.company,
+        equipment,
         signs,
         days,
         setupDuration: job.setupDuration,

@@ -63,10 +63,104 @@ const KOBI_RE = /kobi/i;
 // Sección 2 — equipment rental per day, cents.
 export const RENTAL_RATES = {
   windmasterSign: 300, // $3.00 — the standard per-sign combo
+  signOnly: 100,
+  windmasterOnly: 200,
+  barricade: 250,
+  cone: 100,
+  noParking: 150,
+  flasher: 200,
+  aFrame: 110,
+  barrel: 125,
+  pedestrianDetour: 50,
+  sidewalkClosed: 50,
   messageBoard: 9500,
   arrowBoard: 4500,
+  arrowBoardTruck: 7500,
   trafficLights: 8400,
 } as const;
+
+/** Per-category tally parsed from the Airtable "Signs Count" text block. */
+export interface EquipmentTally {
+  /** WM / Windmaster lines — each is a WM+Sign combo at $3.00/day. */
+  wmSigns: number;
+  /** Named sign lines (CA, CE, DA, MAX 50, …) with no WM line to carry them. */
+  looseSigns: number;
+  noParking: number;
+  barricades: number;
+  cones: number;
+  flashers: number;
+  aFrames: number;
+  barrels: number;
+  pedestrianDetour: number;
+  sidewalkClosed: number;
+  arrowBoards: number;
+  messageBoards: number;
+  /** All sign-type items (drives the setup complexity tier). */
+  totalSigns: number;
+}
+
+const EMPTY_EQUIPMENT: EquipmentTally = {
+  wmSigns: 0, looseSigns: 0, noParking: 0, barricades: 0, cones: 0,
+  flashers: 0, aFrames: 0, barrels: 0, pedestrianDetour: 0, sidewalkClosed: 0,
+  arrowBoards: 0, messageBoards: 0, totalSigns: 0,
+};
+
+function lineQty(line: string): number {
+  const m = line.match(/(\d{1,4})\s*$/);
+  if (m) return parseInt(m[1], 10);
+  const lead = line.match(/^\s*(\d{1,4})\s*[xX]?\b/);
+  if (lead) return parseInt(lead[1], 10);
+  return 1;
+}
+
+/**
+ * Parse the free-text "Signs Count" block: one device per line, quantity at
+ * the end ("WM 19", "BARRICADES + ROAD CLOSURE 4", "Parking Prohibited\t10").
+ * Named traffic signs ride on the WM count when a WM line exists (they are the
+ * signs mounted on those windmasters); with no WM line they bill as combos.
+ */
+export function parseEquipment(text: string | null | undefined): EquipmentTally {
+  const t: EquipmentTally = { ...EMPTY_EQUIPMENT };
+  if (!text) return t;
+  // "SIGNS 22" summary lines and itemized named-sign lines describe the SAME
+  // panels — use whichever is larger, never the sum.
+  let signsSummary = 0;
+  let itemizedSigns = 0;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || /^PHASE\s*\d/i.test(line)) continue;
+    const U = line.toUpperCase();
+    const qty = lineQty(line);
+    if (/MESSAGE\s*BOARD|\bVMB\b|\bVMS\b|VARIABLE\s+MESSAGE/.test(U)) t.messageBoards += qty;
+    else if (/ARROW\s*BOARD|\bABL\b|\bABR\b|\bDAB\b/.test(U)) t.arrowBoards += qty;
+    else if (/WINDMASTER|^WM\b/.test(U)) t.wmSigns += qty;
+    else if (/CONE/.test(U)) t.cones += qty;
+    else if (/BARRICADE/.test(U)) t.barricades += qty;
+    else if (/PARKING\s*PROHIBITED|NO\s*PARKING|^NP\b\s*-?/.test(U)) t.noParking += qty;
+    else if (/FLASHER/.test(U)) t.flashers += qty;
+    else if (/A[\s-]?FRAME/.test(U)) t.aFrames += qty;
+    else if (/BARREL/.test(U)) t.barrels += qty;
+    else if (/PEDESTRIAN|^PDL\b|^PDR\b/.test(U)) t.pedestrianDetour += qty;
+    else if (/SIDEWALK\s*CLOSED|^SC\b\s*-?/.test(U)) t.sidewalkClosed += qty;
+    else if (/^SIGNS?\b/.test(U)) signsSummary += qty; // "SIGNS 22" summary line
+    else if (/\d\s*$/.test(line)) itemizedSigns += qty; // named sign, e.g. "CA - CONSTRUCTION AHEAD 4"
+  }
+  const namedSigns = Math.max(signsSummary, itemizedSigns);
+  // Named signs are the panels mounted on the windmasters; only the excess
+  // over the WM count bills separately (as sign-only rentals → loose).
+  t.looseSigns = t.wmSigns > 0 ? Math.max(0, namedSigns - t.wmSigns) : namedSigns;
+  if (t.wmSigns === 0) {
+    // No windmaster line: named signs still need bases → bill as combos.
+    t.wmSigns = t.looseSigns;
+    t.looseSigns = 0;
+  }
+  t.totalSigns =
+    Math.max(t.wmSigns, namedSigns) +
+    t.noParking +
+    t.pedestrianDetour +
+    t.sidewalkClosed;
+  return t;
+}
 
 // Sección 3 — fixed services, cents.
 export const FIXED = {
@@ -81,7 +175,9 @@ export const FIXED = {
 
 export interface QuoteInput {
   company: string | null;
-  /** Total sign count for the job. */
+  /** Per-category equipment tally (from parseEquipment on "Signs Count"). */
+  equipment?: EquipmentTally;
+  /** Total sign count for the job (complexity tier). */
   signs: number;
   /** Days billed (Number of Days field, else date span inclusive). */
   days: number;
@@ -173,8 +269,32 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     `Setup ${money(setup)} × ${setupQty}: ${setupWhy}${setupQty > 1 ? " — daily setup bills each day" : ""}`,
   );
 
-  // ---- Equipment rental ----
-  if (input.signs > 0 && input.days > 0) {
+  // ---- Equipment rental — per-category breakdown when we parsed the field ----
+  const eq = input.equipment;
+  const days = Math.max(1, input.days);
+  const rentalLine = (label: string, qty: number, rateCents: number) => {
+    if (qty <= 0) return;
+    lines.push({
+      description: `${label} × ${qty} — $${(rateCents / 100).toFixed(2)}/day`,
+      quantity: days,
+      unitCents: qty * rateCents,
+    });
+  };
+  if (eq && (eq.wmSigns || eq.barricades || eq.cones || eq.noParking)) {
+    rentalLine("WM + Sign rental", eq.wmSigns, RENTAL_RATES.windmasterSign);
+    rentalLine("Sign only rental", eq.looseSigns, RENTAL_RATES.signOnly);
+    rentalLine("Barricades", eq.barricades, RENTAL_RATES.barricade);
+    rentalLine("Cones", eq.cones, RENTAL_RATES.cone);
+    rentalLine("No Parking signs", eq.noParking, RENTAL_RATES.noParking);
+    rentalLine("Flashers", eq.flashers, RENTAL_RATES.flasher);
+    rentalLine("A-Frame stands", eq.aFrames, RENTAL_RATES.aFrame);
+    rentalLine("Barrels", eq.barrels, RENTAL_RATES.barrel);
+    rentalLine("Pedestrian detour signs", eq.pedestrianDetour, RENTAL_RATES.pedestrianDetour);
+    rentalLine("Sidewalk closed signs", eq.sidewalkClosed, RENTAL_RATES.sidewalkClosed);
+    reasons.push(
+      `Rental from Signs Count: ${eq.wmSigns} WM+Sign${eq.barricades ? `, ${eq.barricades} barricades` : ""}${eq.noParking ? `, ${eq.noParking} NP` : ""}${eq.cones ? `, ${eq.cones} cones` : ""} × ${days} day(s)`,
+    );
+  } else if (input.signs > 0 && input.days > 0) {
     lines.push({
       description: `Equipment rental — ${input.signs} signs × $3.00/day`,
       quantity: input.days,
@@ -182,6 +302,10 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     });
     reasons.push(
       `Rental: ${input.signs} WM+Sign × $3.00 × ${input.days} day(s)`,
+    );
+  } else {
+    reasons.push(
+      "No equipment found in Airtable Signs Count — add the rental line manually",
     );
   }
   if (input.arrowBoards > 0 && input.days > 0) {

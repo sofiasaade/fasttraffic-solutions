@@ -99,3 +99,39 @@ describe("pricing rules — quotes", () => {
     expect(cp?.unitCents).toBe(21535);
   });
 });
+
+import { parseEquipment } from "./pricingRules";
+
+describe("parseEquipment (Signs Count block)", () => {
+  it("parses a Kobi-style tab-separated block with WM covering named signs", () => {
+    const t = parseEquipment(
+      "SIGNS\t22\nWM\t22\nBARRICADES (Plain)\t3\nBARRICADES + ROAD CLOSURE\t4\nParking Prohibited\t10\nCA - Construction Ahead\t6\nSC-Sidewalk Closed\t2\nPedestrian Detour Right\t1",
+    );
+    expect(t.wmSigns).toBe(22);
+    expect(t.barricades).toBe(7);
+    expect(t.noParking).toBe(10);
+    expect(t.sidewalkClosed).toBe(2);
+    expect(t.pedestrianDetour).toBe(1);
+    // 22 named signs ride on the 22 windmasters — nothing loose.
+    expect(t.looseSigns).toBe(0);
+    expect(t.totalSigns).toBe(22 + 13); // max(SIGNS 22, itemized) + 10 NP + 2 SC + 1 PD
+  });
+
+  it("bills named signs as combos when there is no WM line", () => {
+    const t = parseEquipment(
+      "Sidewalk closed 7\npedestrian right 4\npedestrian left 3\nparking prohibited 32",
+    );
+    expect(t.wmSigns).toBe(0);
+    expect(t.noParking).toBe(32);
+    expect(t.pedestrianDetour).toBe(7);
+    expect(t.sidewalkClosed).toBe(7);
+  });
+
+  it("counts cones and boards", () => {
+    const t = parseEquipment("WM 19\nCONES 30\nVMB-MESSAGE BOARD 1\nABL 2");
+    expect(t.wmSigns).toBe(19);
+    expect(t.cones).toBe(30);
+    expect(t.messageBoards).toBe(1);
+    expect(t.arrowBoards).toBe(2);
+  });
+});
