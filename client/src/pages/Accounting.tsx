@@ -34,6 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fmtDate } from "@/lib/format";
+import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
 
 function money(cents: number) {
   return (cents / 100).toLocaleString("en-CA", {
@@ -178,6 +179,8 @@ export default function Accounting() {
       items.push({ description: "Traffic control services", quantity: "1", unit: "" });
     }
     setQuoteReasons([]);
+    setDocIdx(0);
+    setQuoteReasons([]);
     setCreating({
       jobId: job?.id ?? null,
       clientName: job?.company ?? "",
@@ -193,21 +196,22 @@ export default function Accounting() {
   // ---- Auto-quote from the FTS pricing rules ----
   const [quoting, setQuoting] = useState(false);
   const [quoteReasons, setQuoteReasons] = useState<string[]>([]);
-  const autoQuote = async () => {
-    if (!creating?.jobId) return;
+  const autoQuoteFor = async (jobId: string) => {
     setQuoting(true);
     try {
-      const q = await utils.accounting.suggestQuote.fetch({
-        jobId: creating.jobId,
-      });
-      setCreating({
-        ...creating,
-        items: q.lines.map((l) => ({
-          description: l.description,
-          quantity: String(l.quantity),
-          unit: (l.unitCents / 100).toFixed(2),
-        })),
-      });
+      const q = await utils.accounting.suggestQuote.fetch({ jobId });
+      setCreating((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: q.lines.map((l) => ({
+                description: l.description,
+                quantity: String(l.quantity),
+                unit: (l.unitCents / 100).toFixed(2),
+              })),
+            }
+          : prev,
+      );
       setQuoteReasons(q.reasons);
       toast.success(`Auto-quote: ${q.industry} · ${q.complexity}`);
     } catch (e: any) {
@@ -216,6 +220,32 @@ export default function Accounting() {
       setQuoting(false);
     }
   };
+  const autoQuote = () => {
+    if (creating?.jobId) void autoQuoteFor(creating.jobId);
+  };
+
+  // Plans + Airtable info for the side panel while invoicing.
+  const [docIdx, setDocIdx] = useState(0);
+  const workJobId = creating?.jobId ?? "";
+  const jobDetailQ = trpc.coordinator.jobDetail.useQuery(
+    { jobId: workJobId },
+    { enabled: !!workJobId },
+  );
+  const allFieldsQ = trpc.coordinator.jobAllFields.useQuery(
+    { jobId: workJobId },
+    { enabled: !!workJobId },
+  );
+  const viewDocs = useMemo(() => {
+    const files = ((jobDetailQ.data?.job as any)?.planFile ?? []) as {
+      filename?: string | null;
+      url: string;
+    }[];
+    return [
+      ...pickPlans(files).map((f) => ({ ...f, kind: "Plan" })),
+      ...pickPermits(files).map((f) => ({ ...f, kind: "Permit" })),
+      ...pickOtherDocs(files).map((f) => ({ ...f, kind: "Doc" })),
+    ];
+  }, [jobDetailQ.data]);
 
   const creatingTotals = useMemo(() => {
     if (!creating) return { sub: 0, gst: 0, total: 0 };
@@ -299,6 +329,8 @@ export default function Accounting() {
 
   return (
     <div className="space-y-4">
+      {!creating && (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
@@ -388,8 +420,11 @@ export default function Accounting() {
                       <tr
                         key={r.id}
                         className="hover:bg-accent/40 cursor-pointer transition-colors"
-                        onClick={() => navigate(`/projects/${r.id}`)}
-                        title="Open project details"
+                        onClick={() => {
+                          openNewInvoice(r);
+                          void autoQuoteFor(r.id);
+                        }}
+                        title="Create invoice — plans & Airtable info side by side"
                       >
                         <td className="px-4 py-2.5">
                           <div className="font-medium flex items-center gap-1.5">
@@ -542,16 +577,25 @@ export default function Accounting() {
         </div>
       )}
 
-      {/* ---- New invoice dialog ---- */}
-      <Dialog open={!!creating} onOpenChange={(o) => !o && setCreating(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New invoice</DialogTitle>
-            <DialogDescription>
-              Saved in Fast Traffic OS only — Airtable is never modified.
-            </DialogDescription>
-          </DialogHeader>
-          {creating && (
+        </>
+      )}
+
+      {/* ---- Invoice workspace: editor + plans + Airtable info side by side ---- */}
+      {creating && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start print:hidden">
+          {/* Left: invoice editor */}
+          <div className="rounded-2xl border border-border bg-card p-4 space-y-3 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="font-bold">New invoice</h2>
+                <p className="text-xs text-muted-foreground">
+                  Saved in Fast Traffic OS only — Airtable is never modified.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setCreating(null)}>
+                Back to list
+              </Button>
+            </div>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Button
@@ -751,9 +795,97 @@ export default function Accounting() {
                 </Button>
               </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </div>
+
+          {/* Right: plans + Airtable info to verify the numbers */}
+          <div className="xl:sticky xl:top-4 space-y-3 min-w-0">
+            {creating.jobId ? (
+              <>
+                <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                  <div className="flex items-center gap-1.5 flex-wrap px-3 py-2 border-b border-border">
+                    {jobDetailQ.isLoading ? (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Loader2 className="size-3.5 animate-spin" /> Loading documents…
+                      </span>
+                    ) : viewDocs.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        No documents attached in Airtable.
+                      </span>
+                    ) : (
+                      <>
+                        {viewDocs.map((d, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setDocIdx(i)}
+                            className={cn(
+                              "rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                              i === docIdx
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground hover:bg-accent",
+                            )}
+                            title={d.filename ?? undefined}
+                          >
+                            {d.kind} {i + 1}
+                          </button>
+                        ))}
+                        {viewDocs[docIdx] && (
+                          <a
+                            href={viewDocs[docIdx].url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="ml-auto text-[11px] font-medium text-primary hover:underline"
+                          >
+                            Open in new tab ↗
+                          </a>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {viewDocs[docIdx] && (
+                    <iframe
+                      key={viewDocs[docIdx].url}
+                      src={viewDocs[docIdx].url}
+                      title={viewDocs[docIdx].filename ?? "document"}
+                      className="w-full h-[52vh] bg-muted/30"
+                    />
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                  <div className="px-3 py-2 border-b border-border text-sm font-bold flex items-center gap-2">
+                    <FileSpreadsheet className="size-4 text-primary" /> Airtable info
+                  </div>
+                  <div className="max-h-[34vh] overflow-y-auto">
+                    {allFieldsQ.isLoading ? (
+                      <div className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" /> Loading fields…
+                      </div>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <tbody className="divide-y divide-border/60">
+                          {(allFieldsQ.data ?? []).map((f) => (
+                            <tr key={f.name} className="align-top">
+                              <td className="px-3 py-1.5 font-medium text-muted-foreground whitespace-nowrap w-[38%]">
+                                {f.name}
+                              </td>
+                              <td className="px-3 py-1.5 break-words">{f.value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                Pick a project to see its plans and Airtable info here.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ---- Project picker (from Airtable accounting rows) ---- */}
       <Dialog open={jobPickerOpen} onOpenChange={setJobPickerOpen}>
