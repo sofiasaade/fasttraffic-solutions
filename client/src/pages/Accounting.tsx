@@ -28,6 +28,7 @@ import {
   Printer,
   Building2,
   X,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -69,10 +70,28 @@ export default function Accounting() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Accounting has its own PIN on top of the coordinator session.
+  const lockQ = trpc.accounting.lockStatus.useQuery();
+  const unlocked = !!lockQ.data?.unlocked;
+  const [pinInput, setPinInput] = useState("");
+  const unlock = trpc.accounting.unlock.useMutation({
+    onSuccess: () => {
+      setPinInput("");
+      lockQ.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const lock = trpc.accounting.lock.useMutation({
+    onSuccess: () => lockQ.refetch(),
+  });
+
   const airtableQ = trpc.accounting.airtableAccounting.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
+    enabled: unlocked,
   });
-  const invoicesQ = trpc.accounting.listInvoices.useQuery();
+  const invoicesQ = trpc.accounting.listInvoices.useQuery(undefined, {
+    enabled: unlocked,
+  });
   const utils = trpc.useUtils();
 
   const createInvoice = trpc.accounting.createInvoice.useMutation({
@@ -213,6 +232,48 @@ export default function Accounting() {
   const [printing, setPrinting] = useState<NonNullable<typeof invoicesQ.data>[number] | null>(null);
   const doPrint = () => window.print();
 
+  // ---- Locked: ask for the accounting PIN before showing anything ----
+  if (!lockQ.isLoading && !unlocked) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 space-y-4 text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Receipt className="size-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold">Accounting</h1>
+            <p className="text-xs text-muted-foreground">
+              This section requires its own PIN, separate from the coordinator PIN.
+            </p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (/^\d{4,8}$/.test(pinInput)) unlock.mutate({ pin: pinInput });
+              else toast.error("Enter the accounting PIN");
+            }}
+            className="space-y-3"
+          >
+            <Input
+              autoFocus
+              type="password"
+              inputMode="numeric"
+              placeholder="••••"
+              className="text-center text-lg tracking-[0.5em]"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+              maxLength={8}
+            />
+            <Button type="submit" className="w-full" disabled={unlock.isPending}>
+              {unlock.isPending && <Loader2 className="size-4 mr-1 animate-spin" />}
+              Unlock accounting
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
@@ -246,6 +307,14 @@ export default function Accounting() {
           </Button>
           <Button size="sm" onClick={() => openNewInvoice()}>
             <Plus className="size-4 mr-1" /> New invoice
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Lock the accounting section"
+            onClick={() => lock.mutate()}
+          >
+            <Lock className="size-4" />
           </Button>
         </div>
       </div>

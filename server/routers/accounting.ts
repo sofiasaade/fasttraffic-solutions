@@ -1,8 +1,11 @@
+import crypto from "crypto";
+import { parse as parseCookieHeader } from "cookie";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
+import { getSetting, setSetting } from "../opsDb";
 
 async function db() {
   const d = await getDb();
@@ -11,6 +14,46 @@ async function db() {
 }
 import { invoices, invoiceItems } from "../../drizzle/schema";
 import { fetchAccountingJobs } from "../airtable";
+
+// ---- Accounting lock: a second PIN on top of the coordinator session ----
+const ACCT_COOKIE = "fts_acct";
+const ACCT_PIN_KEY = "accounting_pin";
+const DEFAULT_ACCT_PIN = "8642";
+const UNLOCK_HOURS = 8;
+
+function acctToken(userId: string | number): string {
+  const secret = process.env.JWT_SECRET || "fts-accounting-gate";
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`acct:${userId}`)
+    .digest("hex");
+}
+
+function isUnlocked(ctx: { req: any; user: { id: string | number } }): boolean {
+  const raw = ctx.req?.headers?.cookie as string | undefined;
+  if (!raw) return false;
+  const tok = parseCookieHeader(raw)[ACCT_COOKIE];
+  return !!tok && tok === acctToken(ctx.user.id);
+}
+
+/** Current accounting PIN; seeds the default the first time it is read. */
+async function getAccountingPin(): Promise<string> {
+  const pin = await getSetting(ACCT_PIN_KEY);
+  if (pin) return pin;
+  await setSetting(ACCT_PIN_KEY, DEFAULT_ACCT_PIN);
+  return DEFAULT_ACCT_PIN;
+}
+
+/** adminProcedure + the accounting PIN cookie — all data procs use this. */
+const accountingProcedure = adminProcedure.use(async ({ ctx, next }) => {
+  if (!isUnlocked(ctx as any)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Accounting is locked — enter the accounting PIN.",
+    });
+  }
+  return next();
+});
 
 const itemInput = z.object({
   description: z.string().min(1),
@@ -28,12 +71,49 @@ function computeTotals(items: { quantity: number; unitCents: number }[], gstRate
 }
 
 export const accountingRouter = router({
+  /** Is the accounting section unlocked for this session? */
+  lockStatus: adminProcedure.query(async ({ ctx }) => {
+    return { unlocked: isUnlocked(ctx as any) };
+  }),
+
+  /** Validate the accounting PIN and unlock for a few hours. */
+  unlock: adminProcedure
+    .input(z.object({ pin: z.string().regex(/^\d{4,8}$/) }))
+    .mutation(async ({ ctx, input }) => {
+      const expected = await getAccountingPin();
+      if (input.pin !== expected) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Wrong accounting PIN." });
+      }
+      (ctx as any).res.cookie(ACCT_COOKIE, acctToken(ctx.user.id), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        path: "/",
+        maxAge: UNLOCK_HOURS * 3600 * 1000,
+      });
+      return { ok: true as const };
+    }),
+
+  /** Lock the section again (clears the unlock cookie). */
+  lock: adminProcedure.mutation(async ({ ctx }) => {
+    (ctx as any).res.clearCookie(ACCT_COOKIE, { path: "/" });
+    return { ok: true as const };
+  }),
+
+  /** Change the accounting PIN (requires the section to be unlocked). */
+  setAccountingPin: accountingProcedure
+    .input(z.object({ pin: z.string().regex(/^\d{4,8}$/) }))
+    .mutation(async ({ input }) => {
+      await setSetting(ACCT_PIN_KEY, input.pin);
+      return { ok: true as const };
+    }),
+
   /** Airtable billing info per project — READ-ONLY (app never writes to Airtable). */
-  airtableAccounting: adminProcedure.query(async () => {
+  airtableAccounting: accountingProcedure.query(async () => {
     return fetchAccountingJobs();
   }),
 
-  listInvoices: adminProcedure.query(async () => {
+  listInvoices: accountingProcedure.query(async () => {
     const dbx = await db();
     const rows = await dbx.select().from(invoices).orderBy(desc(invoices.id));
     const items = await dbx.select().from(invoiceItems);
@@ -49,7 +129,7 @@ export const accountingRouter = router({
     }));
   }),
 
-  createInvoice: adminProcedure
+  createInvoice: accountingProcedure
     .input(
       z.object({
         airtableJobId: z.string().nullable().optional(),
@@ -102,7 +182,7 @@ export const accountingRouter = router({
       return { id: invoiceId, invoiceNumber };
     }),
 
-  setInvoiceStatus: adminProcedure
+  setInvoiceStatus: accountingProcedure
     .input(
       z.object({
         id: z.number().int(),
@@ -118,7 +198,7 @@ export const accountingRouter = router({
       return { ok: true };
     }),
 
-  deleteInvoice: adminProcedure
+  deleteInvoice: accountingProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
       const dbx = await db();
