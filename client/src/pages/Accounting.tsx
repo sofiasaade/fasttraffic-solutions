@@ -125,10 +125,14 @@ export default function Accounting() {
           .includes(ql),
       );
     }
-    // Newest first by start date.
-    return [...rows].sort((a, b) =>
-      (b.startDate ?? "").localeCompare(a.startDate ?? ""),
-    );
+    // Ready to Bill first, then Picked up; newest first inside each group.
+    const groupOf = (s: string | null) =>
+      s === "Job Completed - Ready to Bill" ? 0 : 1;
+    return [...rows].sort((a, b) => {
+      const g = groupOf(a.status) - groupOf(b.status);
+      if (g !== 0) return g;
+      return (b.startDate ?? "").localeCompare(a.startDate ?? "");
+    });
   }, [airtableQ.data, q]);
 
   // ---- New invoice dialog ----
@@ -376,7 +380,10 @@ export default function Accounting() {
                               variant="secondary"
                               className={cn(
                                 "text-[10px]",
-                                r.status === "Billed" && "bg-green-100 text-green-700",
+                                r.status === "Job Completed - Ready to Bill" &&
+                                  "bg-purple-100 text-purple-700",
+                                r.status === "Setup Finished - Picked up" &&
+                                  "bg-rose-100 text-rose-700",
                               )}
                             >
                               {r.status}

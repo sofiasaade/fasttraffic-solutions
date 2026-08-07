@@ -228,10 +228,11 @@ export async function fetchJobById(recordId: string): Promise<JobRecord> {
 }
 
 // ---- Accounting (read-only) ----
-// Only jobs ready to be billed — Airtable Status "Job Completed - Ready to
-// Bill". These are the projects the accounting window invoices from.
+// Jobs in the billing pipeline: "Job Completed - Ready to Bill" first, then
+// "Setup Finished - Picked up" (about to become billable). The client orders
+// the two groups; this fetch just brings both.
 export async function fetchAccountingJobs(): Promise<import("../shared/airtableFields").AccountingJob[]> {
-  const formula = `{${AF.status}}='Job Completed - Ready to Bill'`;
+  const formula = `OR({${AF.status}}='Job Completed - Ready to Bill',{${AF.status}}='Setup Finished - Picked up')`;
   const wanted = [
     AF.company, AF.jobAddress, AF.startDate, AF.endDate, AF.status,
     AF.estimateInvoice, AF.poNumber, AF.permitCost, AF.acq, AF.planCharge,
