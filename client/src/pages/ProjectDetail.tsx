@@ -90,6 +90,15 @@ export default function ProjectDetail() {
     { jobId },
     { enabled: !!jobId },
   );
+  // EVERY non-empty Airtable field, for the "All Airtable info" card.
+  const allFieldsQ = trpc.coordinator.jobAllFields.useQuery(
+    { jobId },
+    { enabled: !!jobId, staleTime: 5 * 60 * 1000 },
+  );
+
+  // Side-by-side document viewer (plan/permit PDF next to the info).
+  const [viewerOpen, setViewerOpen] = useState(true);
+  const [viewerIdx, setViewerIdx] = useState(0);
 
   const [note, setNote] = useState("");
   const addNote = trpc.coordinator.addInternalNote.useMutation({
@@ -143,13 +152,35 @@ export default function ProjectDetail() {
     else navigate("/dashboard");
   };
 
+  // Docs the side viewer can open: plans first, then permits, then the rest.
+  const allFiles = (job.planFile ?? []) as any[];
+  const viewerDocs = [
+    ...pickPlans(allFiles),
+    ...pickPermits(allFiles),
+    ...pickOtherDocs(allFiles),
+  ].filter((f: any) => /\.pdf$/i.test(f.filename ?? ""));
+  const viewerDoc = viewerDocs[Math.min(viewerIdx, viewerDocs.length - 1)];
+
   return (
-    <div className="mx-auto max-w-5xl space-y-5 p-4 md:p-6">
+    <div className="flex items-start gap-5 p-4 md:p-6">
+    <div className="mx-auto max-w-5xl min-w-0 flex-1 space-y-5">
       {/* Header */}
       <div className="flex items-start gap-3">
         <Button variant="outline" size="sm" onClick={goBack} className="shrink-0">
           <ArrowLeft className="mr-1 size-4" /> Back
         </Button>
+        {viewerDocs.length > 0 && (
+          <Button
+            variant={viewerOpen ? "default" : "outline"}
+            size="sm"
+            className="shrink-0 hidden xl:inline-flex"
+            onClick={() => setViewerOpen((v) => !v)}
+            title="Show the plan next to the project info"
+          >
+            <FileText className="mr-1 size-4" />
+            {viewerOpen ? "Hide plan" : "View plan"}
+          </Button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-2xl leading-none">{job.emoji || "📍"}</span>
@@ -480,6 +511,79 @@ export default function ProjectDetail() {
           </Card>
         </div>
       </div>
+
+      {/* EVERY non-empty Airtable field on this record (read-only). */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">All Airtable info</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {allFieldsQ.isLoading ? (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading Airtable fields…
+            </div>
+          ) : (allFieldsQ.data?.length ?? 0) === 0 ? (
+            <div className="py-4 text-sm text-muted-foreground">No data.</div>
+          ) : (
+            <div className="max-h-[420px] overflow-y-auto rounded-md border border-border">
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-border/70">
+                  {(allFieldsQ.data ?? []).map((f) => (
+                    <tr key={f.name} className="align-top">
+                      <td className="w-[220px] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {f.name}
+                      </td>
+                      <td className="px-3 py-1.5 whitespace-pre-wrap break-words">
+                        {f.value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+
+    {/* Side-by-side document viewer: plan/permit PDF next to the info. */}
+    {viewerOpen && viewerDoc && (
+      <div
+        className="hidden xl:flex w-[44vw] max-w-[880px] shrink-0 sticky top-4 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+        style={{ height: "calc(100vh - 5rem)" }}
+      >
+        <div className="flex items-center gap-1 border-b border-border p-2 overflow-x-auto">
+          {viewerDocs.map((f: any, i: number) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setViewerIdx(i)}
+              className={`shrink-0 rounded px-2 py-1 text-[11px] font-medium transition-colors max-w-[220px] truncate ${
+                i === Math.min(viewerIdx, viewerDocs.length - 1)
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent"
+              }`}
+              title={f.filename}
+            >
+              {f.filename}
+            </button>
+          ))}
+          <a
+            href={viewerDoc.url}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto shrink-0 rounded px-2 py-1 text-[11px] font-medium text-primary hover:bg-accent"
+          >
+            Open ↗
+          </a>
+        </div>
+        <iframe
+          src={viewerDoc.url}
+          title={viewerDoc.filename ?? "Document"}
+          className="w-full flex-1 bg-white"
+        />
+      </div>
+    )}
     </div>
   );
 }

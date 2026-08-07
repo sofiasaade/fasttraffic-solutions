@@ -227,6 +227,46 @@ export async function fetchJobById(recordId: string): Promise<JobRecord> {
   return mapRecordToJob(data);
 }
 
+/**
+ * EVERY non-empty field on the Airtable record, normalized to display strings
+ * in the table's field order. Attachments show their filenames; collaborator
+ * and AI fields show their readable value. Read-only.
+ */
+export async function fetchJobRawFields(
+  recordId: string,
+): Promise<{ name: string; value: string }[]> {
+  const data: any = await airtableFetch(`${baseUrl()}/${recordId}`);
+  const out: { name: string; value: string }[] = [];
+  for (const [name, v] of Object.entries<any>(data.fields ?? {})) {
+    if (v === null || v === undefined) continue;
+    let s: string | null = null;
+    if (typeof v === "string") s = v;
+    else if (typeof v === "number" || typeof v === "boolean") s = String(v);
+    else if (Array.isArray(v)) {
+      if (v.length === 0) continue;
+      if (v.every((x) => typeof x === "string" || typeof x === "number")) {
+        s = v.join(", ");
+      } else if (v.every((x) => x && typeof x === "object" && "filename" in x)) {
+        s = v.map((x) => x.filename).join(", ");
+      } else if (
+        v.every((x) => x && typeof x === "object" && ("name" in x || "email" in x))
+      ) {
+        s = v.map((x) => x.name ?? x.email).join(", ");
+      } else {
+        s = JSON.stringify(v);
+      }
+    } else if (typeof v === "object") {
+      if (typeof v.value === "string") s = v.value; // aiText fields
+      else if (typeof v.name === "string") s = v.name;
+      else if (typeof v.email === "string") s = v.email;
+      else if (typeof v.label === "string") s = v.label; // button fields
+      else s = JSON.stringify(v);
+    }
+    if (s && s.trim() && s !== "{}") out.push({ name, value: s.trim() });
+  }
+  return out;
+}
+
 // ---- Accounting (read-only) ----
 // Jobs in the billing pipeline: "Job Completed - Ready to Bill" first, then
 // "Setup Finished - Picked up" (about to become billable). The client orders

@@ -29,6 +29,7 @@ import {
   Building2,
   X,
   Lock,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -176,6 +177,7 @@ export default function Accounting() {
     if (items.length === 0) {
       items.push({ description: "Traffic control services", quantity: "1", unit: "" });
     }
+    setQuoteReasons([]);
     setCreating({
       jobId: job?.id ?? null,
       clientName: job?.company ?? "",
@@ -186,6 +188,33 @@ export default function Accounting() {
       notes: job?.poNumber ? `PO # ${job.poNumber}` : "",
       items,
     });
+  };
+
+  // ---- Auto-quote from the FTS pricing rules ----
+  const [quoting, setQuoting] = useState(false);
+  const [quoteReasons, setQuoteReasons] = useState<string[]>([]);
+  const autoQuote = async () => {
+    if (!creating?.jobId) return;
+    setQuoting(true);
+    try {
+      const q = await utils.accounting.suggestQuote.fetch({
+        jobId: creating.jobId,
+      });
+      setCreating({
+        ...creating,
+        items: q.lines.map((l) => ({
+          description: l.description,
+          quantity: String(l.quantity),
+          unit: (l.unitCents / 100).toFixed(2),
+        })),
+      });
+      setQuoteReasons(q.reasons);
+      toast.success(`Auto-quote: ${q.industry} · ${q.complexity}`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Could not auto-quote");
+    } finally {
+      setQuoting(false);
+    }
   };
 
   const creatingTotals = useMemo(() => {
@@ -534,11 +563,37 @@ export default function Accounting() {
                   {creating.jobId ? "Change project" : "Pick project"}
                 </Button>
                 {creating.jobId && (
-                  <span className="text-xs text-muted-foreground truncate">
-                    linked to {creating.clientName}
-                  </span>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={autoQuote}
+                      disabled={quoting}
+                      className="text-primary"
+                    >
+                      {quoting ? (
+                        <Loader2 className="size-4 mr-1 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-4 mr-1" />
+                      )}
+                      Auto-quote (FTS rules)
+                    </Button>
+                    <span className="text-xs text-muted-foreground truncate">
+                      linked to {creating.clientName}
+                    </span>
+                  </>
                 )}
               </div>
+              {quoteReasons.length > 0 && (
+                <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5 text-[11px] text-muted-foreground space-y-0.5">
+                  <div className="font-semibold text-primary text-xs mb-1">
+                    How this quote was built
+                  </div>
+                  {quoteReasons.map((r, i) => (
+                    <div key={i}>· {r}</div>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium">Client</label>

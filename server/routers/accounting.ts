@@ -113,6 +113,87 @@ export const accountingRouter = router({
     return fetchAccountingJobs();
   }),
 
+  /**
+   * Auto-quote a project from the FTS pricing rules (Reglas de Cobro v3.0)
+   * using the job's Airtable data: client tier, sign count, setup type, days,
+   * stamp, parking ban, stockpile, boards and city permit pass-through.
+   */
+  suggestQuote: accountingProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const [{ fetchJobById, fetchJobRawFields }, { buildQuote }, { parseSignCount }] =
+        await Promise.all([
+          import("../airtable"),
+          import("../../shared/pricingRules"),
+          import("../../shared/signCount"),
+        ]);
+      const job = await fetchJobById(input.jobId);
+      const raw = await fetchJobRawFields(input.jobId);
+      const rawMap = new Map(raw.map((f) => [f.name.toLowerCase(), f.value]));
+      const rawGet = (name: string) => rawMap.get(name.toLowerCase()) ?? null;
+
+      const tally = parseSignCount(job.signsCount ?? null);
+      const signs = tally.customSigns;
+
+      // Days: Airtable "Number of Days" first, else inclusive date span.
+      let days = Number(rawGet("Number of Days")) || 0;
+      if (!days && job.startDate && job.endDate) {
+        const s = new Date(job.startDate.slice(0, 10) + "T00:00:00");
+        const e = new Date(job.endDate.slice(0, 10) + "T00:00:00");
+        days = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
+      }
+      if (!days) days = 1;
+
+      const start = job.startDate
+        ? new Date(job.startDate.slice(0, 10) + "T00:00:00")
+        : null;
+      const weekendStart = !!start && (start.getDay() === 0 || start.getDay() === 6);
+
+      const files = (job.planFile ?? []) as { filename?: string | null }[];
+      const hasStamp = files.some((f) => /stamp/i.test(f.filename ?? ""));
+      const hasPlan = files.length > 0;
+
+      const affirmative = (v: string | null) =>
+        !!v && !/^(no|none|n\/a|-)$/i.test(v.trim());
+      const parkingBan = affirmative(rawGet("Parking Ban"));
+      const stockpile = affirmative(rawGet("Stockpile"));
+
+      const num = (v: string | null) => {
+        const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
+        return Number.isFinite(n) ? n : 0;
+      };
+      const arrowBoards = Math.max(tally.arrowBoards, num(rawGet("Arrow Boards")));
+      const messageBoards = Math.max(
+        tally.messageBoards,
+        num(rawGet("Message Boards")),
+      );
+
+      const pc = rawGet("Permit Cost");
+      const pcNum = pc ? Number(pc.replace(/[$,\s]/g, "")) : NaN;
+      const permitCostCents =
+        Number.isFinite(pcNum) && pcNum > 0 ? Math.round(pcNum * 100) : null;
+
+      const quote = buildQuote({
+        company: job.company,
+        signs,
+        days,
+        setupDuration: job.setupDuration,
+        weekendStart,
+        hasStamp,
+        hasPlan,
+        parkingBan,
+        stockpile,
+        arrowBoards,
+        messageBoards,
+        permitCostCents,
+      });
+
+      return {
+        ...quote,
+        inputs: { signs, days, setupDuration: job.setupDuration, weekendStart, hasStamp, parkingBan, stockpile, arrowBoards, messageBoards },
+      };
+    }),
+
   listInvoices: accountingProcedure.query(async () => {
     const dbx = await db();
     const rows = await dbx.select().from(invoices).orderBy(desc(invoices.id));

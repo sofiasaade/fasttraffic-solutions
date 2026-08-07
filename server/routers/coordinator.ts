@@ -500,6 +500,14 @@ export const coordinatorRouter = router({
     });
   }),
 
+  // Every non-empty Airtable field on the record, for the full-info panel.
+  jobAllFields: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const { fetchJobRawFields } = await import("../airtable");
+      return fetchJobRawFields(input.jobId);
+    }),
+
   jobDetail: adminProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
