@@ -42,6 +42,7 @@ import {
   FileText,
   Download,
   ExternalLink,
+  X as XIcon,
   Map as MapIcon,
   ChevronsUpDown,
   Construction,
@@ -53,7 +54,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { fmtTime12, fmtTime12Range } from "@/lib/format";
+import { fmtTime12, fmtTime12Range, fmtDate } from "@/lib/format";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import { BillingNotesButton } from "@/components/BillingNotes";
 import { TechnicianProfileButton } from "@/components/TechnicianProfile";
@@ -815,6 +816,8 @@ export default function Scheduler() {
   const [expandedJobs, setExpandedJobs] = useState<Set<string>>(
     () => new Set(),
   );
+  // Card detail slide-over: opens to the RIGHT so the info has full room.
+  const [detailJob, setDetailJob] = useState<Job | null>(null);
   const toggleJobExpanded = (id: string) =>
     setExpandedJobs((prev) => {
       const next = new Set(prev);
@@ -1545,7 +1548,7 @@ export default function Scheduler() {
   // grid so assignment behaviour is identical; the drop target is the whole card.
   const renderJobCard = (job: Job) => {
     const dk = selectedDayKey;
-    const isExpanded = expandedJobs.has(job.id);
+    const isExpanded = detailJob?.id === job.id;
     const chips = chipsFor(job.id, dk);
     const equips = equipFor(job.id, dk);
     const truckChips = trucksFor(job.id, dk);
@@ -1563,7 +1566,7 @@ export default function Scheduler() {
         {/* Card header */}
         <button
           type="button"
-          onClick={() => toggleJobExpanded(job.id)}
+          onClick={() => setDetailJob(isExpanded ? null : job)}
           aria-expanded={isExpanded}
           className="group/card w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-accent/30 transition-colors"
         >
@@ -1638,13 +1641,20 @@ export default function Scheduler() {
               {((job as any).permitStartTime || (job as any).permitEndTime) && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-700"
-                  title="City permit start – end time (the schedule order key)"
+                  title="Setup day & time → Pickup day & time (from the city permit)"
                 >
                   <Landmark className="size-3 shrink-0" />
-                  {fmtTime12Range(
-                    (job as any).permitStartTime,
-                    (job as any).permitEndTime,
-                  )}
+                  <span className="whitespace-nowrap">
+                    {fmtDate(job.startDate)}
+                    {(job as any).permitStartTime
+                      ? ` · ${fmtTime12((job as any).permitStartTime)}`
+                      : ""}
+                    {" → "}
+                    {fmtDate(job.endDate)}
+                    {(job as any).permitEndTime
+                      ? ` · ${fmtTime12((job as any).permitEndTime)}`
+                      : ""}
+                  </span>
                 </span>
               )}
             </div>
@@ -1791,11 +1801,6 @@ export default function Scheduler() {
           )}
         </div>
 
-        {isExpanded && (
-          <div className="bg-muted/30 border-t border-border">
-            <JobDetailInline job={job} />
-          </div>
-        )}
       </div>
     );
   };
@@ -3660,6 +3665,47 @@ export default function Scheduler() {
         </DialogContent>
       </Dialog>
 
+      {/* Job detail slide-over — opens to the RIGHT so all the info is readable
+          even from the narrow day-view job column. */}
+      {detailJob && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setDetailJob(null)}
+          />
+          <div className="relative h-full w-[min(720px,94vw)] bg-card border-l border-border shadow-2xl overflow-y-auto">
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-card">
+              <div className="min-w-0">
+                <div className="font-bold truncate">
+                  {detailJob.emoji ? `${detailJob.emoji} ` : ""}
+                  {detailJob.company ?? "Job"}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {detailJob.jobAddress ?? ""}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Link
+                  href={`/projects/${detailJob.id}`}
+                  className="rounded-md px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-accent transition-colors"
+                  title="Open full project page"
+                >
+                  Full page <ExternalLink className="inline size-3" />
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setDetailJob(null)}
+                  aria-label="Close details"
+                >
+                  <XIcon className="size-4" />
+                </Button>
+              </div>
+            </div>
+            <JobDetailInline job={detailJob} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
