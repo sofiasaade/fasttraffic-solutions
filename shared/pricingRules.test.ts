@@ -135,3 +135,31 @@ describe("parseEquipment (Signs Count block)", () => {
     expect(t.arrowBoards).toBe(2);
   });
 });
+
+describe("custom signs pricing", () => {
+  it("charges custom signs once at $89.90 each, not per day", () => {
+    const eq = parseEquipment("WM 10\nCUSTOM SIGN - ROAD WORK 3\nCONES 5");
+    expect(eq.customSigns).toBe(3);
+    const q = buildQuote({
+      company: "Test Co",
+      equipment: eq,
+      signs: eq.totalSigns,
+      days: 4,
+      setupDuration: "Daytime Work (7:00 AM - 5:00 PM)",
+      weekendStart: false,
+      hasStamp: false,
+      hasPlan: false,
+      parkingBan: false,
+      stockpile: false,
+      arrowBoards: 0,
+      messageBoards: 0,
+      permitCostCents: null,
+    });
+    const custom = q.lines.find((l) => /custom/i.test(l.description));
+    expect(custom).toBeTruthy();
+    expect(custom!.quantity).toBe(3);       // 3 signs, one-time
+    expect(custom!.unitCents).toBe(8990);   // $89.90 each
+    const wm = q.lines.find((l) => /WM \+ Sign/i.test(l.description));
+    expect(wm!.quantity).toBe(4);           // rental IS per day
+  });
+});

@@ -77,6 +77,8 @@ export const RENTAL_RATES = {
   arrowBoard: 4500,
   arrowBoardTruck: 7500,
   trafficLights: 8400,
+  /** Custom-fabricated sign — ONE-TIME charge per sign, not per day. */
+  customSignEach: 8990,
 } as const;
 
 /** Per-category tally parsed from the Airtable "Signs Count" text block. */
@@ -95,6 +97,8 @@ export interface EquipmentTally {
   sidewalkClosed: number;
   arrowBoards: number;
   messageBoards: number;
+  /** Custom-fabricated signs — one-time charge each ($89.90). */
+  customSigns: number;
   /** All sign-type items (drives the setup complexity tier). */
   totalSigns: number;
 }
@@ -102,7 +106,7 @@ export interface EquipmentTally {
 const EMPTY_EQUIPMENT: EquipmentTally = {
   wmSigns: 0, looseSigns: 0, noParking: 0, barricades: 0, cones: 0,
   flashers: 0, aFrames: 0, barrels: 0, pedestrianDetour: 0, sidewalkClosed: 0,
-  arrowBoards: 0, messageBoards: 0, totalSigns: 0,
+  arrowBoards: 0, messageBoards: 0, customSigns: 0, totalSigns: 0,
 };
 
 function lineQty(line: string): number {
@@ -131,7 +135,8 @@ export function parseEquipment(text: string | null | undefined): EquipmentTally 
     if (!line || /^PHASE\s*\d/i.test(line)) continue;
     const U = line.toUpperCase();
     const qty = lineQty(line);
-    if (/MESSAGE\s*BOARD|\bVMB\b|\bVMS\b|VARIABLE\s+MESSAGE/.test(U)) t.messageBoards += qty;
+    if (/CUSTOM/.test(U)) t.customSigns += qty;
+    else if (/MESSAGE\s*BOARD|\bVMB\b|\bVMS\b|VARIABLE\s+MESSAGE/.test(U)) t.messageBoards += qty;
     else if (/ARROW\s*BOARD|\bABL\b|\bABR\b|\bDAB\b/.test(U)) t.arrowBoards += qty;
     else if (/WINDMASTER|^WM\b/.test(U)) t.wmSigns += qty;
     else if (/CONE/.test(U)) t.cones += qty;
@@ -158,7 +163,8 @@ export function parseEquipment(text: string | null | undefined): EquipmentTally 
     Math.max(t.wmSigns, namedSigns) +
     t.noParking +
     t.pedestrianDetour +
-    t.sidewalkClosed;
+    t.sidewalkClosed +
+    t.customSigns;
   return t;
 }
 
@@ -280,7 +286,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       unitCents: qty * rateCents,
     });
   };
-  if (eq && (eq.wmSigns || eq.barricades || eq.cones || eq.noParking)) {
+  if (eq && (eq.wmSigns || eq.barricades || eq.cones || eq.noParking || eq.customSigns)) {
     rentalLine("WM + Sign rental", eq.wmSigns, RENTAL_RATES.windmasterSign);
     rentalLine("Sign only rental", eq.looseSigns, RENTAL_RATES.signOnly);
     rentalLine("Barricades", eq.barricades, RENTAL_RATES.barricade);
@@ -291,6 +297,17 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     rentalLine("Barrels", eq.barrels, RENTAL_RATES.barrel);
     rentalLine("Pedestrian detour signs", eq.pedestrianDetour, RENTAL_RATES.pedestrianDetour);
     rentalLine("Sidewalk closed signs", eq.sidewalkClosed, RENTAL_RATES.sidewalkClosed);
+    if (eq.customSigns > 0) {
+      // Custom signs are a ONE-TIME fabrication charge, not a daily rental.
+      lines.push({
+        description: `Custom signs — $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} each (one-time)`,
+        quantity: eq.customSigns,
+        unitCents: RENTAL_RATES.customSignEach,
+      });
+      reasons.push(
+        `${eq.customSigns} custom sign(s) × $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} — one-time fabrication charge`,
+      );
+    }
     reasons.push(
       `Rental from Signs Count: ${eq.wmSigns} WM+Sign${eq.barricades ? `, ${eq.barricades} barricades` : ""}${eq.noParking ? `, ${eq.noParking} NP` : ""}${eq.cones ? `, ${eq.cones} cones` : ""} × ${days} day(s)`,
     );
