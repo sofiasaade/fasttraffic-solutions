@@ -117,8 +117,23 @@ export default function Accounting() {
   });
 
   // ---- Airtable table (read-only) ----
+  const READY = "Job Completed - Ready to Bill";
+  const PICKED = "Setup Finished - Picked up";
+  const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "picked">(
+    "all",
+  );
+  const statusCounts = useMemo(() => {
+    const rows = airtableQ.data ?? [];
+    return {
+      ready: rows.filter((r) => r.status === READY).length,
+      picked: rows.filter((r) => r.status === PICKED).length,
+      all: rows.length,
+    };
+  }, [airtableQ.data]);
   const airtableRows = useMemo(() => {
     let rows = airtableQ.data ?? [];
+    if (statusFilter === "ready") rows = rows.filter((r) => r.status === READY);
+    if (statusFilter === "picked") rows = rows.filter((r) => r.status === PICKED);
     const ql = q.trim().toLowerCase();
     if (ql) {
       rows = rows.filter((r) =>
@@ -128,14 +143,13 @@ export default function Accounting() {
       );
     }
     // Ready to Bill first, then Picked up; newest first inside each group.
-    const groupOf = (s: string | null) =>
-      s === "Job Completed - Ready to Bill" ? 0 : 1;
+    const groupOf = (s: string | null) => (s === READY ? 0 : 1);
     return [...rows].sort((a, b) => {
       const g = groupOf(a.status) - groupOf(b.status);
       if (g !== 0) return g;
       return (b.startDate ?? "").localeCompare(a.startDate ?? "");
     });
-  }, [airtableQ.data, q]);
+  }, [airtableQ.data, q, statusFilter]);
 
   // ---- New invoice dialog ----
   const [creating, setCreating] = useState<{
@@ -386,9 +400,44 @@ export default function Accounting() {
                 className="pl-8 h-9"
               />
             </div>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {airtableQ.isLoading ? "…" : `${airtableRows.length} projects`}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setStatusFilter("all")}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                  statusFilter === "all"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-accent",
+                )}
+              >
+                All ({airtableQ.isLoading ? "…" : statusCounts.all})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("ready")}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                  statusFilter === "ready"
+                    ? "bg-purple-600 text-white"
+                    : "bg-purple-100 text-purple-700 hover:bg-purple-200",
+                )}
+              >
+                Ready to Bill ({airtableQ.isLoading ? "…" : statusCounts.ready})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("picked")}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                  statusFilter === "picked"
+                    ? "bg-rose-600 text-white"
+                    : "bg-rose-100 text-rose-700 hover:bg-rose-200",
+                )}
+              >
+                Picked up ({airtableQ.isLoading ? "…" : statusCounts.picked})
+              </button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
