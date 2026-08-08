@@ -466,11 +466,11 @@ export default function Accounting() {
                   <thead className="sticky top-0 bg-muted/80 backdrop-blur text-[11px] uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="text-left px-4 py-2.5">Client / project</th>
+                      <th className="text-left px-3 py-2.5">Days</th>
                       <th className="text-left px-3 py-2.5">Dates</th>
                       <th className="text-left px-3 py-2.5">Status</th>
                       <th className="text-left px-3 py-2.5">Estimate / Invoice</th>
                       <th className="text-left px-3 py-2.5">PO #</th>
-                      <th className="text-left px-3 py-2.5">Days</th>
                       <th className="text-right px-4 py-2.5 print:hidden"></th>
                     </tr>
                   </thead>
@@ -507,6 +507,9 @@ export default function Accounting() {
                             {r.jobAddress ?? ""}
                           </div>
                         </td>
+                        <td className="px-3 py-2.5 tabular-nums font-semibold">
+                          {r.numberOfDays ?? "—"}
+                        </td>
                         <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground text-xs">
                           {fmtDate(r.startDate)} → {fmtDate(r.endDate)}
                         </td>
@@ -530,7 +533,6 @@ export default function Accounting() {
                           {r.estimateInvoice ?? "—"}
                         </td>
                         <td className="px-3 py-2.5 tabular-nums">{r.poNumber ?? "—"}</td>
-                        <td className="px-3 py-2.5 tabular-nums">{r.numberOfDays ?? "—"}</td>
                         <td className="px-4 py-2.5 text-right print:hidden">
                           <Button
                             size="sm"
