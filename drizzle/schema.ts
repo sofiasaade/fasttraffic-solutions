@@ -660,6 +660,12 @@ export const invoices = mysqlTable("invoices", {
   gstCents: int("gstCents").notNull().default(0),
   totalCents: int("totalCents").notNull().default(0),
   notes: text("notes"),
+  /**
+   * Snapshot of the auto-quote suggestion (JSON lines) at creation time.
+   * Comparing this against the final items is the training data for tuning
+   * the pricing rules to how FTS actually bills.
+   */
+  suggestedJson: text("suggestedJson"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

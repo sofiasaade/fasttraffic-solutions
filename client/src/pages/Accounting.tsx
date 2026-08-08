@@ -64,7 +64,12 @@ const STATUS_BADGE: Record<string, string> = {
   void: "bg-rose-100 text-rose-700",
 };
 
-type NewItem = { description: string; quantity: string; unit: string };
+type NewItem = {
+  description: string;
+  quantity: string;
+  unit: string;
+  group?: "rental" | "service";
+};
 
 export default function Accounting() {
   const [, navigate] = useLocation();
@@ -186,6 +191,7 @@ export default function Accounting() {
           description: label,
           quantity: "1",
           unit: (cents / 100).toFixed(2),
+          group: /rental|boards/i.test(label) ? "rental" : "service",
         });
       }
     };
@@ -201,11 +207,11 @@ export default function Accounting() {
       addIf("Schedule", job.scheduleCharge);
     }
     if (items.length === 0) {
-      items.push({ description: "Traffic control services", quantity: "1", unit: "" });
+      items.push({ description: "Traffic control services", quantity: "1", unit: "", group: "service" });
     }
     setQuoteReasons([]);
+    setLastQuote(null);
     setDocIdx(0);
-    setQuoteReasons([]);
     setCreating({
       jobId: job?.id ?? null,
       clientName: job?.company ?? "",
@@ -221,6 +227,11 @@ export default function Accounting() {
   // ---- Auto-quote from the FTS pricing rules ----
   const [quoting, setQuoting] = useState(false);
   const [quoteReasons, setQuoteReasons] = useState<string[]>([]);
+  // Last auto-quote lines, stored with the invoice so Claude can learn from
+  // whatever the biller changed before creating it.
+  const [lastQuote, setLastQuote] = useState<
+    { description: string; quantity: number; unitCents: number }[] | null
+  >(null);
   const autoQuoteFor = async (jobId: string) => {
     setQuoting(true);
     try {
@@ -233,11 +244,19 @@ export default function Accounting() {
                 description: l.description,
                 quantity: String(l.quantity),
                 unit: (l.unitCents / 100).toFixed(2),
+                group: (l as any).section ?? "service",
               })),
             }
           : prev,
       );
       setQuoteReasons(q.reasons);
+      setLastQuote(
+        q.lines.map((l) => ({
+          description: l.description,
+          quantity: l.quantity,
+          unitCents: l.unitCents,
+        })),
+      );
       toast.success(`Auto-quote: ${q.industry} · ${q.complexity}`);
     } catch (e: any) {
       toast.error(e.message ?? "Could not auto-quote");
@@ -303,6 +322,7 @@ export default function Accounting() {
       gstRate: Number(creating.gstRate) || 0,
       notes: creating.notes.trim() || null,
       items,
+      suggested: lastQuote,
     });
   };
 
@@ -750,79 +770,120 @@ export default function Accounting() {
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-medium">Line items</label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() =>
-                      setCreating({
-                        ...creating,
-                        items: [
-                          ...creating.items,
-                          { description: "", quantity: "1", unit: "" },
-                        ],
-                      })
-                    }
-                  >
-                    <Plus className="size-3.5 mr-1" /> Add line
-                  </Button>
-                </div>
-                <div className="space-y-1.5">
-                  {creating.items.map((it, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <Input
-                        placeholder="Description"
-                        className="h-8 flex-1"
-                        value={it.description}
-                        onChange={(e) => {
-                          const items = [...creating.items];
-                          items[i] = { ...it, description: e.target.value };
-                          setCreating({ ...creating, items });
-                        }}
-                      />
-                      <Input
-                        placeholder="Qty"
-                        className="h-8 w-16 text-right"
-                        value={it.quantity}
-                        onChange={(e) => {
-                          const items = [...creating.items];
-                          items[i] = { ...it, quantity: e.target.value };
-                          setCreating({ ...creating, items });
-                        }}
-                      />
-                      <Input
-                        placeholder="$ unit"
-                        className="h-8 w-24 text-right"
-                        value={it.unit}
-                        onChange={(e) => {
-                          const items = [...creating.items];
-                          items[i] = { ...it, unit: e.target.value };
-                          setCreating({ ...creating, items });
-                        }}
-                      />
-                      <span className="w-20 text-right text-xs tabular-nums text-muted-foreground">
-                        {money(Math.round((Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100))}
-                      </span>
+              {(["rental", "service"] as const).map((group) => {
+                const groupTotal = creating.items.reduce(
+                  (n, it) =>
+                    (it.group ?? "service") === group
+                      ? n +
+                        Math.round(
+                          (Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100,
+                        )
+                      : n,
+                  0,
+                );
+                return (
+                  <div key={group}>
+                    <div className="flex items-center justify-between mb-1">
+                      <label
+                        className={cn(
+                          "text-xs font-bold uppercase tracking-wide",
+                          group === "rental" ? "text-blue-700" : "text-purple-700",
+                        )}
+                      >
+                        {group === "rental"
+                          ? "Sign & equipment rental"
+                          : "Charges & services"}
+                        <span className="ml-2 font-semibold normal-case tabular-nums text-muted-foreground">
+                          {money(groupTotal)}
+                        </span>
+                      </label>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0"
+                        size="sm"
+                        className="h-7 text-xs"
                         onClick={() =>
                           setCreating({
                             ...creating,
-                            items: creating.items.filter((_, j) => j !== i),
+                            items: [
+                              ...creating.items,
+                              { description: "", quantity: "1", unit: "", group },
+                            ],
                           })
                         }
                       >
-                        <X className="size-3.5" />
+                        <Plus className="size-3.5 mr-1" /> Add line
                       </Button>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div
+                      className={cn(
+                        "space-y-1.5 rounded-lg border p-2 mb-2",
+                        group === "rental"
+                          ? "border-blue-200 bg-blue-50/40"
+                          : "border-purple-200 bg-purple-50/40",
+                      )}
+                    >
+                      {creating.items.filter((it) => (it.group ?? "service") === group)
+                        .length === 0 && (
+                        <div className="text-[11px] text-muted-foreground px-1 py-0.5">
+                          No lines — use “Add line”.
+                        </div>
+                      )}
+                      {creating.items.map((it, i) =>
+                        (it.group ?? "service") !== group ? null : (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <Input
+                              placeholder="Description"
+                              className="h-8 flex-1 bg-background"
+                              value={it.description}
+                              onChange={(e) => {
+                                const items = [...creating.items];
+                                items[i] = { ...it, description: e.target.value };
+                                setCreating({ ...creating, items });
+                              }}
+                            />
+                            <Input
+                              placeholder="Qty"
+                              className="h-8 w-16 text-right bg-background"
+                              value={it.quantity}
+                              onChange={(e) => {
+                                const items = [...creating.items];
+                                items[i] = { ...it, quantity: e.target.value };
+                                setCreating({ ...creating, items });
+                              }}
+                            />
+                            <Input
+                              placeholder="$ unit"
+                              className="h-8 w-24 text-right bg-background"
+                              value={it.unit}
+                              onChange={(e) => {
+                                const items = [...creating.items];
+                                items[i] = { ...it, unit: e.target.value };
+                                setCreating({ ...creating, items });
+                              }}
+                            />
+                            <span className="w-20 text-right text-xs tabular-nums text-muted-foreground">
+                              {money(Math.round((Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100))}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 shrink-0"
+                              onClick={() =>
+                                setCreating({
+                                  ...creating,
+                                  items: creating.items.filter((_, j) => j !== i),
+                                })
+                              }
+                            >
+                              <X className="size-3.5" />
+                            </Button>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
 
               <div className="grid grid-cols-2 gap-3 items-end">
                 <div>

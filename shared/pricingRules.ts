@@ -209,6 +209,8 @@ export interface QuoteLine {
   description: string;
   quantity: number;
   unitCents: number;
+  /** Invoice editor section: sign/equipment rental vs the other charges. */
+  section?: "rental" | "service";
 }
 
 export interface QuoteResult {
@@ -270,6 +272,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     description: `Setup fee — ${setupWhy}`,
     quantity: setupQty,
     unitCents: setup,
+    section: "service",
   });
   reasons.push(
     `Setup ${money(setup)} × ${setupQty}: ${setupWhy}${setupQty > 1 ? " — daily setup bills each day" : ""}`,
@@ -279,55 +282,45 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   const eq = input.equipment;
   const days = Math.max(1, input.days);
   if (eq && (eq.wmSigns || eq.barricades || eq.cones || eq.noParking || eq.customSigns)) {
-    // ONE totalized line for sign rental, ONE for the rest of the equipment.
-    const signRentalPerDay =
-      eq.wmSigns * RENTAL_RATES.windmasterSign +
-      eq.looseSigns * RENTAL_RATES.signOnly +
-      eq.noParking * RENTAL_RATES.noParking;
-    if (signRentalPerDay > 0) {
-      const signCount = eq.wmSigns + eq.looseSigns + eq.noParking;
-      lines.push({
-        description: `Sign rental — ${signCount} signs (${eq.wmSigns} WM+Sign${eq.looseSigns ? `, ${eq.looseSigns} sign-only` : ""}${eq.noParking ? `, ${eq.noParking} No Parking` : ""}) × ${days} day(s)`,
-        quantity: days,
-        unitCents: signRentalPerDay,
-      });
-      reasons.push(
-        `Sign rental: ${eq.wmSigns} WM+Sign × $3.00${eq.looseSigns ? ` + ${eq.looseSigns} sign-only × $1.00` : ""}${eq.noParking ? ` + ${eq.noParking} NP × $1.50` : ""} = $${(signRentalPerDay / 100).toFixed(2)}/day × ${days} day(s) = $${((signRentalPerDay * days) / 100).toFixed(2)}`,
-      );
-    }
-    const otherParts: string[] = [];
-    let otherPerDay = 0;
-    const addOther = (label: string, qty: number, rateCents: number) => {
+    // Itemized rental section: one line per device category (its own section
+    // in the invoice editor, with the per-day rate visible on every line).
+    let rentalTotal = 0;
+    const rentalLine = (label: string, qty: number, rateCents: number) => {
       if (qty <= 0) return;
-      otherPerDay += qty * rateCents;
-      otherParts.push(`${qty} ${label}`);
-    };
-    addOther("barricades", eq.barricades, RENTAL_RATES.barricade);
-    addOther("cones", eq.cones, RENTAL_RATES.cone);
-    addOther("flashers", eq.flashers, RENTAL_RATES.flasher);
-    addOther("A-frames", eq.aFrames, RENTAL_RATES.aFrame);
-    addOther("barrels", eq.barrels, RENTAL_RATES.barrel);
-    addOther("pedestrian detour", eq.pedestrianDetour, RENTAL_RATES.pedestrianDetour);
-    addOther("sidewalk closed", eq.sidewalkClosed, RENTAL_RATES.sidewalkClosed);
-    if (otherPerDay > 0) {
+      rentalTotal += qty * rateCents * days;
       lines.push({
-        description: `Equipment rental — ${otherParts.join(", ")} × ${days} day(s)`,
+        description: `${label} × ${qty} — $${(rateCents / 100).toFixed(2)}/day`,
         quantity: days,
-        unitCents: otherPerDay,
+        unitCents: qty * rateCents,
+        section: "rental",
       });
-      reasons.push(
-        `Equipment rental: ${otherParts.join(", ")} = $${(otherPerDay / 100).toFixed(2)}/day × ${days} day(s) = $${((otherPerDay * days) / 100).toFixed(2)}`,
-      );
-    }
+    };
+    rentalLine("WM + Sign", eq.wmSigns, RENTAL_RATES.windmasterSign);
+    rentalLine("Sign only", eq.looseSigns, RENTAL_RATES.signOnly);
+    rentalLine("No Parking signs", eq.noParking, RENTAL_RATES.noParking);
+    rentalLine("Barricades", eq.barricades, RENTAL_RATES.barricade);
+    rentalLine("Cones", eq.cones, RENTAL_RATES.cone);
+    rentalLine("Flashers", eq.flashers, RENTAL_RATES.flasher);
+    rentalLine("A-Frame stands", eq.aFrames, RENTAL_RATES.aFrame);
+    rentalLine("Barrels", eq.barrels, RENTAL_RATES.barrel);
+    rentalLine("Pedestrian detour signs", eq.pedestrianDetour, RENTAL_RATES.pedestrianDetour);
+    rentalLine("Sidewalk closed signs", eq.sidewalkClosed, RENTAL_RATES.sidewalkClosed);
     if (eq.customSigns > 0) {
       // Custom signs are a ONE-TIME fabrication charge, not a daily rental.
+      rentalTotal += eq.customSigns * RENTAL_RATES.customSignEach;
       lines.push({
         description: `Custom signs — $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} each (one-time)`,
         quantity: eq.customSigns,
         unitCents: RENTAL_RATES.customSignEach,
+        section: "rental",
       });
       reasons.push(
         `${eq.customSigns} custom sign(s) × $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} — one-time fabrication charge`,
+      );
+    }
+    if (rentalTotal > 0) {
+      reasons.push(
+        `Sign & equipment rental (itemized from Signs Count) × ${days} day(s) = $${(rentalTotal / 100).toFixed(2)}`,
       );
     }
   } else if (input.signs > 0 && input.days > 0) {
@@ -335,6 +328,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       description: `Equipment rental — ${input.signs} signs × $3.00/day`,
       quantity: input.days,
       unitCents: input.signs * RENTAL_RATES.windmasterSign,
+      section: "rental",
     });
     reasons.push(
       `Rental: ${input.signs} WM+Sign × $3.00 × ${input.days} day(s)`,
@@ -349,6 +343,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       description: `Arrow board × ${input.arrowBoards} — $45.00/day`,
       quantity: input.days,
       unitCents: input.arrowBoards * RENTAL_RATES.arrowBoard,
+      section: "rental",
     });
   }
   if (input.messageBoards > 0 && input.days > 0) {
@@ -356,32 +351,34 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       description: `Message board × ${input.messageBoards} — $95.00/day`,
       quantity: input.days,
       unitCents: input.messageBoards * RENTAL_RATES.messageBoard,
+      section: "rental",
     });
   }
 
   // ---- Plan / stamp ----
   if (input.hasStamp) {
-    lines.push({ description: "TMP Engineering Stamp", quantity: 1, unitCents: FIXED.stamp });
+    lines.push({ description: "TMP Engineering Stamp", quantity: 1, unitCents: FIXED.stamp, section: "service" });
     reasons.push("Stamped plan attached → Engineering Stamp $550");
   } else if (input.hasPlan) {
-    lines.push({ description: "Traffic Management Plan", quantity: 1, unitCents: FIXED.tmpStandard });
+    lines.push({ description: "Traffic Management Plan", quantity: 1, unitCents: FIXED.tmpStandard, section: "service" });
     reasons.push("Plan without stamp → TMP $400 (standard)");
   }
 
   // ---- Permits ----
-  lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq });
+  lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq, section: "service" });
   if (input.permitCostCents && input.permitCostCents > 0) {
     lines.push({
       description: "Street Use Permit — city cost (pass-through)",
       quantity: 1,
       unitCents: input.permitCostCents,
+      section: "service",
     });
     reasons.push(`City permit pass-through ${money(input.permitCostCents)}`);
   }
 
   // ---- Extra services ----
   if (input.parkingBan) {
-    lines.push({ description: "Parking Ban (NP install)", quantity: 1, unitCents: FIXED.parkingBan });
+    lines.push({ description: "Parking Ban (NP install)", quantity: 1, unitCents: FIXED.parkingBan, section: "service" });
     reasons.push("Parking Ban set in Airtable → $350");
   }
   if (input.stockpile) {
@@ -391,6 +388,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       description: `Stockpile signage${surcharge ? " (+50%, >50 signs)" : ""}`,
       quantity: 1,
       unitCents: cents,
+      section: "service",
     });
     reasons.push(`Stockpile → ${money(cents)}${surcharge ? " (>50 signs surcharge)" : ""}`);
   }

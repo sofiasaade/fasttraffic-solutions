@@ -234,6 +234,17 @@ export const accountingRouter = router({
         gstRate: z.number().min(0).max(30).default(5),
         notes: z.string().nullable().optional(),
         items: z.array(itemInput).min(1),
+        /** Auto-quote snapshot for later rule tuning (what Claude suggested). */
+        suggested: z
+          .array(
+            z.object({
+              description: z.string(),
+              quantity: z.number(),
+              unitCents: z.number(),
+            }),
+          )
+          .nullable()
+          .optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -259,6 +270,7 @@ export const accountingRouter = router({
         status: "draft",
         gstRate: input.gstRate,
         notes: input.notes ?? null,
+        suggestedJson: input.suggested ? JSON.stringify(input.suggested) : null,
         ...totals,
       });
       const invoiceId = (res as any).insertId as number;
