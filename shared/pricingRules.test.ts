@@ -95,7 +95,7 @@ describe("pricing rules — quotes", () => {
 
   it("passes the city permit cost through exactly", () => {
     const q = buildQuote({ ...base, permitCostCents: 21535 });
-    const cp = q.lines.find((l) => l.description.includes("City permit"));
+    const cp = q.lines.find((l) => l.description.includes("Street Use Permit"));
     expect(cp?.unitCents).toBe(21535);
   });
 });
@@ -159,7 +159,7 @@ describe("custom signs pricing", () => {
     expect(custom).toBeTruthy();
     expect(custom!.quantity).toBe(3);       // 3 signs, one-time
     expect(custom!.unitCents).toBe(8990);   // $89.90 each
-    const wm = q.lines.find((l) => /WM \+ Sign/i.test(l.description));
+    const wm = q.lines.find((l) => /Sign rental/i.test(l.description));
     expect(wm!.quantity).toBe(4);           // rental IS per day
   });
 });

@@ -167,10 +167,23 @@ export const accountingRouter = router({
         num(rawGet("Message Boards")),
       );
 
+      // Street Use Permit cost: the field often lists several amounts, e.g.
+      // "($221.05) (July 15-16) ($173.52) (July 20-22)" — sum every $ amount.
       const pc = rawGet("Permit Cost");
-      const pcNum = pc ? Number(pc.replace(/[$,\s]/g, "")) : NaN;
-      const permitCostCents =
-        Number.isFinite(pcNum) && pcNum > 0 ? Math.round(pcNum * 100) : null;
+      let permitCostCents: number | null = null;
+      if (pc) {
+        const amounts = pc.match(/\$\s*[\d,]+(?:\.\d{1,2})?/g);
+        if (amounts?.length) {
+          const total = amounts.reduce(
+            (n, a) => n + Number(a.replace(/[$,\s]/g, "")),
+            0,
+          );
+          if (total > 0) permitCostCents = Math.round(total * 100);
+        } else {
+          const n = Number(pc.replace(/[$,\s]/g, ""));
+          if (Number.isFinite(n) && n > 0) permitCostCents = Math.round(n * 100);
+        }
+      }
 
       const quote = buildQuote({
         company: job.company,

@@ -278,25 +278,47 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // ---- Equipment rental — per-category breakdown when we parsed the field ----
   const eq = input.equipment;
   const days = Math.max(1, input.days);
-  const rentalLine = (label: string, qty: number, rateCents: number) => {
-    if (qty <= 0) return;
-    lines.push({
-      description: `${label} × ${qty} — $${(rateCents / 100).toFixed(2)}/day`,
-      quantity: days,
-      unitCents: qty * rateCents,
-    });
-  };
   if (eq && (eq.wmSigns || eq.barricades || eq.cones || eq.noParking || eq.customSigns)) {
-    rentalLine("WM + Sign rental", eq.wmSigns, RENTAL_RATES.windmasterSign);
-    rentalLine("Sign only rental", eq.looseSigns, RENTAL_RATES.signOnly);
-    rentalLine("Barricades", eq.barricades, RENTAL_RATES.barricade);
-    rentalLine("Cones", eq.cones, RENTAL_RATES.cone);
-    rentalLine("No Parking signs", eq.noParking, RENTAL_RATES.noParking);
-    rentalLine("Flashers", eq.flashers, RENTAL_RATES.flasher);
-    rentalLine("A-Frame stands", eq.aFrames, RENTAL_RATES.aFrame);
-    rentalLine("Barrels", eq.barrels, RENTAL_RATES.barrel);
-    rentalLine("Pedestrian detour signs", eq.pedestrianDetour, RENTAL_RATES.pedestrianDetour);
-    rentalLine("Sidewalk closed signs", eq.sidewalkClosed, RENTAL_RATES.sidewalkClosed);
+    // ONE totalized line for sign rental, ONE for the rest of the equipment.
+    const signRentalPerDay =
+      eq.wmSigns * RENTAL_RATES.windmasterSign +
+      eq.looseSigns * RENTAL_RATES.signOnly +
+      eq.noParking * RENTAL_RATES.noParking;
+    if (signRentalPerDay > 0) {
+      const signCount = eq.wmSigns + eq.looseSigns + eq.noParking;
+      lines.push({
+        description: `Sign rental — ${signCount} signs (${eq.wmSigns} WM+Sign${eq.looseSigns ? `, ${eq.looseSigns} sign-only` : ""}${eq.noParking ? `, ${eq.noParking} No Parking` : ""}) × ${days} day(s)`,
+        quantity: days,
+        unitCents: signRentalPerDay,
+      });
+      reasons.push(
+        `Sign rental: ${eq.wmSigns} WM+Sign × $3.00${eq.looseSigns ? ` + ${eq.looseSigns} sign-only × $1.00` : ""}${eq.noParking ? ` + ${eq.noParking} NP × $1.50` : ""} = $${(signRentalPerDay / 100).toFixed(2)}/day × ${days} day(s) = $${((signRentalPerDay * days) / 100).toFixed(2)}`,
+      );
+    }
+    const otherParts: string[] = [];
+    let otherPerDay = 0;
+    const addOther = (label: string, qty: number, rateCents: number) => {
+      if (qty <= 0) return;
+      otherPerDay += qty * rateCents;
+      otherParts.push(`${qty} ${label}`);
+    };
+    addOther("barricades", eq.barricades, RENTAL_RATES.barricade);
+    addOther("cones", eq.cones, RENTAL_RATES.cone);
+    addOther("flashers", eq.flashers, RENTAL_RATES.flasher);
+    addOther("A-frames", eq.aFrames, RENTAL_RATES.aFrame);
+    addOther("barrels", eq.barrels, RENTAL_RATES.barrel);
+    addOther("pedestrian detour", eq.pedestrianDetour, RENTAL_RATES.pedestrianDetour);
+    addOther("sidewalk closed", eq.sidewalkClosed, RENTAL_RATES.sidewalkClosed);
+    if (otherPerDay > 0) {
+      lines.push({
+        description: `Equipment rental — ${otherParts.join(", ")} × ${days} day(s)`,
+        quantity: days,
+        unitCents: otherPerDay,
+      });
+      reasons.push(
+        `Equipment rental: ${otherParts.join(", ")} = $${(otherPerDay / 100).toFixed(2)}/day × ${days} day(s) = $${((otherPerDay * days) / 100).toFixed(2)}`,
+      );
+    }
     if (eq.customSigns > 0) {
       // Custom signs are a ONE-TIME fabrication charge, not a daily rental.
       lines.push({
@@ -308,9 +330,6 @@ export function buildQuote(input: QuoteInput): QuoteResult {
         `${eq.customSigns} custom sign(s) × $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} — one-time fabrication charge`,
       );
     }
-    reasons.push(
-      `Rental from Signs Count: ${eq.wmSigns} WM+Sign${eq.barricades ? `, ${eq.barricades} barricades` : ""}${eq.noParking ? `, ${eq.noParking} NP` : ""}${eq.cones ? `, ${eq.cones} cones` : ""} × ${days} day(s)`,
-    );
   } else if (input.signs > 0 && input.days > 0) {
     lines.push({
       description: `Equipment rental — ${input.signs} signs × $3.00/day`,
@@ -353,7 +372,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq });
   if (input.permitCostCents && input.permitCostCents > 0) {
     lines.push({
-      description: "City permit (pass-through)",
+      description: "Street Use Permit — city cost (pass-through)",
       quantity: 1,
       unitCents: input.permitCostCents,
     });
