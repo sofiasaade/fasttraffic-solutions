@@ -470,7 +470,6 @@ export default function Accounting() {
                       <th className="text-left px-3 py-2.5">Dates</th>
                       <th className="text-left px-3 py-2.5">Status</th>
                       <th className="text-left px-3 py-2.5">Estimate / Invoice</th>
-                      <th className="text-left px-3 py-2.5">PO #</th>
                       <th className="text-right px-4 py-2.5 print:hidden"></th>
                     </tr>
                   </thead>
@@ -532,7 +531,6 @@ export default function Accounting() {
                         <td className="px-3 py-2.5 font-medium tabular-nums max-w-[180px] truncate" title={r.estimateInvoice ?? undefined}>
                           {r.estimateInvoice ?? "—"}
                         </td>
-                        <td className="px-3 py-2.5 tabular-nums">{r.poNumber ?? "—"}</td>
                         <td className="px-4 py-2.5 text-right print:hidden">
                           <Button
                             size="sm"
