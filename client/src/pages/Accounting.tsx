@@ -116,6 +116,17 @@ export default function Accounting() {
     onError: (e) => toast.error(e.message),
   });
 
+  // Jobs that already have an FTS invoice -> show a colored tag on the list.
+  const invoicedByJob = useMemo(() => {
+    const m = new Map<string, { number: string; status: string }>();
+    for (const inv of invoicesQ.data ?? []) {
+      if (inv.airtableJobId && !m.has(inv.airtableJobId)) {
+        m.set(inv.airtableJobId, { number: inv.invoiceNumber, status: inv.status });
+      }
+    }
+    return m;
+  }, [invoicesQ.data]);
+
   // ---- Airtable table (read-only) ----
   const READY = "Job Completed - Ready to Bill";
   const PICKED = "Setup Finished - Picked up";
@@ -459,7 +470,6 @@ export default function Accounting() {
                       <th className="text-left px-3 py-2.5">Status</th>
                       <th className="text-left px-3 py-2.5">Estimate / Invoice</th>
                       <th className="text-left px-3 py-2.5">PO #</th>
-                      <th className="text-left px-3 py-2.5">Permit cost</th>
                       <th className="text-left px-3 py-2.5">Days</th>
                       <th className="text-right px-4 py-2.5 print:hidden"></th>
                     </tr>
@@ -476,9 +486,22 @@ export default function Accounting() {
                         title="Create invoice — plans & Airtable info side by side"
                       >
                         <td className="px-4 py-2.5">
-                          <div className="font-medium flex items-center gap-1.5">
+                          <div className="font-medium flex items-center gap-1.5 flex-wrap">
                             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
                             {r.company ?? "—"}
+                            {invoicedByJob.has(r.id) && (
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                  invoicedByJob.get(r.id)!.status === "paid"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-emerald-100 text-emerald-700",
+                                )}
+                                title={`Invoice ${invoicedByJob.get(r.id)!.number} (${invoicedByJob.get(r.id)!.status})`}
+                              >
+                                ✓ {invoicedByJob.get(r.id)!.number}
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-muted-foreground truncate max-w-[320px]">
                             {r.jobAddress ?? ""}
@@ -507,7 +530,6 @@ export default function Accounting() {
                           {r.estimateInvoice ?? "—"}
                         </td>
                         <td className="px-3 py-2.5 tabular-nums">{r.poNumber ?? "—"}</td>
-                        <td className="px-3 py-2.5 tabular-nums">{r.permitCost ?? "—"}</td>
                         <td className="px-3 py-2.5 tabular-nums">{r.numberOfDays ?? "—"}</td>
                         <td className="px-4 py-2.5 text-right print:hidden">
                           <Button
