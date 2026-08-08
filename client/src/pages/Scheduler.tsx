@@ -1640,20 +1640,24 @@ export default function Scheduler() {
               )}
               {((job as any).permitStartTime || (job as any).permitEndTime) && (
                 <span
-                  className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-700"
+                  className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-700 max-w-full min-w-0"
                   title="Setup day & time → Pickup day & time (from the city permit)"
                 >
                   <Landmark className="size-3 shrink-0" />
-                  <span className="whitespace-nowrap">
-                    {fmtDate(job.startDate)}
-                    {(job as any).permitStartTime
-                      ? ` · ${fmtTime12((job as any).permitStartTime)}`
-                      : ""}
-                    {" → "}
-                    {fmtDate(job.endDate)}
-                    {(job as any).permitEndTime
-                      ? ` · ${fmtTime12((job as any).permitEndTime)}`
-                      : ""}
+                  <span className="flex flex-wrap items-center gap-x-1 min-w-0">
+                    <span className="whitespace-nowrap">
+                      {fmtDate(job.startDate)}
+                      {(job as any).permitStartTime
+                        ? ` · ${fmtTime12((job as any).permitStartTime)}`
+                        : ""}
+                      {" →"}
+                    </span>
+                    <span className="whitespace-nowrap">
+                      {fmtDate(job.endDate)}
+                      {(job as any).permitEndTime
+                        ? ` · ${fmtTime12((job as any).permitEndTime)}`
+                        : ""}
+                    </span>
                   </span>
                 </span>
               )}
