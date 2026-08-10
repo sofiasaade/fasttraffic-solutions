@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDate } from "@/lib/format";
-import { subStatusColor } from "@shared/subStatusColors";
 
 /**
  * Projects grouped by CLIENT with their statuses. This is the foundation for
@@ -197,7 +196,6 @@ export default function Clients() {
                 {isOpen && (
                   <div className="border-t border-border divide-y divide-border/60">
                     {c.jobs.map((j) => {
-                      const sub = subStatusColor(j.subStatus);
                       return (
                         <button
                           key={j.id}
@@ -218,14 +216,6 @@ export default function Clients() {
                           >
                             {j.status ?? "—"}
                           </Badge>
-                          {j.subStatus && (
-                            <span
-                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                              style={{ backgroundColor: sub.bg, color: sub.text }}
-                            >
-                              {j.subStatus}
-                            </span>
-                          )}
                         </button>
                       );
                     })}
