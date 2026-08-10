@@ -14,6 +14,7 @@ import {
   Users,
   AlertTriangle,
   Wallet,
+  Briefcase,
   Receipt,
   KeyRound,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const NAV_GROUPS: {
     title: "Monitor",
     items: [
       { href: "/pending", label: "Pending Jobs", icon: AlertTriangle },
+      { href: "/clients", label: "Clients", icon: Briefcase },
       { href: "/map", label: "Permit Map", icon: MapIcon },
       { href: "/alerts", label: "Change Alerts", icon: BellRing },
     ],

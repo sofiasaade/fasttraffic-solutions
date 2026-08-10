@@ -13,6 +13,7 @@ import DispatchBoard from "./pages/DispatchBoard";
 import OvertimeDashboard from "./pages/OvertimeDashboard";
 import Payroll from "./pages/Payroll";
 import Accounting from "./pages/Accounting";
+import Clients from "./pages/Clients";
 import TeamPins from "./pages/TeamPins";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
@@ -111,6 +112,11 @@ function Router() {
           <Route path="/accounting">
             <CoordinatorShell>
               <Accounting />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/clients">
+            <CoordinatorShell>
+              <Clients />
             </CoordinatorShell>
           </Route>
           <Route path="/team-pins">
