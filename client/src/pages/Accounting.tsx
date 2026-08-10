@@ -30,10 +30,11 @@ import {
   X,
   Lock,
   Sparkles,
+  HardHat,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, fmtTime12 } from "@/lib/format";
 import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
 
 function money(cents: number) {
@@ -276,6 +277,10 @@ export default function Accounting() {
     { enabled: !!workJobId },
   );
   const allFieldsQ = trpc.coordinator.jobAllFields.useQuery(
+    { jobId: workJobId },
+    { enabled: !!workJobId },
+  );
+  const opsQ = trpc.accounting.jobOperations.useQuery(
     { jobId: workJobId },
     { enabled: !!workJobId },
   );
@@ -982,6 +987,119 @@ export default function Accounting() {
                       className="w-full h-[52vh] bg-muted/30"
                     />
                   )}
+                </div>
+
+                {/* Operational results: who worked which day, times, novedades, flagging */}
+                <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                  <div className="px-3 py-2 border-b border-border text-sm font-bold flex items-center gap-2">
+                    <HardHat className="size-4 text-primary" /> Field operations
+                  </div>
+                  <div className="max-h-[30vh] overflow-y-auto p-3 space-y-3 text-xs">
+                    {opsQ.isLoading ? (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" /> Loading operations…
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <div className="font-bold uppercase tracking-wide text-[10px] text-muted-foreground mb-1">
+                            Technicians by day
+                          </div>
+                          {(opsQ.data?.assignments ?? []).length === 0 ? (
+                            <div className="text-muted-foreground">
+                              No technician assignments recorded.
+                            </div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {(opsQ.data?.assignments ?? []).map((a: any) => (
+                                <div key={a.id} className="flex flex-wrap items-center gap-x-1.5">
+                                  <span className="font-semibold tabular-nums">
+                                    {a.scheduledDate ? fmtDate(a.scheduledDate) : "General"}
+                                  </span>
+                                  <span>· {a.technicianName}</span>
+                                  <span className="text-muted-foreground">· {a.phase}</span>
+                                  {a.startTime && (
+                                    <span className="text-muted-foreground">
+                                      · {fmtTime12(a.startTime)}
+                                      {a.endTime ? ` – ${fmtTime12(a.endTime)}` : ""}
+                                    </span>
+                                  )}
+                                  {a.completedAt && (
+                                    <span className="text-green-700 font-medium">
+                                      ✓ done {new Date(a.completedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                                    </span>
+                                  )}
+                                  {a.note && (
+                                    <span className="text-amber-700">📝 {a.note}</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="font-bold uppercase tracking-wide text-[10px] text-muted-foreground mb-1">
+                            Flagging
+                          </div>
+                          {(opsQ.data?.flagging ?? []).length === 0 ? (
+                            <div className="text-muted-foreground">No flagging logged.</div>
+                          ) : (
+                            <div className="space-y-0.5">
+                              {(opsQ.data?.flagging ?? []).map((f: any) => (
+                                <div key={f.id} className="flex flex-wrap gap-x-1.5">
+                                  <span className="font-semibold tabular-nums">{fmtDate(f.workDate)}</span>
+                                  <span>· {f.technicianName}</span>
+                                  <span className="tabular-nums">· {f.hours}h</span>
+                                  <span className="text-muted-foreground tabular-nums">
+                                    × {money(f.hourlyRateCents ?? 4000)}/h
+                                  </span>
+                                </div>
+                              ))}
+                              <div className="font-bold text-orange-700 tabular-nums">
+                                Total: {opsQ.data?.flaggingHoursTotal}h · {money(opsQ.data?.flaggingAmountCents ?? 0)}
+                                <span className="font-normal text-muted-foreground"> — added by auto-quote</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="font-bold uppercase tracking-wide text-[10px] text-muted-foreground mb-1">
+                            Novedades
+                          </div>
+                          {(opsQ.data?.notes ?? []).length === 0 ? (
+                            <div className="text-muted-foreground">No field notes.</div>
+                          ) : (
+                            <div className="space-y-1">
+                              {(opsQ.data?.notes ?? []).map((n: any) => (
+                                <div key={n.id} className="flex items-start gap-1.5">
+                                  <span
+                                    className={cn(
+                                      "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase",
+                                      n.category === "stolen" && "bg-rose-100 text-rose-700",
+                                      n.category === "lost" && "bg-amber-100 text-amber-700",
+                                      n.category === "damaged" && "bg-orange-100 text-orange-700",
+                                      (!n.category || n.category === "general") &&
+                                        "bg-muted text-muted-foreground",
+                                    )}
+                                  >
+                                    {n.category ?? "note"}
+                                  </span>
+                                  <span className="min-w-0">
+                                    {n.note ?? n.text ?? ""}
+                                    <span className="text-muted-foreground">
+                                      {" "}— {n.authorName ?? n.technicianName ?? ""}
+                                    </span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-card overflow-hidden">

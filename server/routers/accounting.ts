@@ -201,10 +201,66 @@ export const accountingRouter = router({
         permitCostCents,
       });
 
+      // Billable flagging logged by the coordinator (per person-hour) — one
+      // line per rate so mixed regular/overtime hours stay separate.
+      const { listFlaggingHoursForJob } = await import("../opsDb");
+      const flagging = await listFlaggingHoursForJob(input.jobId);
+      if (flagging.length > 0) {
+        const byRate = new Map<number, number>();
+        for (const f of flagging) {
+          const rate = f.hourlyRateCents ?? 4000;
+          byRate.set(rate, (byRate.get(rate) ?? 0) + (f.hours ?? 0));
+        }
+        for (const [rate, hours] of Array.from(byRate.entries())) {
+          if (hours <= 0) continue;
+          quote.lines.push({
+            description: `Flaggers — ${hours}h × $${(rate / 100).toFixed(2)}/h`,
+            quantity: hours,
+            unitCents: rate,
+            section: "service",
+          });
+          quote.reasons.push(
+            `Flagging logged in operations: ${hours}h × $${(rate / 100).toFixed(2)}/h = $${((hours * rate) / 100).toFixed(2)}`,
+          );
+        }
+      }
+
       return {
         ...quote,
         inputs: { signs, days, setupDuration: job.setupDuration, weekendStart, hasStamp, parkingBan, stockpile, arrowBoards, messageBoards },
       };
+    }),
+
+  /**
+   * Operational results for a project, to verify the invoice against what the
+   * field actually did: per-day technician assignments (with times and
+   * completion), novedades (field notes) and billable flagging hours.
+   */
+  jobOperations: accountingProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const dbx = await db();
+      const [{ jobAssignments }, ops] = await Promise.all([
+        import("../../drizzle/schema"),
+        import("../opsDb"),
+      ]);
+      const assignments = await dbx
+        .select()
+        .from(jobAssignments)
+        .where(eq(jobAssignments.airtableJobId, input.jobId));
+      assignments.sort((a, b) =>
+        (a.scheduledDate ?? "9999").localeCompare(b.scheduledDate ?? "9999"),
+      );
+      const [notes, flagging] = await Promise.all([
+        ops.listJobNotes(input.jobId),
+        ops.listFlaggingHoursForJob(input.jobId),
+      ]);
+      const flaggingHoursTotal = flagging.reduce((n, f) => n + (f.hours ?? 0), 0);
+      const flaggingAmountCents = flagging.reduce(
+        (n, f) => n + Math.round((f.hours ?? 0) * (f.hourlyRateCents ?? 4000)),
+        0,
+      );
+      return { assignments, notes, flagging, flaggingHoursTotal, flaggingAmountCents };
     }),
 
   listInvoices: accountingProcedure.query(async () => {
