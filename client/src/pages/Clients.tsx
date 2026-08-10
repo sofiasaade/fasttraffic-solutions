@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtDate } from "@/lib/format";
+import ClientJobsMap from "@/components/ClientJobsMap";
 
 /**
  * Projects grouped by CLIENT with their statuses. This is the foundation for
@@ -28,6 +29,8 @@ type Job = {
   endDate: string | null;
   status: string | null;
   subStatus: string | null;
+  lat: number | null;
+  lon: number | null;
 };
 
 /** Normalize company names so "Kobi Construction Ltd" and "Kobi Construction Ltd." group together. */
@@ -194,7 +197,10 @@ export default function Clients() {
                 </button>
 
                 {isOpen && (
-                  <div className="border-t border-border divide-y divide-border/60">
+                  <div className="border-t border-border">
+                    {/* All this client's projects on one map, colored by status */}
+                    <ClientJobsMap jobs={c.jobs} />
+                    <div className="divide-y divide-border/60 border-t border-border">
                     {c.jobs.map((j) => {
                       return (
                         <button
@@ -219,6 +225,7 @@ export default function Clients() {
                         </button>
                       );
                     })}
+                    </div>
                   </div>
                 )}
               </div>
