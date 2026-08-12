@@ -454,6 +454,11 @@ export default function DailyBoard() {
                                   </div>
                                 );
                               })()}
+                              {((j as any).preparedBy?.length ?? 0) > 0 && (
+                                <div className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                                  ✓ Prepared · {(j as any).preparedBy.join(", ")}
+                                </div>
+                              )}
                             </div>
                             {/* Project details + plans */}
                             <Link

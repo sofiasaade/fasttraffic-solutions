@@ -170,9 +170,12 @@ function JobCard({
                   : "Cancelled"}
               </span>
             )}
-            {!cancelled && (job.techPrep?.length ?? 0) > 0 && (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-                <CheckCircle2 className="size-3" /> Prepared
+            {!cancelled && ((job as any).preparedBy?.length ?? 0) > 0 && (
+              <span
+                className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700"
+                title={`Prepared by ${(job as any).preparedBy.join(", ")}`}
+              >
+                <CheckCircle2 className="size-3" /> Prepared · {(job as any).preparedBy.join(", ")}
               </span>
             )}
           </div>

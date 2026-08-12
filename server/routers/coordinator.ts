@@ -47,6 +47,7 @@ import {
   getAssignmentsMapForDay,
   getDayPinnedAssignmentsMap,
   getPrepCrewMap,
+  getPreparedByMap,
   getAssignmentStatusMap,
   setAssignmentStatus,
   setJobAssignmentsStatus,
@@ -261,6 +262,11 @@ function withAssignmentState(
   };
 }
 
+/** Today's date key in Calgary time (server runs in UTC). */
+function calgaryTodayKey(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+}
+
 export const coordinatorRouter = router({
   // Dispatch board: Field + Permit Approved + Permit Request Submitted, merged
   // with local assignments and overrides.
@@ -299,9 +305,11 @@ export const coordinatorRouter = router({
     const permitMap = await getPermitSchedulesForJobs(
       merged.map((j) => ({ id: j.id, planFile: (j as any).planFile ?? [] })),
     );
+    const preparedMap = await getPreparedByMap(ids, calgaryTodayKey());
     for (const j of merged) {
       (j as any).permitStartTime = permitMap.get(j.id)?.validFromTime ?? null;
       (j as any).permitEndTime = permitMap.get(j.id)?.validToTime ?? null;
+      (j as any).preparedBy = preparedMap.get(j.id) ?? [];
     }
     return merged;
   }),
@@ -410,6 +418,13 @@ export const coordinatorRouter = router({
       }
       // Count how many active (non-cancelled) starting-today jobs have no
       // readable permit, so the UI can warn coordinators to verify the time.
+      const preparedMapDash = await getPreparedByMap(
+        startingToday.map((j: any) => j.id),
+        calgaryTodayKey(),
+      );
+      for (const j of startingToday) {
+        (j as any).preparedBy = preparedMapDash.get(j.id) ?? [];
+      }
       let missingPermit = 0;
       for (const j of startingToday) {
         const sched = permitMap.get(j.id);
@@ -796,10 +811,15 @@ export const coordinatorRouter = router({
       const permitMap = await getPermitSchedulesForJobs(
         pool.map((p) => ({ id: p.id, planFile: p.planFile })),
       );
+      const preparedMap = await getPreparedByMap(
+        pool.map((p) => p.id),
+        calgaryTodayKey(),
+      );
       for (const p of pool) {
         p.permitStartTime = permitMap.get(p.id)?.validFromTime ?? null;
         // Pickup cards group/sort by when the permit ENDS (pickup time).
         (p as any).permitEndTime = permitMap.get(p.id)?.validToTime ?? null;
+        (p as any).preparedBy = preparedMap.get(p.id) ?? [];
       }
 
       // Assignments pinned to this day, grouped by technician.

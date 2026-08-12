@@ -90,4 +90,43 @@ export function registerPinLogin(app: Express) {
       res.status(500).json({ ok: false, error: "Sign-in failed." });
     }
   });
+
+  // Coordinator preview of a technician's app WITHOUT their PIN. Requires a
+  // VALID coordinator (admin) session — this safely replaces the old
+  // ENABLE_DEV_LOGIN backdoor the roster used to link to.
+  app.post("/api/preview-tech", async (req, res) => {
+    try {
+      const admin = await sdk.authenticateRequest(req).catch(() => null);
+      if (!admin || admin.role !== "admin") {
+        res.status(403).json({ ok: false, error: "Coordinator session required." });
+        return;
+      }
+      const name = String(req.body?.tech ?? "").trim();
+      const tech = name ? await getTechnicianByName(name) : null;
+      if (!tech || tech.active === false) {
+        res.status(404).json({ ok: false, error: "Technician not found." });
+        return;
+      }
+      const openId = `tech-${slug(tech.airtableName)}`;
+      await db.upsertUser({
+        openId,
+        name: tech.displayName ?? tech.airtableName,
+        email: null,
+        loginMethod: "pin-tech",
+        role: "user",
+        lastSignedIn: new Date(),
+      });
+      const user = await db.getUserByOpenId(openId);
+      if (user) await linkTechnicianToUser(tech.airtableName, user.id);
+      const token = await sdk.createSessionToken(openId, {
+        name: tech.displayName ?? tech.airtableName,
+        expiresInMs: ONE_YEAR_MS,
+      });
+      setSessionCookie(res, token);
+      res.json({ ok: true, redirect: "/app" });
+    } catch (err) {
+      console.error("[preview-tech] failed", err);
+      res.status(500).json({ ok: false, error: "Preview failed." });
+    }
+  });
 }

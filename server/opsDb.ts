@@ -685,6 +685,36 @@ export async function getAssignmentsMapForDay(jobIds: string[], date: string) {
  * the Preparation, even when the prep was performed on an earlier day than the
  * job's starting day. Returns a map of jobId -> de-duplicated technician names.
  */
+/**
+ * Who actually PREPARED each job: Preparation assignments that are done —
+ * completed by the technician, or whose scheduled day already passed.
+ * Map jobId -> unique technician names (empty = not prepared yet).
+ */
+export async function getPreparedByMap(jobIds: string[], todayKey: string) {
+  const map = new Map<string, string[]>();
+  if (jobIds.length === 0) return map;
+  const d = await db();
+  const rows = await d
+    .select()
+    .from(jobAssignments)
+    .where(
+      and(
+        inArray(jobAssignments.airtableJobId, jobIds),
+        eq(jobAssignments.phase, "Preparation"),
+      ),
+    );
+  for (const r of rows) {
+    const done =
+      r.completedAt != null ||
+      (r.scheduledDate != null && r.scheduledDate <= todayKey);
+    if (!done) continue;
+    if (!map.has(r.airtableJobId)) map.set(r.airtableJobId, []);
+    const list = map.get(r.airtableJobId)!;
+    if (!list.includes(r.technicianName)) list.push(r.technicianName);
+  }
+  return map;
+}
+
 export async function getPrepCrewMap(jobIds: string[]) {
   const map = new Map<string, string[]>();
   if (jobIds.length === 0) return map;

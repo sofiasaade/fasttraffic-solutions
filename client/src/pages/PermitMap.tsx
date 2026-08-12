@@ -94,6 +94,8 @@ export default function PermitMap() {
   // Free-text project search (client / address / city). Filters both the
   // side list and the map markers so the two stay in sync.
   const [search, setSearch] = useState("");
+  // Date filter: show only jobs whose window covers this date ("" = all).
+  const [onDate, setOnDate] = useState("");
 
   // Visible status filters (toggles). All on by default.
   const [visible, setVisible] = useState<Record<StatusKey, boolean>>({
@@ -114,12 +116,17 @@ export default function PermitMap() {
     const q = search.trim().toLowerCase();
     return ((jobs as MapJob[] | undefined) ?? []).filter((j) => {
       if (!visible[statusKey(j.status)]) return false;
+      if (onDate) {
+        const s = (j.startDate ?? "").slice(0, 10);
+        const e = (j.endDate ?? "").slice(0, 10) || s;
+        if (!s || !(s <= onDate && onDate <= e)) return false;
+      }
       if (!q) return true;
       return `${j.company ?? ""} ${j.jobAddress ?? ""} ${j.municipality ?? ""}`
         .toLowerCase()
         .includes(q);
     });
-  }, [jobs, visible, search]);
+  }, [jobs, visible, search, onDate]);
 
   const infoHtml = (j: MapJob) => {
     const t = STATUS_THEME[statusKey(j.status)];
@@ -337,6 +344,38 @@ export default function PermitMap() {
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <X className="size-4" />
+                </button>
+              )}
+            </div>
+            {/* Date filter: only jobs active ON this date */}
+            <div className="mt-2 flex items-center gap-1.5">
+              <Input
+                type="date"
+                value={onDate}
+                onChange={(e) => setOnDate(e.target.value)}
+                className="h-8 text-xs flex-1"
+                title="Show only jobs active on this date"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const d = new Date();
+                  setOnDate(
+                    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+                  );
+                }}
+                className="h-8 rounded-md border border-border px-2 text-xs font-medium hover:bg-accent"
+              >
+                Today
+              </button>
+              {onDate && (
+                <button
+                  type="button"
+                  onClick={() => setOnDate("")}
+                  aria-label="Clear date filter"
+                  className="h-8 rounded-md border border-border px-2 text-xs text-muted-foreground hover:bg-accent"
+                >
+                  <X className="size-3.5" />
                 </button>
               )}
             </div>

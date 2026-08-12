@@ -1665,6 +1665,14 @@ export default function Scheduler() {
                   {sd.label}
                 </span>
               )}
+              {((job as any).preparedBy?.length ?? 0) > 0 && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700 max-w-full"
+                  title={`Prepared by ${(job as any).preparedBy.join(", ")}`}
+                >
+                  ✓ Prepared · {(job as any).preparedBy.join(", ")}
+                </span>
+              )}
               {((job as any).permitStartTime || (job as any).permitEndTime) && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2 py-0.5 text-[10px] font-semibold text-orange-700 max-w-full min-w-0"

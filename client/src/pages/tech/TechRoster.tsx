@@ -51,10 +51,19 @@ export default function TechRoster() {
 
         <div className="space-y-2">
           {rosterQuery.data?.map((t) => (
-            <a
+            <button
               key={t.id}
-              href={`/api/dev-login?tech=${encodeURIComponent(t.airtableName)}`}
-              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/50 hover:shadow-sm transition-all"
+              type="button"
+              onClick={async () => {
+                const r = await fetch("/api/preview-tech", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ tech: t.airtableName }),
+                });
+                if (r.ok) window.location.href = "/app";
+                else alert("Could not open this technician's app.");
+              }}
+              className="w-full text-left flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 hover:border-primary/50 hover:shadow-sm transition-all"
             >
               <div className="flex items-center justify-center size-9 rounded-full bg-sidebar text-white text-xs font-bold shrink-0">
                 {t.displayName
@@ -77,7 +86,7 @@ export default function TechRoster() {
                 {t.experienceLevel ?? "junior"}
               </Badge>
               <ChevronRight className="size-4 text-muted-foreground shrink-0" />
-            </a>
+            </button>
           ))}
         </div>
       </div>
