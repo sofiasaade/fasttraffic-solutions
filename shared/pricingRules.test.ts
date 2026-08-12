@@ -55,10 +55,10 @@ describe("pricing rules — quotes", () => {
     expect(rental?.unitCents).toBe(40 * 300); // 40 signs × $3/day
   });
 
-  it("applies the Kobi 20% discount on the residential rate", () => {
+  it("uses Kobi's calibrated QB rate ($650 day median, n=205)", () => {
     const q = buildQuote({ ...base, company: "Kobi Construction Ltd", signs: 10 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(Math.round(55000 * 0.8)); // $550 − 20% = $440
+    expect(setup?.unitCents).toBe(65000);
   });
 
   it("uses the Telus client card, including night premium", () => {
@@ -68,7 +68,7 @@ describe("pricing rules — quotes", () => {
       setupDuration: "Nightime Work (9:00 PM - 5:00 AM)",
     });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(142500); // Telus night $1,425
+    expect(setup?.unitCents).toBe(95000); // Telus night — QB median $950
   });
 
   it("adds weekend surcharge only to the setup fee", () => {

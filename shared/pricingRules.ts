@@ -49,16 +49,41 @@ const NIGHT_SETUP: Partial<Record<Industry, Record<Complexity, number>>> = {
   road: { simple: 80000, standard: 115000, complex: 175000, major: 300000 },
 };
 
-// Sección 7 — client pricing cards (setup fee overrides, cents).
+// Client pricing cards — setup fee per day, in cents.
+// CALIBRATED Aug 2026 against QuickBooks "Sales by Product/Service Detail"
+// (Jan 2025 – Aug 2026, 1,720 invoices): median of each client's actual
+// "Set up (Day)" lines, clients with n ≥ 13 setups. Night = client median
+// where known, else day + $200 (the observed night premium).
 const CLIENT_SETUP_OVERRIDES: [RegExp, { day?: number; night?: number }][] = [
-  [/lbco/i, { day: 80000, night: 95000 }],
-  [/telus/i, { day: 106000, night: 142500 }],
-  [/north\s*star/i, { day: 125000 }],
-  [/cannex/i, { day: 70000 }],
+  [/lbco/i, { day: 75000 }], // n=262
+  [/bow\s*-?mark|bowmark/i, { day: 40000 }], // n=240 — many small daily setups
+  [/kobi/i, { day: 65000 }], // n=205 — real median (the −20% deal ≈ this)
+  [/telus/i, { day: 75000, night: 95000 }], // n=122 day, n=11 night
+  [/lts\s*build/i, { day: 85000 }], // n=97
+  [/kidco/i, { day: 95000 }], // n=80
+  [/blue-?con/i, { day: 75000 }], // n=63
+  [/cannex/i, { day: 75000 }], // n=62
+  [/north\s*star/i, { day: 85000 }], // n=60
+  [/wpt\s*electronics|wp\s*telectronics/i, { day: 90000 }], // n=54
+  [/maf-?worx/i, { day: 75000 }], // n=41
+  [/precision\s*underground/i, { day: 87500 }], // n=32
+  [/fibercomm/i, { day: 75000 }], // n=28
+  [/marmot/i, { day: 75000 }], // n=24
+  [/smart\s*(home\s*)?communications?/i, { day: 95000, night: 105000 }], // n=23
+  [/dominium/i, { day: 75000 }], // n=22
+  [/kang\s*construction/i, { day: 115000 }], // n=21
+  [/pcl\s*construction/i, { day: 85000 }], // n=20
+  [/turn\s*group/i, { day: 65000 }], // n=19
+  [/t\.?a\.?\s*excavating/i, { day: 75000 }], // n=18
+  [/mcintyre/i, { day: 75000 }], // n=15
+  [/alpine\s*glass/i, { day: 85000, night: 145000 }], // n=15
+  [/borger/i, { day: 95000 }], // n=15
+  [/birchcliff/i, { day: 75000 }], // n=14
+  [/alsa\s*road/i, { day: 65000 }], // n=13
 ];
 
-/** Kobi: verbal 20% discount — residential rate minus 20% (Sección 1.3). */
-const KOBI_RE = /kobi/i;
+/** Observed night premium over the client's day rate (QB medians ≈ +$200). */
+const NIGHT_PREMIUM = 20000;
 
 // Sección 2 — equipment rental per day, cents.
 export const RENTAL_RATES = {
@@ -75,10 +100,18 @@ export const RENTAL_RATES = {
   sidewalkClosed: 50,
   messageBoard: 9500,
   arrowBoard: 4500,
-  arrowBoardTruck: 7500,
-  trafficLights: 8400,
+  /** Arrow-board trailer — separate product from the plain arrow board (QB median $65/day). */
+  arrowBoardTrailer: 6500,
+  /** Arrow board WITH truck bills PER HOUR, not per day (QB: $120/h). */
+  arrowBoardTruckHour: 12000,
+  /** QB shows $170/day, not the $84 in the rules PDF. */
+  trafficLights: 17000,
   /** Custom-fabricated sign — ONE-TIME charge per sign, not per day. */
   customSignEach: 8990,
+  /** Equipment delivery / pick-up trip (QB median $225, range $85–450). */
+  deliveryPickup: 22500,
+  /** Mobile set-up (QB median $120). */
+  mobileSetup: 12000,
 } as const;
 
 /** Per-category tally parsed from the Airtable "Signs Count" text block. */
@@ -244,19 +277,12 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   const override = CLIENT_SETUP_OVERRIDES.find(([re]) => re.test(input.company ?? ""));
   if (override) {
     const o = override[1];
-    setup = night ? (o.night ?? (o.day ?? 0) + 30000) : (o.day ?? null);
-    if (setup) setupWhy = `client pricing card (${night ? "night" : "day"})`;
-  }
-  if (setup === null && KOBI_RE.test(input.company ?? "")) {
-    const base = night
-      ? DAY_SETUP.residential[complexity] + 30000
-      : DAY_SETUP.residential[complexity];
-    setup = Math.round(base * 0.8);
-    setupWhy = "Kobi agreement: residential rate −20%";
+    setup = night ? (o.night ?? (o.day ?? 0) + NIGHT_PREMIUM) : (o.day ?? null);
+    if (setup) setupWhy = `client card, QB median (${night ? "night" : "day"})`;
   }
   if (setup === null) {
     setup = night
-      ? (NIGHT_SETUP[industry]?.[complexity] ?? DAY_SETUP[industry][complexity] + 30000)
+      ? (NIGHT_SETUP[industry]?.[complexity] ?? DAY_SETUP[industry][complexity] + NIGHT_PREMIUM)
       : DAY_SETUP[industry][complexity];
     setupWhy = `${industry} · ${complexity} (${input.signs} signs)${night ? " · night" : ""}`;
   }
