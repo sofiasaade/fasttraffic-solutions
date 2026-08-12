@@ -234,6 +234,8 @@ vi.mock("../opsDb", () => ({
     }
     return map;
   }),
+  // Who actually prepared each job (done preps) — empty in these tests.
+  getPreparedByMap: vi.fn(async () => new Map<string, string[]>()),
   // Prep crew across ALL dates (generic + any day-pinned row), de-duplicated.
   getPrepCrewMap: vi.fn(async (ids: string[]) => {
     const map = new Map<string, string[]>();
