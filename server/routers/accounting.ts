@@ -269,6 +269,22 @@ export const accountingRouter = router({
       return { assignments, notes, flagging, flaggingHoursTotal, flaggingAmountCents };
     }),
 
+  /**
+   * Cross-check the Airtable "Signs Count" field against the sign schedule
+   * printed inside the TMP plan PDF. Cones are drawn as dots (not text), so
+   * they come back as "drawn" — verify those visually on the plan.
+   */
+  verifySigns: accountingProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const [{ fetchJobById }, { verifySignsAgainstPlan }] = await Promise.all([
+        import("../airtable"),
+        import("../signVerification"),
+      ]);
+      const job = await fetchJobById(input.jobId);
+      return verifySignsAgainstPlan(job.signsCount, job.planFile as any);
+    }),
+
   listInvoices: accountingProcedure.query(async () => {
     const dbx = await db();
     const rows = await dbx.select().from(invoices).orderBy(desc(invoices.id));

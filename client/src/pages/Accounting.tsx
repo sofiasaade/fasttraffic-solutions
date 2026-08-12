@@ -237,6 +237,7 @@ export default function Accounting() {
     setQuoteReasons([]);
     setLastQuote(null);
     setDocIdx(0);
+    setSignCheckOn(false);
     setCreating({
       jobId: job?.id ?? null,
       clientName: job?.company ?? "",
@@ -307,6 +308,12 @@ export default function Accounting() {
   const opsQ = trpc.accounting.jobOperations.useQuery(
     { jobId: workJobId },
     { enabled: !!workJobId },
+  );
+  // Signs Count vs plan legend — runs on demand (downloads + parses the PDF).
+  const [signCheckOn, setSignCheckOn] = useState(false);
+  const signCheckQ = trpc.accounting.verifySigns.useQuery(
+    { jobId: workJobId },
+    { enabled: !!workJobId && signCheckOn, staleTime: 10 * 60 * 1000 },
   );
   const viewDocs = useMemo(() => {
     const files = ((jobDetailQ.data?.job as any)?.planFile ?? []) as {
@@ -1100,6 +1107,65 @@ export default function Accounting() {
                               </div>
                             </div>
                           )}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="font-bold uppercase tracking-wide text-[10px] text-muted-foreground">
+                              Signs Count vs Plan
+                            </div>
+                            {!signCheckOn && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-[10px]"
+                                onClick={() => setSignCheckOn(true)}
+                              >
+                                Verify against plan
+                              </Button>
+                            )}
+                          </div>
+                          {signCheckOn &&
+                            (signCheckQ.isLoading ? (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin" /> Reading the plan PDF…
+                              </div>
+                            ) : (signCheckQ.data?.rows.length ?? 0) === 0 ? (
+                              <div className="text-muted-foreground">
+                                No sign list to compare (missing Signs Count or plan PDF).
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5">
+                                {signCheckQ.data!.rows.map((r, i) => (
+                                  <div key={i} className="flex flex-wrap items-center gap-x-1.5">
+                                    <span
+                                      className={cn(
+                                        "font-bold",
+                                        r.verdict === "match" && "text-green-700",
+                                        r.verdict === "differs" && "text-rose-700",
+                                        r.verdict === "not_found" && "text-muted-foreground",
+                                        r.verdict === "drawn" && "text-blue-700",
+                                      )}
+                                    >
+                                      {r.verdict === "match"
+                                        ? "✓"
+                                        : r.verdict === "differs"
+                                          ? "⚠"
+                                          : r.verdict === "drawn"
+                                            ? "●"
+                                            : "?"}
+                                    </span>
+                                    <span>{r.label}</span>
+                                    <span className="tabular-nums text-muted-foreground">
+                                      field {r.fieldQty}
+                                      {r.verdict === "differs" && ` · plan says ${r.planQty}`}
+                                      {r.verdict === "not_found" && " · not in plan text"}
+                                      {r.verdict === "drawn" && " · drawn as dots — check visually"}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
                         </div>
 
                         <div>
