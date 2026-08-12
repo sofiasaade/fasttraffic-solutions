@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { subStatusColor } from "@shared/subStatusColors";
+import { is24HourSetup } from "@shared/dashboardDay";
 import { fmtTime12 } from "@/lib/format";
 
 function dayKeyLocal(d: Date) {
@@ -74,10 +75,8 @@ const POOL_PHASES = [
   { key: "pickup", label: "Pick up", color: "#16a34a" },
 ] as const;
 
-const is24h = (
-  setupDuration: string | null | undefined,
-  subStatus?: string | null,
-) => /24\s*hour/i.test(setupDuration ?? "") || /24\s*hour/i.test(subStatus ?? "");
+// Shared rule: the Field-Operations sub-status is the authority.
+const is24h = is24HourSetup;
 
 const TASKS = [
   "Preparation",

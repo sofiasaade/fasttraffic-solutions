@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyJobForDay,
+  is24HourSetup,
   dayKey,
   isRecurringDailySetup,
 } from "../shared/dashboardDay";
@@ -174,5 +175,17 @@ describe("isRecurringDailySetup", () => {
   it("returns false for missing values", () => {
     expect(isRecurringDailySetup(null)).toBe(false);
     expect(isRecurringDailySetup(undefined)).toBe(false);
+  });
+});
+
+describe("sub-status authority over setup duration", () => {
+  it("a job requested as 24 Hours but marked Daily Setup (Field) is DAILY", () => {
+    expect(is24HourSetup("24 Hours Set Up", "Daily Setup (Field)")).toBe(false);
+  });
+  it("sub-status 24 Hours wins regardless of duration", () => {
+    expect(is24HourSetup("Daytime Work (9:00 AM - 3:00 PM)", "24 Hours Setup (Field)")).toBe(true);
+  });
+  it("falls back to setup duration when sub-status is silent", () => {
+    expect(is24HourSetup("24 Hours Set Up", "Setup Prepared (Field) ")).toBe(true);
   });
 });

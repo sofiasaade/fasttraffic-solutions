@@ -67,6 +67,7 @@ import { isCancelledJob } from "@shared/jobStatus";
 import {
   classifyJobForDay,
   is24HourSetup,
+  isDailySetupSubStatus,
   startHourFromSetupDuration,
 } from "@shared/dashboardDay";
 
@@ -1571,7 +1572,14 @@ export default function Scheduler() {
     const chips = chipsFor(job.id, dk);
     const equips = equipFor(job.id, dk);
     const truckChips = trucksFor(job.id, dk);
-    const sd = job.setupDuration ? setupDurationBadge(job.setupDuration) : null;
+    // The Field-Operations sub-status wins over the requested Setup Duration
+    // when they contradict (e.g. requested 24 Hours but running as Daily).
+    const effDuration = isDailySetupSubStatus(job.subStatus)
+      ? "Daily Set Up (Several Days)"
+      : /24\s*hour/i.test(job.subStatus ?? "")
+        ? "24 Hours Set Up"
+        : job.setupDuration;
+    const sd = effDuration ? setupDurationBadge(effDuration) : null;
     return (
       <div
         key={job.id}

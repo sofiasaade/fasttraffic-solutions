@@ -94,7 +94,12 @@ export function is24HourSetup(
   setupDuration?: string | null,
   subStatus?: string | null,
 ): boolean {
-  return /24\s*hour/i.test(setupDuration ?? "") || /24\s*hour/i.test(subStatus ?? "");
+  // The Field-Operations sub-status is the AUTHORITY when it speaks — the
+  // field crew updates it live, while "Setup Duration" is what was requested.
+  // A job requested as 24 Hours but marked "Daily Setup (Field)" is daily.
+  if (isDailySetupSubStatus(subStatus)) return false;
+  if (/24\s*hour/i.test(subStatus ?? "")) return true;
+  return /24\s*hour/i.test(setupDuration ?? "");
 }
 
 /**
