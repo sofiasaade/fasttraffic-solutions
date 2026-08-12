@@ -63,7 +63,7 @@ function Stat({
         <div className="text-2xl font-extrabold leading-none tabular-nums tracking-tight">
           {value}
         </div>
-        <div className="text-xs text-muted-foreground mt-1 truncate">{label}</div>
+        <div className="text-xs text-muted-foreground mt-1 leading-tight">{label}</div>
       </div>
     </div>
   );

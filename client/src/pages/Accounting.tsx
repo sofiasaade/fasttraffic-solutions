@@ -880,10 +880,10 @@ export default function Accounting() {
                       )}
                       {creating.items.map((it, i) =>
                         (it.group ?? "service") !== group ? null : (
-                          <div key={i} className="flex items-center gap-1.5">
+                          <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
                             <Input
                               placeholder="Description"
-                              className="h-8 flex-1 bg-background"
+                              className="h-8 flex-1 min-w-[160px] bg-background"
                               value={it.description}
                               onChange={(e) => {
                                 const items = [...creating.items];

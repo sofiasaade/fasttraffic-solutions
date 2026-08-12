@@ -2271,7 +2271,7 @@ export default function Scheduler() {
         </div>
       </div>
 
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {/* Timeline */}
         <div className="flex-1 overflow-auto">
           {/* Global-search focus banner: shown when arriving from the project
@@ -2750,7 +2750,7 @@ export default function Scheduler() {
         </div>
 
         {/* Resources panel: Workers / Equipment tabs */}
-        <aside className="w-72 border-l border-border bg-card/40 flex flex-col shrink-0">
+        <aside className="w-full lg:w-72 border-t lg:border-t-0 lg:border-l border-border bg-card/40 flex flex-col shrink-0 max-h-[45vh] lg:max-h-none overflow-y-auto">
           <div className="p-3 border-b border-border">
             <h2 className="font-bold text-sm mb-2">Resources</h2>
             {/* Tabs */}
