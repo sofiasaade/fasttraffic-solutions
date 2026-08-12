@@ -273,6 +273,17 @@ export async function fetchJobRawFields(
 // the two groups; this fetch just brings both.
 export async function fetchAccountingJobs(): Promise<import("../shared/airtableFields").AccountingJob[]> {
   const formula = `OR({${AF.status}}='Job Completed - Ready to Bill',{${AF.status}}='Setup Finished - Picked up')`;
+  return fetchAccountingByFormula(formula);
+}
+
+/** Already-billed jobs — the training corpus for the auto-quote estimator. */
+export async function fetchBilledJobs(): Promise<import("../shared/airtableFields").AccountingJob[]> {
+  return fetchAccountingByFormula(`{${AF.status}}='Billed'`);
+}
+
+async function fetchAccountingByFormula(
+  formula: string,
+): Promise<import("../shared/airtableFields").AccountingJob[]> {
   const wanted = [
     AF.company, AF.jobAddress, AF.startDate, AF.endDate, AF.status,
     AF.estimateInvoice, AF.poNumber, AF.permitCost, AF.acq, AF.planCharge,

@@ -74,7 +74,7 @@ type NewItem = {
 
 export default function Accounting() {
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<"airtable" | "invoices">("airtable");
+  const [tab, setTab] = useState<"airtable" | "billed" | "invoices">("airtable");
   const [q, setQ] = useState("");
 
   // Accounting has its own PIN on top of the coordinator session.
@@ -98,6 +98,11 @@ export default function Accounting() {
   });
   const invoicesQ = trpc.accounting.listInvoices.useQuery(undefined, {
     enabled: unlocked,
+  });
+  // Billed jobs load lazily (900+ records) only when the tab is opened.
+  const billedQ = trpc.accounting.airtableBilled.useQuery(undefined, {
+    enabled: unlocked && tab === "billed",
+    staleTime: 10 * 60 * 1000,
   });
   const utils = trpc.useUtils();
 
@@ -167,6 +172,25 @@ export default function Accounting() {
       return (b.startDate ?? "").localeCompare(a.startDate ?? "");
     });
   }, [airtableQ.data, q, statusFilter]);
+
+  const billedRows = useMemo(() => {
+    let rows = billedQ.data ?? [];
+    const ql = q.trim().toLowerCase();
+    if (ql) {
+      rows = rows.filter((r) =>
+        `${r.company ?? ""} ${r.jobAddress ?? ""} ${r.estimateInvoice ?? ""} ${r.poNumber ?? ""}`
+          .toLowerCase()
+          .includes(ql),
+      );
+    }
+    return [...rows].sort((a, b) =>
+      (b.startDate ?? "").localeCompare(a.startDate ?? ""),
+    );
+  }, [billedQ.data, q]);
+
+  // Active list for the Airtable/Billed tabs.
+  const listRows = tab === "billed" ? billedRows : airtableRows;
+  const listLoading = tab === "billed" ? billedQ.isLoading : airtableQ.isLoading;
 
   // ---- New invoice dialog ----
   const [creating, setCreating] = useState<{
@@ -399,6 +423,18 @@ export default function Accounting() {
             <FileSpreadsheet className="size-4 mr-1" /> Airtable
           </Button>
           <Button
+            variant={tab === "billed" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTab("billed")}
+          >
+            <FileSpreadsheet className="size-4 mr-1" /> Billed
+            {billedQ.data && (
+              <span className="ml-1.5 rounded-full bg-primary-foreground/20 px-1.5 text-[10px] tabular-nums">
+                {billedQ.data.length}
+              </span>
+            )}
+          </Button>
+          <Button
             variant={tab === "invoices" ? "default" : "outline"}
             size="sm"
             onClick={() => setTab("invoices")}
@@ -424,7 +460,7 @@ export default function Accounting() {
         </div>
       </div>
 
-      {tab === "airtable" && (
+      {(tab === "airtable" || tab === "billed") && (
         <div className="space-y-3 print:hidden">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[220px]">
@@ -436,6 +472,7 @@ export default function Accounting() {
                 className="pl-8 h-9"
               />
             </div>
+            {tab === "airtable" && (
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -474,14 +511,15 @@ export default function Accounting() {
                 Picked up ({airtableQ.isLoading ? "…" : statusCounts.picked})
               </button>
             </div>
+            )}
           </div>
 
           <div className="rounded-2xl border border-border bg-card overflow-hidden">
-            {airtableQ.isLoading ? (
+            {listLoading ? (
               <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" /> Loading Airtable accounting…
               </div>
-            ) : airtableRows.length === 0 ? (
+            ) : listRows.length === 0 ? (
               <div className="p-12 text-center text-sm text-muted-foreground">
                 No projects with billing info.
               </div>
@@ -499,7 +537,7 @@ export default function Accounting() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {airtableRows.map((r) => (
+                    {listRows.map((r) => (
                       <tr
                         key={r.id}
                         className="hover:bg-accent/40 cursor-pointer transition-colors"

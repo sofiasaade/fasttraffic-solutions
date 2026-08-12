@@ -113,6 +113,12 @@ export const accountingRouter = router({
     return fetchAccountingJobs();
   }),
 
+  /** Airtable jobs with status "Billed" — the estimator's training corpus. */
+  airtableBilled: accountingProcedure.query(async () => {
+    const { fetchBilledJobs } = await import("../airtable");
+    return fetchBilledJobs();
+  }),
+
   /**
    * Auto-quote a project from the FTS pricing rules (Reglas de Cobro v3.0)
    * using the job's Airtable data: client tier, sign count, setup type, days,
