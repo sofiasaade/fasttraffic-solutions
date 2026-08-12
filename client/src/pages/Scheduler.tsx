@@ -757,6 +757,8 @@ export default function Scheduler() {
   const [phase, setPhase] = useState<Phase>("Setup");
   const [startTime, setStartTime] = useState("08:00");
   const [endTime, setEndTime] = useState("16:00");
+  // Preparation date override — defaults to the day BEFORE the drop cell.
+  const [prepDate, setPrepDate] = useState("");
   const [pendingForce, setPendingForce] = useState<{
     conflicts: { technician: string; otherJobLabel: string }[];
   } | null>(null);
@@ -883,6 +885,12 @@ export default function Scheduler() {
   };
 
   // Jobs that overlap the visible week (start..end intersects the week).
+  // Also includes jobs with a day-pinned assignment inside the week (e.g. a
+  // Preparation scheduled days before the job starts).
+  const pinnedJobIds = useMemo(
+    () => new Set(scheduled.map((r) => r.jobId)),
+    [scheduled],
+  );
   const weekJobs = useMemo(() => {
     const list = (jobsQuery.data ?? []) as Job[];
     const weekFirst = rangeFirst;
@@ -895,7 +903,7 @@ export default function Scheduler() {
         const s = parseDayKey(j.startDate);
         const e = parseDayKey(j.endDate) || s;
         if (!s) return false;
-        if (!(s <= weekLast && e >= weekFirst)) return false;
+        if (!(s <= weekLast && e >= weekFirst) && !pinnedJobIds.has(j.id)) return false;
         // Zone filter (same as Dispatch board).
         if (zoneFilter !== "all" && j.zone !== zoneFilter) return false;
         // Free-text filter on company / address.
@@ -1004,10 +1012,18 @@ export default function Scheduler() {
       if (b.startingToday) map.starting.push(j);
       if (b.pickup) map.pickup.push(j);
       if (b.ongoing) map[is24HourSetup(j.setupDuration, j.subStatus) ? "ongoing24" : "ongoing"].push(j);
-      // Prep work: has a Preparation tech AND the job starts AFTER the selected day.
+      // Prep work: has a Preparation tech AND the job starts AFTER the selected day,
+      // OR a Preparation assignment PINNED to this exact day.
       const hasPrep = (j.techPrep?.length ?? 0) > 0;
       const startKey = (j.startDate || "").slice(0, 10);
-      if (hasPrep && startKey && startKey > selectedDayKey) map.prep.push(j);
+      const prepPinnedToday = scheduled.some(
+        (r) =>
+          r.jobId === j.id &&
+          r.phase === "Preparation" &&
+          r.scheduledDate === selectedDayKey,
+      );
+      if (prepPinnedToday || (hasPrep && startKey && startKey > selectedDayKey))
+        map.prep.push(j);
     }
     // Earliest first inside every phase section; Pick up orders by end time.
     for (const list of Object.values(map)) {
@@ -1015,7 +1031,7 @@ export default function Scheduler() {
     }
     map.pickup.sort((a, b) => jobPickupMinutes(a) - jobPickupMinutes(b));
     return map;
-  }, [weekJobs, selectedDayKey]);
+  }, [weekJobs, selectedDayKey, scheduled]);
   const dayPhaseCount = useMemo(
     () =>
       groupedDayPhase.prep.length +
@@ -1319,11 +1335,14 @@ export default function Scheduler() {
 
   const doSchedule = async (force: boolean) => {
     if (!drop) return;
+    // Preparation can be scheduled days BEFORE the job's date.
+    const effectiveDate =
+      phase === "Preparation" && prepDate ? prepDate : drop.dayKey;
     const res = await setScheduled.mutateAsync({
       jobId: drop.job.id,
       phase,
       technicianName: drop.techName,
-      scheduledDate: drop.dayKey,
+      scheduledDate: effectiveDate,
       startTime,
       endTime,
       force,
@@ -1332,7 +1351,7 @@ export default function Scheduler() {
       setPendingForce({ conflicts: res.conflicts });
       return;
     }
-    toast.success(`${drop.techDisplay} scheduled for ${phase} on ${drop.dayKey}.`);
+    toast.success(`${drop.techDisplay} scheduled for ${phase} on ${effectiveDate}.`);
     setDrop(null);
     setPendingForce(null);
     invalidateJobData();
@@ -3030,6 +3049,7 @@ export default function Scheduler() {
           if (!v) {
             setDrop(null);
             setPendingForce(null);
+            setPrepDate("");
           }
         }}
       >
@@ -3074,6 +3094,33 @@ export default function Scheduler() {
                 </span>
               </div>
             </div>
+
+            {phase === "Preparation" && drop && (
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">
+                  Preparation date
+                </label>
+                <Input
+                  type="date"
+                  max={drop.dayKey}
+                  value={
+                    prepDate ||
+                    (() => {
+                      const [y, m, d] = drop.dayKey.split("-").map(Number);
+                      const dt = new Date(y, m - 1, d);
+                      dt.setDate(dt.getDate() - 1);
+                      return dayKeyLocal(dt);
+                    })()
+                  }
+                  onChange={(e) => setPrepDate(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Prep is usually done one or more days before the job — pick
+                  the day the technician will prepare. It shows in that day's
+                  Preparation section.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
