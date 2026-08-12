@@ -1977,6 +1977,8 @@ export const coordinatorRouter = router({
         airtableName: z.string(),
         weekday: z.number().int().min(0).max(6),
         available: z.boolean(),
+        startTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        endTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
         reason: z.string().trim().max(255).optional(),
       }),
     )
@@ -1985,6 +1987,8 @@ export const coordinatorRouter = router({
         airtableName: input.airtableName,
         weekday: input.weekday,
         available: input.available,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
         reason: input.reason?.trim() || null,
         updatedByName: ctx.user.name ?? ctx.user.email ?? "Coordinator",
       });

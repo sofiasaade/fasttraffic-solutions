@@ -207,6 +207,9 @@ export async function setWeekdayAvailability(input: {
   airtableName: string;
   weekday: number; // 0..6
   available: boolean;
+  /** Optional working-hours window (HH:MM). Null = all day. */
+  startTime?: string | null;
+  endTime?: string | null;
   reason?: string | null;
   updatedByName?: string | null;
 }) {
@@ -226,6 +229,8 @@ export async function setWeekdayAvailability(input: {
       .update(technicianAvailability)
       .set({
         available: input.available,
+        startTime: input.startTime ?? null,
+        endTime: input.endTime ?? null,
         reason: input.reason ?? null,
         updatedByName: input.updatedByName ?? null,
       })
@@ -237,6 +242,8 @@ export async function setWeekdayAvailability(input: {
     kind: "weekday",
     weekday: input.weekday,
     available: input.available,
+    startTime: input.startTime ?? null,
+    endTime: input.endTime ?? null,
     reason: input.reason ?? null,
     updatedByName: input.updatedByName ?? null,
   });

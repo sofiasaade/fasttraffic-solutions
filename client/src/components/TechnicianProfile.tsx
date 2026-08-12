@@ -270,10 +270,20 @@ function AvailabilitySection({
   });
 
   // Build a quick lookup of weekday -> available (default true).
-  const weekdayRule = new Map<number, { id: number; available: boolean }>();
+  const weekdayRule = new Map<
+    number,
+    { id: number; available: boolean; startTime: string | null; endTime: string | null }
+  >();
   availability
     .filter((a) => a.kind === "weekday" && a.weekday != null)
-    .forEach((a) => weekdayRule.set(a.weekday as number, { id: a.id, available: a.available }));
+    .forEach((a) =>
+      weekdayRule.set(a.weekday as number, {
+        id: a.id,
+        available: a.available,
+        startTime: (a as any).startTime ?? null,
+        endTime: (a as any).endTime ?? null,
+      }),
+    );
 
   return (
     <section className="space-y-3">
@@ -281,34 +291,81 @@ function AvailabilitySection({
         <CalendarDays className="size-4 text-primary" /> Weekly availability
       </div>
       <p className="text-xs text-muted-foreground">
-        Click a day to toggle whether this technician normally works it. Greyed
-        days show as unavailable on the Workers calendar.
+        Click a day to toggle whether this technician normally works it, and
+        set the hours they work that day (leave blank = all day). Greyed days
+        show as unavailable on the Workers calendar.
       </p>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
         {WEEKDAYS.map((label, wd) => {
           const rule = weekdayRule.get(wd);
           const unavailable = rule ? !rule.available : false;
+          const st = (rule as any)?.startTime ?? "";
+          const et = (rule as any)?.endTime ?? "";
+          const saveHours = (start: string, end: string) =>
+            setWeekday.mutate({
+              airtableName,
+              weekday: wd,
+              available: true,
+              startTime: start || null,
+              endTime: end || null,
+            });
           return (
-            <button
+            <div
               key={wd}
-              type="button"
-              disabled={setWeekday.isPending}
-              onClick={() =>
-                setWeekday.mutate({
-                  airtableName,
-                  weekday: wd,
-                  available: unavailable, // toggle: if currently unavailable, make available
-                })
-              }
               className={cn(
-                "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                "rounded-lg border p-1.5 space-y-1",
                 unavailable
-                  ? "border-slate-300 bg-[repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb_4px,#f3f4f6_4px,#f3f4f6_8px)] text-slate-500"
-                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                  ? "border-slate-300 bg-[repeating-linear-gradient(45deg,#e5e7eb,#e5e7eb_4px,#f3f4f6_4px,#f3f4f6_8px)]"
+                  : "border-emerald-200 bg-emerald-50/60",
               )}
             >
-              {label}
-            </button>
+              <button
+                type="button"
+                disabled={setWeekday.isPending}
+                onClick={() =>
+                  setWeekday.mutate({
+                    airtableName,
+                    weekday: wd,
+                    available: unavailable, // toggle
+                    startTime: unavailable ? st || null : null,
+                    endTime: unavailable ? et || null : null,
+                  })
+                }
+                className={cn(
+                  "w-full rounded-md px-1 py-1 text-sm font-semibold transition-colors",
+                  unavailable
+                    ? "text-slate-500"
+                    : "text-emerald-700 hover:bg-emerald-100",
+                )}
+              >
+                {label}
+              </button>
+              {!unavailable && (
+                <div className="space-y-1">
+                  <input
+                    type="time"
+                    defaultValue={st}
+                    onBlur={(e) => {
+                      if (e.target.value !== st) saveHours(e.target.value, et);
+                    }}
+                    className="w-full rounded border border-emerald-200 bg-background px-1 py-0.5 text-[11px] tabular-nums"
+                    title="From (blank = all day)"
+                  />
+                  <input
+                    type="time"
+                    defaultValue={et}
+                    onBlur={(e) => {
+                      if (e.target.value !== et) saveHours(st, e.target.value);
+                    }}
+                    className="w-full rounded border border-emerald-200 bg-background px-1 py-0.5 text-[11px] tabular-nums"
+                    title="To (blank = all day)"
+                  />
+                  <div className="text-center text-[9px] text-emerald-700/70">
+                    {st || et ? "" : "all day"}
+                  </div>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>

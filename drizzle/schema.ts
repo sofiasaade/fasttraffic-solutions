@@ -126,6 +126,9 @@ export const technicianAvailability = mysqlTable(
     /** YYYY-MM-DD when kind=date, else null. */
     date: varchar("date", { length: 10 }),
     available: boolean("available").notNull(),
+    /** Optional working-hours window (HH:MM). Null = all day. */
+    startTime: varchar("startTime", { length: 5 }),
+    endTime: varchar("endTime", { length: 5 }),
     reason: varchar("reason", { length: 255 }),
     updatedByName: varchar("updatedByName", { length: 128 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
