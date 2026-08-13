@@ -236,6 +236,11 @@ export interface QuoteInput {
   messageBoards: number;
   /** City permit cost in cents (pass-through), if known. */
   permitCostCents: number | null;
+  /**
+   * Itemized city permits (one line each): SU code + dates + exact cost.
+   * When present these REPLACE the single permitCostCents line.
+   */
+  permitLines?: { label: string; cents: number }[];
 }
 
 export interface QuoteLine {
@@ -402,7 +407,21 @@ export function buildQuote(input: QuoteInput): QuoteResult {
 
   // ---- Permits ----
   lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq, section: "service" });
-  if (input.permitCostCents && input.permitCostCents > 0) {
+  if (input.permitLines && input.permitLines.length > 0) {
+    for (const p of input.permitLines) {
+      lines.push({
+        description: p.label,
+        quantity: 1,
+        unitCents: p.cents,
+        section: "service",
+      });
+    }
+    reasons.push(
+      `City permits (pass-through): ${input.permitLines
+        .map((p) => `${p.label} ${money(p.cents)}`)
+        .join(" · ")}`,
+    );
+  } else if (input.permitCostCents && input.permitCostCents > 0) {
     lines.push({
       description: "Street Use Permit — city cost (pass-through)",
       quantity: 1,

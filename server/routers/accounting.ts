@@ -173,23 +173,86 @@ export const accountingRouter = router({
         num(rawGet("Message Boards")),
       );
 
-      // Street Use Permit cost: the field often lists several amounts, e.g.
-      // "($221.05) (July 15-16) ($173.52) (July 20-22)" — sum every $ amount.
+      // Street Use Permit costs: the field lists one or more amounts, e.g.
+      // "($221.05) (July 15-16) ($173.52) (July 20-22)". Each permit becomes
+      // its OWN line, paired in order with the cached SU permit extractions
+      // (SU code + valid dates).
       const pc = rawGet("Permit Cost");
       let permitCostCents: number | null = null;
+      const costEntries: { cents: number; dateText: string | null }[] = [];
       if (pc) {
-        const amounts = pc.match(/\$\s*[\d,]+(?:\.\d{1,2})?/g);
-        if (amounts?.length) {
-          const total = amounts.reduce(
-            (n, a) => n + Number(a.replace(/[$,\s]/g, "")),
-            0,
-          );
-          if (total > 0) permitCostCents = Math.round(total * 100);
-        } else {
+        // Walk tokens in order: every $ amount starts a permit entry; a
+        // following parenthesized text (without $) is that permit's dates.
+        const tokens = pc.match(/\(([^)]*)\)|\$\s*[\d,]+(?:\.\d{1,2})?/g) ?? [];
+        for (const tok of tokens) {
+          const inner = tok.startsWith("(") ? tok.slice(1, -1).trim() : tok.trim();
+          const amt = inner.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
+          if (amt) {
+            costEntries.push({
+              cents: Math.round(Number(amt[1].replace(/,/g, "")) * 100),
+              dateText: null,
+            });
+          } else if (
+            inner &&
+            costEntries.length > 0 &&
+            !costEntries[costEntries.length - 1].dateText
+          ) {
+            costEntries[costEntries.length - 1].dateText = inner;
+          }
+        }
+        if (costEntries.length === 0) {
           const n = Number(pc.replace(/[$,\s]/g, ""));
           if (Number.isFinite(n) && n > 0) permitCostCents = Math.round(n * 100);
         }
       }
+
+      // Cached SU permit schedules for this job (code + valid dates), in order.
+      const { getPermitExtractionsMap } = await import("../opsDb");
+      const readSuPermits = async () => {
+        const extRows =
+          (await getPermitExtractionsMap([input.jobId])).get(input.jobId) ?? [];
+        return extRows
+          .filter(
+            (r: any) => r.parseStatus === "ok" && !String(r.filename).startsWith("plan:"),
+          )
+          .map((r: any) => ({
+            code:
+              r.permitNumber ??
+              (String(r.filename).match(/SU-?\d{2}-?\d+/i)?.[0] ?? null),
+            from: r.validFromDate as string | null,
+            to: r.validToDate as string | null,
+          }))
+          .sort((a: any, b: any) => (a.from ?? "9999").localeCompare(b.from ?? "9999"));
+      };
+      let suPermits = await readSuPermits();
+      if (suPermits.length === 0 && costEntries.length > 0) {
+        // Ready-to-bill jobs never went through the map's permit warm-up —
+        // extract this job's SU permits on demand (cached afterwards).
+        const { getPermitSchedulesForJobs } = await import("../permitExtraction");
+        await getPermitSchedulesForJobs([
+          { id: input.jobId, planFile: (job.planFile ?? []) as any },
+        ]).catch(() => null);
+        suPermits = await readSuPermits();
+      }
+
+      const fmtShort = (iso: string | null) => {
+        if (!iso) return null;
+        const [y, m, d] = iso.split("-").map(Number);
+        return new Date(y, m - 1, d).toLocaleDateString("en-CA", {
+          month: "short",
+          day: "numeric",
+        });
+      };
+      const permitLines = costEntries.map((e, i) => {
+        const su = suPermits[i];
+        const dates = su?.from
+          ? `${fmtShort(su.from)}${su.to && su.to !== su.from ? ` – ${fmtShort(su.to)}` : ""}`
+          : e.dateText;
+        return {
+          label: `Street Use Permit${su?.code ? ` ${su.code}` : ""}${dates ? ` — ${dates}` : ""}`,
+          cents: e.cents,
+        };
+      });
 
       const quote = buildQuote({
         company: job.company,
@@ -205,6 +268,7 @@ export const accountingRouter = router({
         arrowBoards,
         messageBoards,
         permitCostCents,
+        permitLines: permitLines.length > 0 ? permitLines : undefined,
       });
 
       // Billable flagging logged by the coordinator (per person-hour) — one
@@ -364,6 +428,62 @@ export const accountingRouter = router({
         });
       }
       return { id: invoiceId, invoiceNumber };
+    }),
+
+  /** Edit an existing invoice (fields + all line items). Paid/void are locked. */
+  updateInvoice: accountingProcedure
+    .input(
+      z.object({
+        id: z.number().int(),
+        clientName: z.string().min(1),
+        jobAddress: z.string().nullable().optional(),
+        issueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+        gstRate: z.number().min(0).max(30).default(5),
+        notes: z.string().nullable().optional(),
+        items: z.array(itemInput).min(1),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const dbx = await db();
+      const [inv] = await dbx
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, input.id))
+        .limit(1);
+      if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      if (inv.status === "paid" || inv.status === "void") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `A ${inv.status} invoice can't be edited — change its status first.`,
+        });
+      }
+      const totals = computeTotals(input.items, input.gstRate);
+      await dbx
+        .update(invoices)
+        .set({
+          clientName: input.clientName,
+          jobAddress: input.jobAddress ?? null,
+          issueDate: input.issueDate,
+          dueDate: input.dueDate ?? null,
+          gstRate: input.gstRate,
+          notes: input.notes ?? null,
+          ...totals,
+        })
+        .where(eq(invoices.id, input.id));
+      await dbx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
+      for (let i = 0; i < input.items.length; i++) {
+        const it = input.items[i];
+        await dbx.insert(invoiceItems).values({
+          invoiceId: input.id,
+          description: it.description,
+          quantity: it.quantity,
+          unitCents: it.unitCents,
+          amountCents: Math.round(it.quantity * it.unitCents),
+          sortOrder: i,
+        });
+      }
+      return { ok: true as const, invoiceNumber: inv.invoiceNumber };
     }),
 
   setInvoiceStatus: accountingProcedure

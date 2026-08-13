@@ -211,6 +211,56 @@ export default function Accounting() {
   } | null>(null);
   const [jobPickerOpen, setJobPickerOpen] = useState(false);
   const [jobPickerQ, setJobPickerQ] = useState("");
+  // Editing an existing invoice reuses the same workspace.
+  const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
+  const updateInvoice = trpc.accounting.updateInvoice.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Invoice ${r.invoiceNumber} updated`);
+      setCreating(null);
+      setEditingInvoiceId(null);
+      utils.accounting.listInvoices.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  /** Open an existing invoice in the editor (rental lines re-expand into columns). */
+  const openEditInvoice = (inv: NonNullable<typeof invoicesQ.data>[number]) => {
+    const items: NewItem[] = inv.items.map((it) => {
+      const m = it.description.match(/^(.+) × (\d+(?:\.\d+)?) — \$([\d.]+)\/day$/);
+      if (m) {
+        return {
+          description: m[1],
+          quantity: String(it.quantity), // days
+          unit: (it.unitCents / 100).toFixed(2),
+          group: "rental" as const,
+          itemQty: m[2],
+          rate: m[3],
+        };
+      }
+      return {
+        description: it.description,
+        quantity: String(it.quantity),
+        unit: (it.unitCents / 100).toFixed(2),
+        group: "service" as const,
+      };
+    });
+    setQuoteReasons([]);
+    setLastQuote(null);
+    setDocIdx(0);
+    setSignCheckOn(false);
+    setEditingInvoiceId(inv.id);
+    setCreating({
+      jobId: inv.airtableJobId ?? null,
+      clientName: inv.clientName,
+      jobAddress: inv.jobAddress ?? "",
+      issueDate: inv.issueDate,
+      dueDate: inv.dueDate ?? "",
+      gstRate: String(inv.gstRate),
+      notes: inv.notes ?? "",
+      items,
+    });
+    setTab("invoices");
+  };
 
   const openNewInvoice = (job?: (typeof airtableRows)[number]) => {
     // Pre-fill line items from the Airtable charges when present.
@@ -244,6 +294,7 @@ export default function Accounting() {
     setLastQuote(null);
     setDocIdx(0);
     setSignCheckOn(false);
+    setEditingInvoiceId(null);
     setCreating({
       jobId: job?.id ?? null,
       clientName: job?.company ?? "",
@@ -387,6 +438,19 @@ export default function Accounting() {
       .filter((x): x is { description: string; quantity: number; unitCents: number } => !!x);
     if (!creating.clientName.trim()) return toast.error("Client name is required");
     if (items.length === 0) return toast.error("Add at least one line with an amount");
+    if (editingInvoiceId != null) {
+      updateInvoice.mutate({
+        id: editingInvoiceId,
+        clientName: creating.clientName.trim(),
+        jobAddress: creating.jobAddress.trim() || null,
+        issueDate: creating.issueDate,
+        dueDate: creating.dueDate || null,
+        gstRate: Number(creating.gstRate) || 0,
+        notes: creating.notes.trim() || null,
+        items,
+      });
+      return;
+    }
     createInvoice.mutate({
       airtableJobId: creating.jobId,
       clientName: creating.clientName.trim(),
@@ -728,6 +792,16 @@ export default function Accounting() {
                         {money(inv.totalCents)}
                       </td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {inv.status !== "paid" && inv.status !== "void" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs mr-1"
+                            onClick={() => openEditInvoice(inv)}
+                          >
+                            Edit
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -766,12 +840,21 @@ export default function Accounting() {
           <div className="rounded-2xl border border-border bg-card p-4 space-y-3 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <h2 className="font-bold">New invoice</h2>
+                <h2 className="font-bold">
+                  {editingInvoiceId != null ? "Edit invoice" : "New invoice"}
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   Saved in Fast Traffic OS only — Airtable is never modified.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setCreating(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setCreating(null);
+                  setEditingInvoiceId(null);
+                }}
+              >
                 Back to list
               </Button>
             </div>
@@ -1055,11 +1138,14 @@ export default function Accounting() {
                 <Button variant="outline" onClick={() => setCreating(null)}>
                   Cancel
                 </Button>
-                <Button onClick={submitInvoice} disabled={createInvoice.isPending}>
-                  {createInvoice.isPending && (
+                <Button
+                  onClick={submitInvoice}
+                  disabled={createInvoice.isPending || updateInvoice.isPending}
+                >
+                  {(createInvoice.isPending || updateInvoice.isPending) && (
                     <Loader2 className="size-4 mr-1 animate-spin" />
                   )}
-                  Create invoice
+                  {editingInvoiceId != null ? "Save changes" : "Create invoice"}
                 </Button>
               </div>
             </div>
