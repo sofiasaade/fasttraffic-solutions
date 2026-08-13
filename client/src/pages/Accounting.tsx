@@ -150,6 +150,10 @@ export default function Accounting() {
   const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "picked">(
     "all",
   );
+  // Second dimension: jobs that already have an FTS invoice vs not.
+  const [invoiceFilter, setInvoiceFilter] = useState<"all" | "invoiced" | "not">(
+    "all",
+  );
   const statusCounts = useMemo(() => {
     const rows = airtableQ.data ?? [];
     return {
@@ -162,6 +166,8 @@ export default function Accounting() {
     let rows = airtableQ.data ?? [];
     if (statusFilter === "ready") rows = rows.filter((r) => r.status === READY);
     if (statusFilter === "picked") rows = rows.filter((r) => r.status === PICKED);
+    if (invoiceFilter === "invoiced") rows = rows.filter((r) => invoicedByJob.has(r.id));
+    if (invoiceFilter === "not") rows = rows.filter((r) => !invoicedByJob.has(r.id));
     const ql = q.trim().toLowerCase();
     if (ql) {
       rows = rows.filter((r) =>
@@ -178,10 +184,12 @@ export default function Accounting() {
       if (g !== 0) return g;
       return (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999");
     });
-  }, [airtableQ.data, q, statusFilter]);
+  }, [airtableQ.data, q, statusFilter, invoiceFilter, invoicedByJob]);
 
   const billedRows = useMemo(() => {
     let rows = billedQ.data ?? [];
+    if (invoiceFilter === "invoiced") rows = rows.filter((r) => invoicedByJob.has(r.id));
+    if (invoiceFilter === "not") rows = rows.filter((r) => !invoicedByJob.has(r.id));
     const ql = q.trim().toLowerCase();
     if (ql) {
       rows = rows.filter((r) =>
@@ -194,7 +202,7 @@ export default function Accounting() {
     return [...rows].sort((a, b) =>
       (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999"),
     );
-  }, [billedQ.data, q]);
+  }, [billedQ.data, q, invoiceFilter, invoicedByJob]);
 
   // Active list for the Airtable/Billed tabs.
   const listRows = tab === "billed" ? billedRows : airtableRows;
@@ -215,6 +223,8 @@ export default function Accounting() {
   const [jobPickerQ, setJobPickerQ] = useState("");
   // Editing an existing invoice reuses the same workspace.
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
+  // Rental discount percentage (open — any %, default 25).
+  const [discountPct, setDiscountPct] = useState("25");
   const updateInvoice = trpc.accounting.updateInvoice.useMutation({
     onSuccess: (r) => {
       toast.success(`Invoice ${r.invoiceNumber} updated`);
@@ -621,6 +631,44 @@ export default function Accounting() {
               >
                 Picked up ({airtableQ.isLoading ? "…" : statusCounts.picked})
               </button>
+              {(() => {
+                const source = airtableQ.data;
+                const inv = (source ?? []).filter((r) => invoicedByJob.has(r.id)).length;
+                const not = (source?.length ?? 0) - inv;
+                return (
+                  <>
+                    <span className="mx-1 h-5 w-px bg-border" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInvoiceFilter(invoiceFilter === "invoiced" ? "all" : "invoiced")
+                      }
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                        invoiceFilter === "invoiced"
+                          ? "bg-emerald-600 text-white"
+                          : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
+                      )}
+                    >
+                      ✓ Invoiced ({inv})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setInvoiceFilter(invoiceFilter === "not" ? "all" : "not")
+                      }
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                        invoiceFilter === "not"
+                          ? "bg-slate-600 text-white"
+                          : "bg-muted text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      No invoice ({not})
+                    </button>
+                  </>
+                );
+              })()}
             </div>
             )}
           </div>
@@ -1103,24 +1151,27 @@ export default function Accounting() {
                       })}
                       {group === "rental" &&
                         (() => {
-                          const DISCOUNT_DESC = "Signs rental discount (25%)";
-                          const hasDiscount = creating.items.some(
-                            (it) => it.description === DISCOUNT_DESC,
+                          const isDiscountLine = (d: string) =>
+                            /rental discount \([\d.]+%\)/i.test(d);
+                          const existing = creating.items.find((it) =>
+                            isDiscountLine(it.description),
                           );
                           const toggleDiscount = () => {
-                            if (hasDiscount) {
+                            if (existing) {
                               setCreating({
                                 ...creating,
                                 items: creating.items.filter(
-                                  (it) => it.description !== DISCOUNT_DESC,
+                                  (it) => !isDiscountLine(it.description),
                                 ),
                               });
                               return;
                             }
+                            const pct = Number(discountPct) || 0;
+                            if (pct <= 0 || pct >= 100) return;
                             const base = creating.items.reduce(
                               (n, it) =>
                                 (it.group ?? "service") === "rental" &&
-                                it.description !== DISCOUNT_DESC
+                                !isDiscountLine(it.description)
                                   ? n + lineTotal(it)
                                   : n,
                               0,
@@ -1130,28 +1181,43 @@ export default function Accounting() {
                               items: [
                                 ...creating.items,
                                 {
-                                  description: DISCOUNT_DESC,
+                                  description: `Signs rental discount (${pct}%)`,
                                   quantity: "1",
-                                  unit: (-(base * 0.25) / 100).toFixed(2),
+                                  unit: (-(base * (pct / 100)) / 100).toFixed(2),
                                   group: "rental",
                                 },
                               ],
                             });
                           };
                           return (
-                            <div className="flex items-center justify-between gap-3 border-t border-blue-200 pt-1.5 text-[11px] tabular-nums">
-                              <button
-                                type="button"
-                                onClick={toggleDiscount}
-                                className={cn(
-                                  "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
-                                  hasDiscount
-                                    ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
-                                    : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-blue-200 pt-1.5 text-[11px] tabular-nums">
+                              <div className="flex items-center gap-1.5">
+                                {!existing && (
+                                  <span className="flex items-center gap-1">
+                                    <Input
+                                      value={discountPct}
+                                      onChange={(e) => setDiscountPct(e.target.value)}
+                                      className="h-6 w-12 px-1 text-right text-[11px] bg-background"
+                                      title="Discount percentage"
+                                    />
+                                    <span className="text-muted-foreground">%</span>
+                                  </span>
                                 )}
-                              >
-                                {hasDiscount ? "✕ Remove 25% discount" : "− Discount 25%"}
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={toggleDiscount}
+                                  className={cn(
+                                    "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
+                                    existing
+                                      ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                      : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
+                                  )}
+                                >
+                                  {existing
+                                    ? `✕ Remove discount`
+                                    : `− Apply discount`}
+                                </button>
+                              </div>
                               <span className="font-bold text-blue-800">
                                 Rental subtotal: {money(groupTotal)}
                               </span>
