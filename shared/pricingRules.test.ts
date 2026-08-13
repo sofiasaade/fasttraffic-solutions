@@ -250,3 +250,12 @@ describe("medium impact setup", () => {
     expect(setup?.unitCents).toBe(84000);
   });
 });
+
+describe("plan-only jobs", () => {
+  it("bills ONLY the plan — no setup, no rental", () => {
+    const q = buildQuote({ ...baseInput(), planOnly: true, hasStamp: true, signs: 40 });
+    expect(q.lines.some((l) => l.description.startsWith("Setup fee"))).toBe(false);
+    expect(q.lines.some((l) => l.section === "rental")).toBe(false);
+    expect(q.lines.some((l) => l.description.includes("Stamp"))).toBe(true);
+  });
+});

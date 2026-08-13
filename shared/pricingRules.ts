@@ -246,6 +246,8 @@ export interface QuoteInput {
   setupDuration: string | null;
   /** Airtable "Impact Category" (e.g. "2️⃣ Low") — drives the hourly setup rule. */
   impact?: string | null;
+  /** "Plan Only" job: ONLY the plan is billed — no setup, no rental, nothing else. */
+  planOnly?: boolean;
   /** Job starts on a Saturday or Sunday. */
   weekendStart: boolean;
   /** A stamped plan is attached. */
@@ -301,6 +303,27 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   const lines: QuoteLine[] = [];
   const reasons: string[] = [];
   const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+  // "Plan Only": the client only got the plan — bill the plan (stamp or TMP)
+  // and any real city-permit costs; NO setup, NO rental, NO signs.
+  if (input.planOnly) {
+    if (input.hasStamp) {
+      lines.push({ description: "TMP Engineering Stamp", quantity: 1, unitCents: FIXED.stamp, section: "service" });
+    } else if (input.hasPlan) {
+      lines.push({ description: "Traffic Management Plan", quantity: 1, unitCents: FIXED.tmpStandard, section: "service" });
+    }
+    if (input.permitLines && input.permitLines.length > 0) {
+      lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq, section: "service" });
+      for (const p of input.permitLines) {
+        lines.push({ description: p.label, quantity: 1, unitCents: p.cents, section: "service" });
+      }
+    } else if (input.permitCostCents && input.permitCostCents > 0) {
+      lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq, section: "service" });
+      lines.push({ description: "Street Use Permit — city cost (pass-through)", quantity: 1, unitCents: input.permitCostCents, section: "service" });
+    }
+    reasons.push("PLAN ONLY — only the plan is billed: no setup, no rental, no signs");
+    return { industry, complexity, lines, reasons };
+  }
 
   // ---- Setup fee ----
   const night = isNight(input.setupDuration);

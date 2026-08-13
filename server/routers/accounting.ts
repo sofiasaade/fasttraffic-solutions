@@ -255,8 +255,13 @@ export const accountingRouter = router({
         };
       });
 
+      const planOnly = /plan\s*only/i.test(
+        `${job.jobAddress ?? ""} ${job.projectTitle ?? ""} ${rawGet("Type of Submission") ?? ""} ${rawGet("Location") ?? ""}`,
+      );
+
       const quote = buildQuote({
         company: job.company,
+        planOnly,
         equipment,
         signs,
         panelSigns: equipment.wmSigns + equipment.looseSigns,
@@ -277,7 +282,7 @@ export const accountingRouter = router({
       // Billable flagging logged by the coordinator (per person-hour) — one
       // line per rate so mixed regular/overtime hours stay separate.
       const { listFlaggingHoursForJob } = await import("../opsDb");
-      const flagging = await listFlaggingHoursForJob(input.jobId);
+      const flagging = planOnly ? [] : await listFlaggingHoursForJob(input.jobId);
       if (flagging.length > 0) {
         const byRate = new Map<number, number>();
         for (const f of flagging) {

@@ -65,6 +65,14 @@ const STATUS_BADGE: Record<string, string> = {
   void: "bg-rose-100 text-rose-700",
 };
 
+// Setup-fee hourly rules (Sofia's matrix) for the quick-correct dropdown.
+const SETUP_RULES = [
+  { unit: "560.00", label: "Low · <25 signs — 4h · $560", desc: "Setup fee — low impact · <25 signs: 4h × $140/h" },
+  { unit: "630.00", label: "Low · 25+ signs — 4.5h · $630", desc: "Setup fee — low impact · 25+ signs: 4.5h × $140/h" },
+  { unit: "840.00", label: "Medium — 6h · $840", desc: "Setup fee — medium impact: 6h × $140/h" },
+  { unit: "1120.00", label: "High — 8h · $1,120", desc: "Setup fee — high impact: 8h × $140/h" },
+] as const;
+
 type NewItem = {
   description: string;
   /** Service lines: quantity. Rental lines: number of DAYS. */
@@ -1161,32 +1169,34 @@ export default function Accounting() {
                             </Button>
                             {group === "service" &&
                               /^Setup fee/.test(it.description) && (
-                                <div className="w-full flex items-center gap-1 pl-1 -mt-0.5">
-                                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
-                                    Rule:
+                                <div className="w-full flex items-center gap-1.5 pl-1">
+                                  <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                                    Rule
                                   </span>
-                                  {[
-                                    { label: "4h · $560 (low, <25 signs)", unit: "560.00", desc: "Setup fee — low impact · <25 signs: 4h × $140/h" },
-                                    { label: "4.5h · $630 (low, 25+ signs)", unit: "630.00", desc: "Setup fee — low impact · 25+ signs: 4.5h × $140/h" },
-                                    { label: "6h · $840 (medium)", unit: "840.00", desc: "Setup fee — medium impact: 6h × $140/h" },
-                                    { label: "8h · $1,120 (high)", unit: "1120.00", desc: "Setup fee — high impact: 8h × $140/h" },
-                                  ].map((opt) => (
-                                    <button
-                                      key={opt.unit}
-                                      type="button"
-                                      onClick={() =>
-                                        upd({ description: opt.desc, unit: opt.unit })
-                                      }
-                                      className={cn(
-                                        "rounded-full border px-2 py-0.5 text-[9px] font-bold transition-colors",
-                                        it.unit === opt.unit
-                                          ? "border-purple-400 bg-purple-100 text-purple-800"
-                                          : "border-border bg-background text-muted-foreground hover:bg-accent",
-                                      )}
-                                    >
-                                      {opt.label}
-                                    </button>
-                                  ))}
+                                  <Select
+                                    value={
+                                      SETUP_RULES.find((r) => r.unit === it.unit)?.unit ??
+                                      "custom"
+                                    }
+                                    onValueChange={(v) => {
+                                      const r = SETUP_RULES.find((x) => x.unit === v);
+                                      if (r) upd({ description: r.desc, unit: r.unit });
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-7 w-64 text-[11px] bg-background">
+                                      <SelectValue placeholder="Custom amount" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {SETUP_RULES.map((r) => (
+                                        <SelectItem key={r.unit} value={r.unit}>
+                                          {r.label}
+                                        </SelectItem>
+                                      ))}
+                                      <SelectItem value="custom" disabled>
+                                        Custom amount (edit $ Unit)
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
                                 </div>
                               )}
                           </div>
