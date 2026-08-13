@@ -231,6 +231,11 @@ export interface QuoteInput {
   equipment?: EquipmentTally;
   /** Total sign count for the job (complexity tier). */
   signs: number;
+  /**
+   * ONLY the traffic-sign panels (WM + loose signs) — Sofia's rule: the
+   * low-impact <25/25+ threshold counts just these, not NP/pedestrian/etc.
+   */
+  panelSigns?: number;
   /** Days billed (Number of Days field, else date span inclusive). */
   days: number;
   /** Airtable "Setup Duration" text. */
@@ -299,8 +304,10 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   let setupWhy = "";
 
   // Low-impact jobs bill setup hourly ($140/h) — beats every card.
+  // The <25/25+ threshold counts ONLY the sign panels (not NP/pedestrian/etc).
   const lowImpact = /low/i.test(input.impact ?? "");
-  const smallJob = input.signs > 0 && input.signs < BASIC_SIGNS_LIMIT;
+  const thresholdSigns = input.panelSigns ?? input.signs;
+  const smallJob = thresholdSigns > 0 && thresholdSigns < BASIC_SIGNS_LIMIT;
   if (lowImpact || (smallJob && !input.impact)) {
     const hours = smallJob ? LOW_IMPACT_HOURS_SMALL : LOW_IMPACT_HOURS_LARGE;
     setup = Math.round(hours * BASIC_HOURLY_CENTS); // 4h=$560 · 4.5h=$630

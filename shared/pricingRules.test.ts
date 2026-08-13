@@ -190,3 +190,30 @@ describe("custom signs pricing", () => {
     expect(wm!.quantity).toBe(4);           // rental IS per day
   });
 });
+
+describe("low-impact threshold counts only sign panels", () => {
+  it("20 WM + 30 NP signs is still a 4h low-impact job (panels < 25)", () => {
+    const eq = parseEquipment("WM 20\nParking Prohibited 30");
+    expect(eq.wmSigns).toBe(20);
+    expect(eq.totalSigns).toBeGreaterThan(25); // total includes NP…
+    const q = buildQuote({
+      company: "Test Co",
+      equipment: eq,
+      signs: eq.totalSigns,
+      panelSigns: eq.wmSigns + eq.looseSigns,
+      days: 1,
+      setupDuration: "Daytime Work (7:00 AM - 5:00 PM)",
+      impact: "2️⃣ Low",
+      weekendStart: false,
+      hasStamp: false,
+      hasPlan: false,
+      parkingBan: false,
+      stockpile: false,
+      arrowBoards: 0,
+      messageBoards: 0,
+      permitCostCents: null,
+    });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(56000); // …but the rule sees 20 panels → 4h
+  });
+});

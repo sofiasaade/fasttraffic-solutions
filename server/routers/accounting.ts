@@ -259,6 +259,7 @@ export const accountingRouter = router({
         company: job.company,
         equipment,
         signs,
+        panelSigns: equipment.wmSigns + equipment.looseSigns,
         days,
         setupDuration: job.setupDuration,
         impact: job.impact,
