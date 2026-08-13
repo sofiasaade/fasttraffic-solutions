@@ -307,8 +307,10 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // The <25/25+ threshold counts ONLY the sign panels (not NP/pedestrian/etc).
   const lowImpact = /low/i.test(input.impact ?? "");
   const thresholdSigns = input.panelSigns ?? input.signs;
-  const smallJob = thresholdSigns > 0 && thresholdSigns < BASIC_SIGNS_LIMIT;
-  if (lowImpact || (smallJob && !input.impact)) {
+  // Zero panels still counts as "<25" for explicitly LOW-impact jobs; the
+  // unknown-impact fallback keeps requiring a real count (> 0).
+  const smallJob = thresholdSigns < BASIC_SIGNS_LIMIT;
+  if (lowImpact || (smallJob && thresholdSigns > 0 && !input.impact)) {
     const hours = smallJob ? LOW_IMPACT_HOURS_SMALL : LOW_IMPACT_HOURS_LARGE;
     setup = Math.round(hours * BASIC_HOURLY_CENTS); // 4h=$560 · 4.5h=$630
     setupWhy = `${lowImpact ? "low impact" : "basic job"} · ${smallJob ? `<${BASIC_SIGNS_LIMIT}` : `${BASIC_SIGNS_LIMIT}+`} signs: ${hours}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
