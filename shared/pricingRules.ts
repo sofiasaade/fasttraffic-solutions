@@ -95,6 +95,8 @@ const BASIC_SIGNS_LIMIT = 25;
 const BASIC_HOURLY_CENTS = 14000;
 const LOW_IMPACT_HOURS_SMALL = 4;
 const LOW_IMPACT_HOURS_LARGE = 4.5;
+/** MEDIUM impact (26–39 signs): 6h × $140 = $840. */
+const MEDIUM_IMPACT_HOURS = 6;
 /** HIGH impact (multiple lane closures, >40 signs): 8h × $140 = $1,120. */
 const HIGH_IMPACT_HOURS = 8;
 
@@ -308,6 +310,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // Low-impact jobs bill setup hourly ($140/h) — beats every card.
   // The <25/25+ threshold counts ONLY the sign panels (not NP/pedestrian/etc).
   const lowImpact = /low/i.test(input.impact ?? "");
+  const mediumImpact = /medium/i.test(input.impact ?? "");
   const highImpact = /high/i.test(input.impact ?? "");
   const thresholdSigns = input.panelSigns ?? input.signs;
   // Zero panels still counts as "<25" for explicitly LOW-impact jobs; the
@@ -317,6 +320,14 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     // High impact = multiple lane closures / >40 signs → 8h × $140 = $1,120.
     setup = HIGH_IMPACT_HOURS * BASIC_HOURLY_CENTS;
     setupWhy = `high impact: ${HIGH_IMPACT_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
+    if (night) {
+      setup += NIGHT_PREMIUM;
+      setupWhy += " · night premium";
+    }
+  } else if (mediumImpact) {
+    // Medium impact (26–39 signs) → 6h × $140 = $840.
+    setup = MEDIUM_IMPACT_HOURS * BASIC_HOURLY_CENTS;
+    setupWhy = `medium impact: ${MEDIUM_IMPACT_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
     if (night) {
       setup += NIGHT_PREMIUM;
       setupWhy += " · night premium";

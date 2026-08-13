@@ -242,3 +242,11 @@ function baseInput(): QuoteInput {
     permitCostCents: null,
   };
 }
+
+describe("medium impact setup", () => {
+  it("medium impact bills 6h × $140 = $840", () => {
+    const q = buildQuote({ ...baseInput(), impact: "3️⃣ Medium", signs: 30 });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(84000);
+  });
+});

@@ -1155,7 +1155,8 @@ export default function Accounting() {
                                   {[
                                     { label: "4h · $560 (low, <25 signs)", unit: "560.00", desc: "Setup fee — low impact · <25 signs: 4h × $140/h" },
                                     { label: "4.5h · $630 (low, 25+ signs)", unit: "630.00", desc: "Setup fee — low impact · 25+ signs: 4.5h × $140/h" },
-                                    { label: "8h · $1,120 (high impact)", unit: "1120.00", desc: "Setup fee — high impact: 8h × $140/h" },
+                                    { label: "6h · $840 (medium)", unit: "840.00", desc: "Setup fee — medium impact: 6h × $140/h" },
+                                    { label: "8h · $1,120 (high)", unit: "1120.00", desc: "Setup fee — high impact: 8h × $140/h" },
                                   ].map((opt) => (
                                     <button
                                       key={opt.unit}
