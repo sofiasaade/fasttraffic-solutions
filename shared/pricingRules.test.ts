@@ -39,8 +39,14 @@ describe("pricing rules — classification", () => {
 });
 
 describe("pricing rules — quotes", () => {
+  it("basic jobs (<25 signs) bill setup as 4h × $140/h = $560", () => {
+    const q = buildQuote({ ...base, signs: 10, company: "Kobi Construction Ltd" });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(56000); // beats the client card for basics
+  });
+
   it("residential standard daily setup bills each day", () => {
-    const q = buildQuote(base);
+    const q = buildQuote({ ...base, signs: 28 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
     expect(setup?.unitCents).toBe(70000); // residential standard $700
     expect(setup?.quantity).toBe(5); // daily several days → per day
@@ -50,15 +56,15 @@ describe("pricing rules — quotes", () => {
     const q = buildQuote({ ...base, setupDuration: "24 Hours Set Up", signs: 40 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
     expect(setup?.quantity).toBe(1);
-    const rental = q.lines.find((l) => l.description.includes("Sign rental"));
-    expect(rental?.quantity).toBe(5);
-    expect(rental?.unitCents).toBe(40 * 300); // 40 signs × $3/day
-    expect(rental?.itemQty).toBe(40);
-    expect(rental?.rateCents).toBe(300);
+    const wm = q.lines.find((l) => l.description === "Windmasters");
+    const signs = q.lines.find((l) => l.description === "Signs");
+    expect(wm?.quantity).toBe(5);
+    expect(wm?.unitCents).toBe(40 * 200); // 40 windmasters × $2/day
+    expect(signs?.unitCents).toBe(40 * 100); // 40 signs × $1/day
   });
 
   it("uses Kobi's calibrated QB rate ($650 day median, n=205)", () => {
-    const q = buildQuote({ ...base, company: "Kobi Construction Ltd", signs: 10 });
+    const q = buildQuote({ ...base, company: "Kobi Construction Ltd", signs: 30 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
     expect(setup?.unitCents).toBe(65000);
   });
@@ -66,6 +72,7 @@ describe("pricing rules — quotes", () => {
   it("uses the Telus client card, including night premium", () => {
     const q = buildQuote({
       ...base,
+      signs: 30,
       company: "Telus",
       setupDuration: "Nightime Work (9:00 PM - 5:00 AM)",
     });
@@ -76,7 +83,7 @@ describe("pricing rules — quotes", () => {
   it("adds weekend surcharge only to the setup fee", () => {
     const q = buildQuote({ ...base, weekendStart: true, signs: 10 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(Math.round(55000 * 1.25));
+    expect(setup?.unitCents).toBe(Math.round(56000 * 1.25)); // basic $560 +25%
   });
 
   it("charges stamp when a stamped plan is attached, TMP otherwise", () => {
@@ -163,7 +170,7 @@ describe("custom signs pricing", () => {
     expect(custom!.unitCents).toBe(3 * 8990);    // 3 signs × $89.90
     expect(custom!.itemQty).toBe(3);
     expect(custom!.rateCents).toBe(8990);
-    const wm = q.lines.find((l) => /WM \+ Sign/i.test(l.description));
+    const wm = q.lines.find((l) => l.description === "Windmasters");
     expect(wm!.quantity).toBe(4);           // rental IS per day
   });
 });

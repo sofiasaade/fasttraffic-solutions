@@ -85,6 +85,14 @@ const CLIENT_SETUP_OVERRIDES: [RegExp, { day?: number; night?: number }][] = [
 /** Observed night premium over the client's day rate (QB medians ≈ +$200). */
 const NIGHT_PREMIUM = 20000;
 
+/**
+ * Sofia's rule (Aug 2026): BASIC jobs — fewer than 25 signs — bill the setup
+ * as 4 hours × $140/hour = $560, regardless of client or industry tier.
+ */
+const BASIC_SIGNS_LIMIT = 25;
+const BASIC_SETUP_HOURS = 4;
+const BASIC_HOURLY_CENTS = 14000;
+
 // Sección 2 — equipment rental per day, cents.
 export const RENTAL_RATES = {
   windmasterSign: 300, // $3.00 — the standard per-sign combo
@@ -283,8 +291,18 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   let setup: number | null = null;
   let setupWhy = "";
 
+  // Basic jobs (<25 signs) have a flat hourly rule that beats every card.
+  if (input.signs > 0 && input.signs < BASIC_SIGNS_LIMIT) {
+    setup = BASIC_SETUP_HOURS * BASIC_HOURLY_CENTS; // 4h × $140 = $560
+    setupWhy = `basic job (<${BASIC_SIGNS_LIMIT} signs): ${BASIC_SETUP_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
+    if (night) {
+      setup += NIGHT_PREMIUM;
+      setupWhy += " · night premium";
+    }
+  }
+
   const override = CLIENT_SETUP_OVERRIDES.find(([re]) => re.test(input.company ?? ""));
-  if (override) {
+  if (setup === null && override) {
     const o = override[1];
     setup = night ? (o.night ?? (o.day ?? 0) + NIGHT_PREMIUM) : (o.day ?? null);
     if (setup) setupWhy = `client card, QB median (${night ? "night" : "day"})`;
@@ -332,8 +350,10 @@ export function buildQuote(input: QuoteInput): QuoteResult {
         rateCents,
       });
     };
-    rentalLine("WM + Sign", eq.wmSigns, RENTAL_RATES.windmasterSign);
-    rentalLine("Sign only", eq.looseSigns, RENTAL_RATES.signOnly);
+    // Sofia's rule (Aug 2026): windmasters and signs bill as SEPARATE lines —
+    // windmasters $2.00/day, sign panels $1.00/day (same $3 total per combo).
+    rentalLine("Windmasters", eq.wmSigns, RENTAL_RATES.windmasterOnly);
+    rentalLine("Signs", eq.wmSigns + eq.looseSigns, RENTAL_RATES.signOnly);
     rentalLine("No Parking signs", eq.noParking, RENTAL_RATES.noParking);
     rentalLine("Barricades", eq.barricades, RENTAL_RATES.barricade);
     rentalLine("Cones", eq.cones, RENTAL_RATES.cone);
@@ -364,15 +384,23 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     }
   } else if (input.signs > 0 && input.days > 0) {
     lines.push({
-      description: "Sign rental",
+      description: "Windmasters",
       quantity: input.days,
-      unitCents: input.signs * RENTAL_RATES.windmasterSign,
+      unitCents: input.signs * RENTAL_RATES.windmasterOnly,
       section: "rental",
       itemQty: input.signs,
-      rateCents: RENTAL_RATES.windmasterSign,
+      rateCents: RENTAL_RATES.windmasterOnly,
+    });
+    lines.push({
+      description: "Signs",
+      quantity: input.days,
+      unitCents: input.signs * RENTAL_RATES.signOnly,
+      section: "rental",
+      itemQty: input.signs,
+      rateCents: RENTAL_RATES.signOnly,
     });
     reasons.push(
-      `Rental: ${input.signs} WM+Sign × $3.00 × ${input.days} day(s)`,
+      `Rental: ${input.signs} windmasters × $2.00 + ${input.signs} signs × $1.00 × ${input.days} day(s)`,
     );
   } else {
     reasons.push(
