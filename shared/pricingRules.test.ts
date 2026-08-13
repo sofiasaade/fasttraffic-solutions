@@ -217,3 +217,28 @@ describe("low-impact threshold counts only sign panels", () => {
     expect(setup?.unitCents).toBe(56000); // …but the rule sees 20 panels → 4h
   });
 });
+
+describe("high impact setup", () => {
+  it("high impact bills 8h × $140 = $1,120", () => {
+    const q = buildQuote({ ...baseInput(), impact: "🔴 High", signs: 60 });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(112000);
+  });
+});
+
+function baseInput(): QuoteInput {
+  return {
+    company: "Some Contractor",
+    signs: 20,
+    days: 5,
+    setupDuration: "Daily Set Up (9:00 AM - 3:00) (Several Days)",
+    weekendStart: false,
+    hasStamp: false,
+    hasPlan: true,
+    parkingBan: false,
+    stockpile: false,
+    arrowBoards: 0,
+    messageBoards: 0,
+    permitCostCents: null,
+  };
+}

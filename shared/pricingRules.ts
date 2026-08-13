@@ -95,6 +95,8 @@ const BASIC_SIGNS_LIMIT = 25;
 const BASIC_HOURLY_CENTS = 14000;
 const LOW_IMPACT_HOURS_SMALL = 4;
 const LOW_IMPACT_HOURS_LARGE = 4.5;
+/** HIGH impact (multiple lane closures, >40 signs): 8h × $140 = $1,120. */
+const HIGH_IMPACT_HOURS = 8;
 
 // Sección 2 — equipment rental per day, cents.
 export const RENTAL_RATES = {
@@ -306,11 +308,20 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // Low-impact jobs bill setup hourly ($140/h) — beats every card.
   // The <25/25+ threshold counts ONLY the sign panels (not NP/pedestrian/etc).
   const lowImpact = /low/i.test(input.impact ?? "");
+  const highImpact = /high/i.test(input.impact ?? "");
   const thresholdSigns = input.panelSigns ?? input.signs;
   // Zero panels still counts as "<25" for explicitly LOW-impact jobs; the
   // unknown-impact fallback keeps requiring a real count (> 0).
   const smallJob = thresholdSigns < BASIC_SIGNS_LIMIT;
-  if (lowImpact || (smallJob && thresholdSigns > 0 && !input.impact)) {
+  if (highImpact) {
+    // High impact = multiple lane closures / >40 signs → 8h × $140 = $1,120.
+    setup = HIGH_IMPACT_HOURS * BASIC_HOURLY_CENTS;
+    setupWhy = `high impact: ${HIGH_IMPACT_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
+    if (night) {
+      setup += NIGHT_PREMIUM;
+      setupWhy += " · night premium";
+    }
+  } else if (lowImpact || (smallJob && thresholdSigns > 0 && !input.impact)) {
     const hours = smallJob ? LOW_IMPACT_HOURS_SMALL : LOW_IMPACT_HOURS_LARGE;
     setup = Math.round(hours * BASIC_HOURLY_CENTS); // 4h=$560 · 4.5h=$630
     setupWhy = `${lowImpact ? "low impact" : "basic job"} · ${smallJob ? `<${BASIC_SIGNS_LIMIT}` : `${BASIC_SIGNS_LIMIT}+`} signs: ${hours}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
