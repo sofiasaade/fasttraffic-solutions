@@ -260,6 +260,7 @@ export const accountingRouter = router({
         signs,
         days,
         setupDuration: job.setupDuration,
+        impact: job.impact,
         weekendStart,
         hasStamp,
         hasPlan,

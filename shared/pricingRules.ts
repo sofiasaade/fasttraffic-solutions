@@ -86,12 +86,15 @@ const CLIENT_SETUP_OVERRIDES: [RegExp, { day?: number; night?: number }][] = [
 const NIGHT_PREMIUM = 20000;
 
 /**
- * Sofia's rule (Aug 2026): BASIC jobs — fewer than 25 signs — bill the setup
- * as 4 hours × $140/hour = $560, regardless of client or industry tier.
+ * Sofia's rule (Aug 2026): LOW-IMPACT jobs bill the setup by the hour at
+ * $140/h — 4 hours when under 25 signs ($560), 4.5 hours at 25+ signs ($630).
+ * Beats every client card. Jobs with unknown impact and <25 signs also get
+ * the 4-hour rate (her earlier "basic job" rule).
  */
 const BASIC_SIGNS_LIMIT = 25;
-const BASIC_SETUP_HOURS = 4;
 const BASIC_HOURLY_CENTS = 14000;
+const LOW_IMPACT_HOURS_SMALL = 4;
+const LOW_IMPACT_HOURS_LARGE = 4.5;
 
 // Sección 2 — equipment rental per day, cents.
 export const RENTAL_RATES = {
@@ -232,6 +235,8 @@ export interface QuoteInput {
   days: number;
   /** Airtable "Setup Duration" text. */
   setupDuration: string | null;
+  /** Airtable "Impact Category" (e.g. "2️⃣ Low") — drives the hourly setup rule. */
+  impact?: string | null;
   /** Job starts on a Saturday or Sunday. */
   weekendStart: boolean;
   /** A stamped plan is attached. */
@@ -293,10 +298,13 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   let setup: number | null = null;
   let setupWhy = "";
 
-  // Basic jobs (<25 signs) have a flat hourly rule that beats every card.
-  if (input.signs > 0 && input.signs < BASIC_SIGNS_LIMIT) {
-    setup = BASIC_SETUP_HOURS * BASIC_HOURLY_CENTS; // 4h × $140 = $560
-    setupWhy = `basic job (<${BASIC_SIGNS_LIMIT} signs): ${BASIC_SETUP_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
+  // Low-impact jobs bill setup hourly ($140/h) — beats every card.
+  const lowImpact = /low/i.test(input.impact ?? "");
+  const smallJob = input.signs > 0 && input.signs < BASIC_SIGNS_LIMIT;
+  if (lowImpact || (smallJob && !input.impact)) {
+    const hours = smallJob ? LOW_IMPACT_HOURS_SMALL : LOW_IMPACT_HOURS_LARGE;
+    setup = Math.round(hours * BASIC_HOURLY_CENTS); // 4h=$560 · 4.5h=$630
+    setupWhy = `${lowImpact ? "low impact" : "basic job"} · ${smallJob ? `<${BASIC_SIGNS_LIMIT}` : `${BASIC_SIGNS_LIMIT}+`} signs: ${hours}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
     if (night) {
       setup += NIGHT_PREMIUM;
       setupWhy += " · night premium";

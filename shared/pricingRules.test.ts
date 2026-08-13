@@ -45,6 +45,17 @@ describe("pricing rules — quotes", () => {
     expect(setup?.unitCents).toBe(56000); // beats the client card for basics
   });
 
+  it("low impact jobs: 4h under 25 signs, 4.5h at 25+ — both × $140/h", () => {
+    const small = buildQuote({ ...base, signs: 12, impact: "2️⃣ Low" });
+    expect(
+      small.lines.find((l) => l.description.startsWith("Setup fee"))?.unitCents,
+    ).toBe(56000); // 4h × $140
+    const large = buildQuote({ ...base, signs: 30, impact: "2️⃣ Low" });
+    expect(
+      large.lines.find((l) => l.description.startsWith("Setup fee"))?.unitCents,
+    ).toBe(63000); // 4.5h × $140
+  });
+
   it("residential standard daily setup bills each day", () => {
     const q = buildQuote({ ...base, signs: 28 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
