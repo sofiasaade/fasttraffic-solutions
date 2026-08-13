@@ -429,7 +429,7 @@ export default function Accounting() {
             unitCents: Math.round(n * rate * 100),
           };
         }
-        if (!it.description.trim() || !(Number(it.quantity) > 0) || !(Number(it.unit) > 0))
+        if (!it.description.trim() || !(Number(it.quantity) > 0) || Number(it.unit) === 0 || !Number.isFinite(Number(it.unit)))
           return null;
         return {
           description: it.description.trim(),
@@ -1103,26 +1103,58 @@ export default function Accounting() {
                       })}
                       {group === "rental" &&
                         (() => {
-                          const isSignLine = (d: string) =>
-                            /sign|windmaster|\bwm\b/i.test(d) && !/barricade/i.test(d);
-                          let signs = 0;
-                          let equip = 0;
-                          for (const it of creating.items) {
-                            if ((it.group ?? "service") !== "rental") continue;
-                            const t = lineTotal(it);
-                            if (isSignLine(it.description)) signs += t;
-                            else equip += t;
-                          }
+                          const DISCOUNT_DESC = "Signs rental discount (25%)";
+                          const hasDiscount = creating.items.some(
+                            (it) => it.description === DISCOUNT_DESC,
+                          );
+                          const toggleDiscount = () => {
+                            if (hasDiscount) {
+                              setCreating({
+                                ...creating,
+                                items: creating.items.filter(
+                                  (it) => it.description !== DISCOUNT_DESC,
+                                ),
+                              });
+                              return;
+                            }
+                            const base = creating.items.reduce(
+                              (n, it) =>
+                                (it.group ?? "service") === "rental" &&
+                                it.description !== DISCOUNT_DESC
+                                  ? n + lineTotal(it)
+                                  : n,
+                              0,
+                            );
+                            setCreating({
+                              ...creating,
+                              items: [
+                                ...creating.items,
+                                {
+                                  description: DISCOUNT_DESC,
+                                  quantity: "1",
+                                  unit: (-(base * 0.25) / 100).toFixed(2),
+                                  group: "rental",
+                                },
+                              ],
+                            });
+                          };
                           return (
-                            <div className="flex items-center justify-end gap-4 border-t border-blue-200 pt-1.5 text-[11px] tabular-nums">
+                            <div className="flex items-center justify-between gap-3 border-t border-blue-200 pt-1.5 text-[11px] tabular-nums">
+                              <button
+                                type="button"
+                                onClick={toggleDiscount}
+                                className={cn(
+                                  "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
+                                  hasDiscount
+                                    ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                    : "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100",
+                                )}
+                              >
+                                {hasDiscount ? "✕ Remove 25% discount" : "− Discount 25%"}
+                              </button>
                               <span className="font-bold text-blue-800">
-                                Signs rental subtotal: {money(signs)}
+                                Rental subtotal: {money(groupTotal)}
                               </span>
-                              {equip > 0 && (
-                                <span className="text-muted-foreground">
-                                  Other equipment: {money(equip)}
-                                </span>
-                              )}
                             </div>
                           );
                         })()}

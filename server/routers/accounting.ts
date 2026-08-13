@@ -58,7 +58,8 @@ const accountingProcedure = adminProcedure.use(async ({ ctx, next }) => {
 const itemInput = z.object({
   description: z.string().min(1),
   quantity: z.number().positive(),
-  unitCents: z.number().int().min(0),
+  // Negative = discount line (e.g. "Signs rental discount (25%)").
+  unitCents: z.number().int(),
 });
 
 function computeTotals(items: { quantity: number; unitCents: number }[], gstRate: number) {
