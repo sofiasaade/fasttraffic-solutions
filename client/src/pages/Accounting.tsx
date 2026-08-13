@@ -1146,6 +1146,34 @@ export default function Accounting() {
                             >
                               <X className="size-3.5" />
                             </Button>
+                            {group === "service" &&
+                              /^Setup fee/.test(it.description) && (
+                                <div className="w-full flex items-center gap-1 pl-1 -mt-0.5">
+                                  <span className="text-[9px] uppercase tracking-wide text-muted-foreground">
+                                    Rule:
+                                  </span>
+                                  {[
+                                    { label: "4h · $560 (<25 signs)", unit: "560.00", desc: "Setup fee — low impact · <25 signs: 4h × $140/h" },
+                                    { label: "4.5h · $630 (25+ signs)", unit: "630.00", desc: "Setup fee — low impact · 25+ signs: 4.5h × $140/h" },
+                                  ].map((opt) => (
+                                    <button
+                                      key={opt.unit}
+                                      type="button"
+                                      onClick={() =>
+                                        upd({ description: opt.desc, unit: opt.unit })
+                                      }
+                                      className={cn(
+                                        "rounded-full border px-2 py-0.5 text-[9px] font-bold transition-colors",
+                                        it.unit === opt.unit
+                                          ? "border-purple-400 bg-purple-100 text-purple-800"
+                                          : "border-border bg-background text-muted-foreground hover:bg-accent",
+                                      )}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                           </div>
                         );
                       })}
