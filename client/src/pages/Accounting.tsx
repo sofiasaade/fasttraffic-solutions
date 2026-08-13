@@ -1099,6 +1099,31 @@ export default function Accounting() {
                           </div>
                         );
                       })}
+                      {group === "rental" &&
+                        (() => {
+                          const isSignLine = (d: string) =>
+                            /sign|windmaster|\bwm\b/i.test(d) && !/barricade/i.test(d);
+                          let signs = 0;
+                          let equip = 0;
+                          for (const it of creating.items) {
+                            if ((it.group ?? "service") !== "rental") continue;
+                            const t = lineTotal(it);
+                            if (isSignLine(it.description)) signs += t;
+                            else equip += t;
+                          }
+                          return (
+                            <div className="flex items-center justify-end gap-4 border-t border-blue-200 pt-1.5 text-[11px] tabular-nums">
+                              <span className="font-bold text-blue-800">
+                                Signs rental subtotal: {money(signs)}
+                              </span>
+                              {equip > 0 && (
+                                <span className="text-muted-foreground">
+                                  Other equipment: {money(equip)}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                     </div>
                   </div>
                 );
