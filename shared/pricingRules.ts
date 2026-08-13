@@ -248,6 +248,11 @@ export interface QuoteInput {
   impact?: string | null;
   /** "Plan Only" job: ONLY the plan is billed — no setup, no rental, nothing else. */
   planOnly?: boolean;
+  /**
+   * Codes/names of the DISTINCT stamped plans — one $550 stamp line each
+   * (Sofia: "se le cobra uno a uno si son 3 planos distintos").
+   */
+  stampedPlans?: string[];
   /** Job starts on a Saturday or Sunday. */
   weekendStart: boolean;
   /** A stamped plan is attached. */
@@ -296,6 +301,27 @@ function isDailySeveral(setupDuration: string | null): boolean {
   return /several/i.test(setupDuration ?? "");
 }
 
+
+function pushStampLines(lines: QuoteLine[], input: QuoteInput): boolean {
+  // One Engineering Stamp per distinct stamped plan, labeled with its code.
+  if (input.stampedPlans && input.stampedPlans.length > 0) {
+    for (const code of input.stampedPlans) {
+      lines.push({
+        description: `TMP Engineering Stamp — ${code}`,
+        quantity: 1,
+        unitCents: FIXED.stamp,
+        section: "service",
+      });
+    }
+    return true;
+  }
+  if (input.hasStamp) {
+    lines.push({ description: "TMP Engineering Stamp", quantity: 1, unitCents: FIXED.stamp, section: "service" });
+    return true;
+  }
+  return false;
+}
+
 /** Build a suggested quote from the FTS pricing rules. */
 export function buildQuote(input: QuoteInput): QuoteResult {
   const industry = industryFor(input.company);
@@ -307,8 +333,8 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // "Plan Only": the client only got the plan — bill the plan (stamp or TMP)
   // and any real city-permit costs; NO setup, NO rental, NO signs.
   if (input.planOnly) {
-    if (input.hasStamp) {
-      lines.push({ description: "TMP Engineering Stamp", quantity: 1, unitCents: FIXED.stamp, section: "service" });
+    if (pushStampLines(lines, input)) {
+      // stamped plan lines added
     } else if (input.hasPlan) {
       lines.push({ description: "Traffic Management Plan", quantity: 1, unitCents: FIXED.tmpStandard, section: "service" });
     }
@@ -489,9 +515,13 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   }
 
   // ---- Plan / stamp ----
-  if (input.hasStamp) {
-    lines.push({ description: "TMP Engineering Stamp", quantity: 1, unitCents: FIXED.stamp, section: "service" });
-    reasons.push("Stamped plan attached → Engineering Stamp $550");
+  if (pushStampLines(lines, input)) {
+    const n = input.stampedPlans?.length ?? 1;
+    reasons.push(
+      n > 1
+        ? `${n} distinct stamped plans → ${n} × Engineering Stamp $550`
+        : "Stamped plan attached → Engineering Stamp $550",
+    );
   } else if (input.hasPlan) {
     lines.push({ description: "Traffic Management Plan", quantity: 1, unitCents: FIXED.tmpStandard, section: "service" });
     reasons.push("Plan without stamp → TMP $400 (standard)");

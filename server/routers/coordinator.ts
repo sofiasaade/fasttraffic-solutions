@@ -515,12 +515,16 @@ export const coordinatorRouter = router({
     });
   }),
 
-  // Every non-empty Airtable field on the record, for the full-info panel.
+  // Airtable fields for the info panel — internal/derived fields (formulas,
+  // design-team timers, geo caches, PR matrices…) are hidden per Sofia.
   jobAllFields: adminProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
       const { fetchJobRawFields } = await import("../airtable");
-      return fetchJobRawFields(input.jobId);
+      const HIDDEN =
+        /^(matriz pr|geocode|pdf name|autocad|recap|calculation|lat|lon|id|days to sd|duration|standardized time|category baseline|performance status|impact score|project score|design development|review time|month|year created|timing active|start\s+plan creation|stop time plan creation|plan created|duration plan creation|date of feedback|last status modified|last modified|created time|quality checklist|checklist|permit timing|post permit requested|ind - |total matriz|date last heads up|speed limit|categoria de tiempo|plan\/stamp category|location map|calendar info|cesar comments|designers sub-status|single lane|pedestrian impact|cyclist impact|road closure$|speed reduction|combined closures|highway|distance from the storage|acq$|semáforo|city comments files|comment history|designers table|designer name|assignee|collaborators?|dependencies|from field|received status|recieved by|heads up|estado simplificado|posibles|job address match|permit request summary|speed limit|traffic restrictions|project status for design|project status report|phases|file uploaded by client|email sent|date\/time emailed)/i;
+      const rows = await fetchJobRawFields(input.jobId);
+      return rows.filter((f) => !HIDDEN.test(f.name.trim()));
     }),
 
   jobDetail: adminProcedure

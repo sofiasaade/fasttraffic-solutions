@@ -163,6 +163,19 @@ export const accountingRouter = router({
       const ftsPlans = pickFtsPlans(files);
       const hasStamp = ftsPlans.some((f) => /stamp/i.test(f.filename ?? ""));
       const hasPlan = ftsPlans.length > 0;
+      // Distinct stamped plans, labeled by their FTS code — one stamp charge
+      // each. Revisions dedupe by code (e.g. "…2603-21…_C (1)" vs "…2603-21").
+      const stampCodes = Array.from(
+        new Set(
+          ftsPlans
+            .filter((f) => /stamp/i.test(f.filename ?? ""))
+            .map(
+              (f) =>
+                (f.filename ?? "").match(/FTS-\d{2}-\d{3,}(?:-\d+)*/i)?.[0] ??
+                (f.filename ?? "").replace(/\.pdf$/i, "").slice(0, 40),
+            ),
+        ),
+      );
 
       const affirmative = (v: string | null) =>
         !!v && !/^(no|none|n\/a|-)$/i.test(v.trim());
@@ -276,6 +289,7 @@ export const accountingRouter = router({
         weekendStart,
         hasStamp,
         hasPlan,
+        stampedPlans: stampCodes.length > 0 ? stampCodes : undefined,
         parkingBan,
         stockpile,
         arrowBoards,
