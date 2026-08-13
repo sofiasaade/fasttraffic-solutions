@@ -156,8 +156,13 @@ export const accountingRouter = router({
       const weekendStart = !!start && (start.getDay() === 0 || start.getDay() === 6);
 
       const files = (job.planFile ?? []) as { filename?: string | null }[];
-      const hasStamp = files.some((f) => /stamp/i.test(f.filename ?? ""));
-      const hasPlan = files.length > 0;
+      // Only FTS-made plans (FTS-* / Stamped filenames) are billable. If the
+      // attachments have no FTS plan, the plan was provided BY THE CLIENT —
+      // no TMP/stamp charge (Sofia's rule).
+      const { pickPlans: pickFtsPlans } = await import("../../shared/planDocs");
+      const ftsPlans = pickFtsPlans(files);
+      const hasStamp = ftsPlans.some((f) => /stamp/i.test(f.filename ?? ""));
+      const hasPlan = ftsPlans.length > 0;
 
       const affirmative = (v: string | null) =>
         !!v && !/^(no|none|n\/a|-)$/i.test(v.trim());
@@ -301,6 +306,12 @@ export const accountingRouter = router({
             `Flagging logged in operations: ${hours}h × $${(rate / 100).toFixed(2)}/h = $${((hours * rate) / 100).toFixed(2)}`,
           );
         }
+      }
+
+      if (!hasPlan && files.length > 0) {
+        quote.reasons.push(
+          "Plan provided BY CLIENT (no FTS plan in the attachments) — TMP/stamp NOT charged",
+        );
       }
 
       return {
