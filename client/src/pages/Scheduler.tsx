@@ -1653,6 +1653,18 @@ export default function Scheduler() {
                   <span className="truncate max-w-[220px]">{job.closureType}</span>
                 </span>
               )}
+              {job.subStatus && (
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold max-w-full truncate"
+                  style={{
+                    backgroundColor: subStatusColor(job.subStatus).bg,
+                    color: subStatusColor(job.subStatus).text,
+                  }}
+                  title="Field Operations sub-status"
+                >
+                  {job.subStatus}
+                </span>
+              )}
               {sd && (
                 <span
                   className={cn(

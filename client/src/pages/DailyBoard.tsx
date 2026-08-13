@@ -421,6 +421,18 @@ export default function DailyBoard() {
                               <div className="text-[11px] text-muted-foreground truncate">
                                 {j.jobAddress ?? j.municipality ?? ""}
                               </div>
+                              {j.subStatus && (
+                                <span
+                                  className="mt-0.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold max-w-full truncate"
+                                  style={{
+                                    backgroundColor: subStatusColor(j.subStatus).bg,
+                                    color: subStatusColor(j.subStatus).text,
+                                  }}
+                                  title="Field Operations sub-status"
+                                >
+                                  {j.subStatus}
+                                </span>
+                              )}
                               {(() => {
                                 // Prefer the parsed city-permit time (END time
                                 // on Pick up cards); else the work-hours window
