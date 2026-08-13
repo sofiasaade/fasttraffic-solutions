@@ -1104,7 +1104,8 @@ export default function Accounting() {
                         };
                         const isRental = group === "rental" && it.itemQty != null;
                         return (
-                          <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
+                          <div key={i} className="space-y-1">
+                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
                             <Input
                               placeholder="Description"
                               className="h-8 flex-1 min-w-[140px] bg-background"
@@ -1167,9 +1168,10 @@ export default function Accounting() {
                             >
                               <X className="size-3.5" />
                             </Button>
+                            </div>
                             {group === "service" &&
                               /^Setup fee/.test(it.description) && (
-                                <div className="w-full flex items-center gap-1.5 pl-1">
+                                <div className="flex items-center gap-1.5 pl-2">
                                   <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
                                     Rule
                                   </span>
