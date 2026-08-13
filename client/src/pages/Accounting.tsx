@@ -144,6 +144,12 @@ export default function Accounting() {
     return m;
   }, [invoicesQ.data]);
 
+  // Numeric part of a job's linked invoice number (for invoice-order sorting).
+  const invoiceNumOf = (jobId: string) => {
+    const n = invoicedByJob.get(jobId)?.number.match(/(\d+)$/)?.[1];
+    return n ? Number(n) : -1;
+  };
+
   // ---- Airtable table (read-only) ----
   const READY = "Job Completed - Ready to Bill";
   const PICKED = "Setup Finished - Picked up";
@@ -176,6 +182,10 @@ export default function Accounting() {
           .includes(ql),
       );
     }
+    // Invoiced filter active → newest invoice number first.
+    if (invoiceFilter === "invoiced") {
+      return [...rows].sort((a, b) => invoiceNumOf(b.id) - invoiceNumOf(a.id));
+    }
     // Ready to Bill first, then Picked up; OLDEST first inside each group
     // (bill the oldest work first).
     const groupOf = (s: string | null) => (s === READY ? 0 : 1);
@@ -198,7 +208,10 @@ export default function Accounting() {
           .includes(ql),
       );
     }
-    // Oldest first, same as the billing queue.
+    // Invoiced filter active → newest invoice number first; else oldest first.
+    if (invoiceFilter === "invoiced") {
+      return [...rows].sort((a, b) => invoiceNumOf(b.id) - invoiceNumOf(a.id));
+    }
     return [...rows].sort((a, b) =>
       (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999"),
     );
