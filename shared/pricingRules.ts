@@ -244,6 +244,10 @@ export interface QuoteLine {
   unitCents: number;
   /** Invoice editor section: sign/equipment rental vs the other charges. */
   section?: "rental" | "service";
+  /** Rental lines: number of devices (e.g. 16 signs). */
+  itemQty?: number;
+  /** Rental lines: per-device per-day rate in cents (e.g. 300 = $3.00/day). */
+  rateCents?: number;
 }
 
 export interface QuoteResult {
@@ -315,10 +319,12 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       if (qty <= 0) return;
       rentalTotal += qty * rateCents * days;
       lines.push({
-        description: `${label} × ${qty} — $${(rateCents / 100).toFixed(2)}/day`,
+        description: label,
         quantity: days,
         unitCents: qty * rateCents,
         section: "rental",
+        itemQty: qty,
+        rateCents,
       });
     };
     rentalLine("WM + Sign", eq.wmSigns, RENTAL_RATES.windmasterSign);
@@ -335,10 +341,12 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       // Custom signs are a ONE-TIME fabrication charge, not a daily rental.
       rentalTotal += eq.customSigns * RENTAL_RATES.customSignEach;
       lines.push({
-        description: `Custom signs — $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} each (one-time)`,
-        quantity: eq.customSigns,
-        unitCents: RENTAL_RATES.customSignEach,
+        description: "Custom signs (one-time charge)",
+        quantity: 1,
+        unitCents: eq.customSigns * RENTAL_RATES.customSignEach,
         section: "rental",
+        itemQty: eq.customSigns,
+        rateCents: RENTAL_RATES.customSignEach,
       });
       reasons.push(
         `${eq.customSigns} custom sign(s) × $${(RENTAL_RATES.customSignEach / 100).toFixed(2)} — one-time fabrication charge`,
@@ -351,10 +359,12 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     }
   } else if (input.signs > 0 && input.days > 0) {
     lines.push({
-      description: `Equipment rental — ${input.signs} signs × $3.00/day`,
+      description: "Sign rental",
       quantity: input.days,
       unitCents: input.signs * RENTAL_RATES.windmasterSign,
       section: "rental",
+      itemQty: input.signs,
+      rateCents: RENTAL_RATES.windmasterSign,
     });
     reasons.push(
       `Rental: ${input.signs} WM+Sign × $3.00 × ${input.days} day(s)`,

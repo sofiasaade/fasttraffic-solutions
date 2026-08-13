@@ -67,9 +67,15 @@ const STATUS_BADGE: Record<string, string> = {
 
 type NewItem = {
   description: string;
+  /** Service lines: quantity. Rental lines: number of DAYS. */
   quantity: string;
+  /** Service lines: unit price $. Rental lines: computed (itemQty × rate). */
   unit: string;
   group?: "rental" | "service";
+  /** Rental lines: number of devices (e.g. 16 signs). */
+  itemQty?: string;
+  /** Rental lines: per-device per-day rate in $ (e.g. 3.00). */
+  rate?: string;
 };
 
 export default function Accounting() {
@@ -271,6 +277,12 @@ export default function Accounting() {
                 quantity: String(l.quantity),
                 unit: (l.unitCents / 100).toFixed(2),
                 group: (l as any).section ?? "service",
+                itemQty:
+                  (l as any).itemQty != null ? String((l as any).itemQty) : undefined,
+                rate:
+                  (l as any).rateCents != null
+                    ? ((l as any).rateCents / 100).toFixed(2)
+                    : undefined,
               })),
             }
           : prev,
@@ -330,6 +342,17 @@ export default function Accounting() {
   const creatingTotals = useMemo(() => {
     if (!creating) return { sub: 0, gst: 0, total: 0 };
     const sub = creating.items.reduce((n, it) => {
+      if (it.group === "rental" && it.itemQty != null) {
+        return (
+          n +
+          Math.round(
+            (Number(it.itemQty) || 0) *
+              (Number(it.rate) || 0) *
+              (Number(it.quantity) || 0) *
+              100,
+          )
+        );
+      }
       const qn = Number(it.quantity) || 0;
       const un = Number(it.unit) || 0;
       return n + Math.round(qn * un * 100);
@@ -341,12 +364,27 @@ export default function Accounting() {
   const submitInvoice = () => {
     if (!creating) return;
     const items = creating.items
-      .filter((it) => it.description.trim() && Number(it.quantity) > 0 && Number(it.unit) > 0)
-      .map((it) => ({
-        description: it.description.trim(),
-        quantity: Number(it.quantity),
-        unitCents: Math.round(Number(it.unit) * 100),
-      }));
+      .map((it) => {
+        if (it.group === "rental" && it.itemQty != null) {
+          const n = Number(it.itemQty) || 0;
+          const rate = Number(it.rate) || 0;
+          const days = Number(it.quantity) || 0;
+          if (!it.description.trim() || n <= 0 || rate <= 0 || days <= 0) return null;
+          return {
+            description: `${it.description.trim()} × ${n} — $${rate.toFixed(2)}/day`,
+            quantity: days,
+            unitCents: Math.round(n * rate * 100),
+          };
+        }
+        if (!it.description.trim() || !(Number(it.quantity) > 0) || !(Number(it.unit) > 0))
+          return null;
+        return {
+          description: it.description.trim(),
+          quantity: Number(it.quantity),
+          unitCents: Math.round(Number(it.unit) * 100),
+        };
+      })
+      .filter((x): x is { description: string; quantity: number; unitCents: number } => !!x);
     if (!creating.clientName.trim()) return toast.error("Client name is required");
     if (items.length === 0) return toast.error("Add at least one line with an amount");
     createInvoice.mutate({
@@ -821,14 +859,19 @@ export default function Accounting() {
               </div>
 
               {(["rental", "service"] as const).map((group) => {
+                const lineTotal = (it: NewItem) =>
+                  it.group === "rental" && it.itemQty != null
+                    ? Math.round(
+                        (Number(it.itemQty) || 0) *
+                          (Number(it.rate) || 0) *
+                          (Number(it.quantity) || 0) *
+                          100,
+                      )
+                    : Math.round(
+                        (Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100,
+                      );
                 const groupTotal = creating.items.reduce(
-                  (n, it) =>
-                    (it.group ?? "service") === group
-                      ? n +
-                        Math.round(
-                          (Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100,
-                        )
-                      : n,
+                  (n, it) => ((it.group ?? "service") === group ? n + lineTotal(it) : n),
                   0,
                 );
                 return (
@@ -856,7 +899,9 @@ export default function Accounting() {
                             ...creating,
                             items: [
                               ...creating.items,
-                              { description: "", quantity: "1", unit: "", group },
+                              group === "rental"
+                                ? { description: "", quantity: "1", unit: "", group, itemQty: "1", rate: "" }
+                                : { description: "", quantity: "1", unit: "", group },
                             ],
                           })
                         }
@@ -872,47 +917,88 @@ export default function Accounting() {
                           : "border-purple-200 bg-purple-50/40",
                       )}
                     >
+                      {/* Column headers */}
+                      <div className="flex items-center gap-1.5 px-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                        <span className="flex-1 min-w-[140px]">Description</span>
+                        {group === "rental" ? (
+                          <>
+                            <span className="w-14 text-right"># Signs</span>
+                            <span className="w-20 text-right">$/day</span>
+                            <span className="w-14 text-right">Days</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-16 text-right">Qty</span>
+                            <span className="w-24 text-right">$ Unit</span>
+                          </>
+                        )}
+                        <span className="w-20 text-right">Total</span>
+                        <span className="w-7" />
+                      </div>
                       {creating.items.filter((it) => (it.group ?? "service") === group)
                         .length === 0 && (
                         <div className="text-[11px] text-muted-foreground px-1 py-0.5">
                           No lines — use “Add line”.
                         </div>
                       )}
-                      {creating.items.map((it, i) =>
-                        (it.group ?? "service") !== group ? null : (
+                      {creating.items.map((it, i) => {
+                        if ((it.group ?? "service") !== group) return null;
+                        const upd = (patch: Partial<NewItem>) => {
+                          const items = [...creating.items];
+                          items[i] = { ...it, ...patch };
+                          setCreating({ ...creating, items });
+                        };
+                        const isRental = group === "rental" && it.itemQty != null;
+                        return (
                           <div key={i} className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
                             <Input
                               placeholder="Description"
-                              className="h-8 flex-1 min-w-[160px] bg-background"
+                              className="h-8 flex-1 min-w-[140px] bg-background"
                               value={it.description}
-                              onChange={(e) => {
-                                const items = [...creating.items];
-                                items[i] = { ...it, description: e.target.value };
-                                setCreating({ ...creating, items });
-                              }}
+                              onChange={(e) => upd({ description: e.target.value })}
                             />
-                            <Input
-                              placeholder="Qty"
-                              className="h-8 w-16 text-right bg-background"
-                              value={it.quantity}
-                              onChange={(e) => {
-                                const items = [...creating.items];
-                                items[i] = { ...it, quantity: e.target.value };
-                                setCreating({ ...creating, items });
-                              }}
-                            />
-                            <Input
-                              placeholder="$ unit"
-                              className="h-8 w-24 text-right bg-background"
-                              value={it.unit}
-                              onChange={(e) => {
-                                const items = [...creating.items];
-                                items[i] = { ...it, unit: e.target.value };
-                                setCreating({ ...creating, items });
-                              }}
-                            />
+                            {isRental ? (
+                              <>
+                                <Input
+                                  placeholder="#"
+                                  title="Number of signs / devices"
+                                  className="h-8 w-14 text-right bg-background"
+                                  value={it.itemQty}
+                                  onChange={(e) => upd({ itemQty: e.target.value })}
+                                />
+                                <Input
+                                  placeholder="$/day"
+                                  title="Rate per device per day"
+                                  className="h-8 w-20 text-right bg-background"
+                                  value={it.rate}
+                                  onChange={(e) => upd({ rate: e.target.value })}
+                                />
+                                <Input
+                                  placeholder="Days"
+                                  title="Days billed"
+                                  className="h-8 w-14 text-right bg-background"
+                                  value={it.quantity}
+                                  onChange={(e) => upd({ quantity: e.target.value })}
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <Input
+                                  placeholder="Qty"
+                                  className="h-8 w-16 text-right bg-background"
+                                  value={it.quantity}
+                                  onChange={(e) => upd({ quantity: e.target.value })}
+                                />
+                                <Input
+                                  placeholder="$ unit"
+                                  className="h-8 w-24 text-right bg-background"
+                                  value={it.unit}
+                                  onChange={(e) => upd({ unit: e.target.value })}
+                                />
+                              </>
+                            )}
                             <span className="w-20 text-right text-xs tabular-nums text-muted-foreground">
-                              {money(Math.round((Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100))}
+                              {money(lineTotal(it))}
                             </span>
                             <Button
                               variant="ghost"
@@ -928,8 +1014,8 @@ export default function Accounting() {
                               <X className="size-3.5" />
                             </Button>
                           </div>
-                        ),
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
                 );

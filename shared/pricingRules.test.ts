@@ -50,9 +50,11 @@ describe("pricing rules — quotes", () => {
     const q = buildQuote({ ...base, setupDuration: "24 Hours Set Up", signs: 40 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
     expect(setup?.quantity).toBe(1);
-    const rental = q.lines.find((l) => l.description.includes("Equipment rental"));
+    const rental = q.lines.find((l) => l.description.includes("Sign rental"));
     expect(rental?.quantity).toBe(5);
     expect(rental?.unitCents).toBe(40 * 300); // 40 signs × $3/day
+    expect(rental?.itemQty).toBe(40);
+    expect(rental?.rateCents).toBe(300);
   });
 
   it("uses Kobi's calibrated QB rate ($650 day median, n=205)", () => {
@@ -157,8 +159,10 @@ describe("custom signs pricing", () => {
     });
     const custom = q.lines.find((l) => /custom/i.test(l.description));
     expect(custom).toBeTruthy();
-    expect(custom!.quantity).toBe(3);       // 3 signs, one-time
-    expect(custom!.unitCents).toBe(8990);   // $89.90 each
+    expect(custom!.quantity).toBe(1);            // one-time charge
+    expect(custom!.unitCents).toBe(3 * 8990);    // 3 signs × $89.90
+    expect(custom!.itemQty).toBe(3);
+    expect(custom!.rateCents).toBe(8990);
     const wm = q.lines.find((l) => /WM \+ Sign/i.test(l.description));
     expect(wm!.quantity).toBe(4);           // rental IS per day
   });
