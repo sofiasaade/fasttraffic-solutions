@@ -170,12 +170,13 @@ export default function Accounting() {
           .includes(ql),
       );
     }
-    // Ready to Bill first, then Picked up; newest first inside each group.
+    // Ready to Bill first, then Picked up; OLDEST first inside each group
+    // (bill the oldest work first).
     const groupOf = (s: string | null) => (s === READY ? 0 : 1);
     return [...rows].sort((a, b) => {
       const g = groupOf(a.status) - groupOf(b.status);
       if (g !== 0) return g;
-      return (b.startDate ?? "").localeCompare(a.startDate ?? "");
+      return (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999");
     });
   }, [airtableQ.data, q, statusFilter]);
 
@@ -189,8 +190,9 @@ export default function Accounting() {
           .includes(ql),
       );
     }
+    // Oldest first, same as the billing queue.
     return [...rows].sort((a, b) =>
-      (b.startDate ?? "").localeCompare(a.startDate ?? ""),
+      (a.startDate ?? "9999").localeCompare(b.startDate ?? "9999"),
     );
   }, [billedQ.data, q]);
 
