@@ -96,10 +96,15 @@ describe("pricing rules — quotes", () => {
     ).toBe(40000);
   });
 
-  it("adds stockpile surcharge over 50 signs", () => {
-    const q = buildQuote({ ...base, stockpile: true, signs: 80 });
-    const sp = q.lines.find((l) => l.description.startsWith("Stockpile"));
-    expect(sp?.unitCents).toBe(67500); // $450 + 50%
+  it("stockpile: $450 under 80 signs, $950 at 80+", () => {
+    const small = buildQuote({ ...base, stockpile: true, signs: 40 });
+    expect(
+      small.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
+    ).toBe(45000);
+    const large = buildQuote({ ...base, stockpile: true, signs: 80 });
+    expect(
+      large.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
+    ).toBe(95000);
   });
 
   it("passes the city permit cost through exactly", () => {

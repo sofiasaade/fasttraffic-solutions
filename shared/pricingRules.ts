@@ -215,7 +215,9 @@ export const FIXED = {
   stamp: 55000,
   tmpStandard: 40000,
   parkingBan: 35000,
+  /** Stockpile: Sofia's rule (Aug 2026) — <80 signs $450, ≥80 signs $950. */
   stockpile: 45000,
+  stockpileLarge: 95000,
   flaggerHour: 4000,
   flaggerOtHour: 6000,
 } as const;
@@ -465,15 +467,17 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     reasons.push("Parking Ban set in Airtable → $350");
   }
   if (input.stockpile) {
-    const surcharge = input.signs > 50;
-    const cents = surcharge ? Math.round(FIXED.stockpile * 1.5) : FIXED.stockpile;
+    const large = input.signs >= 80;
+    const cents = large ? FIXED.stockpileLarge : FIXED.stockpile;
     lines.push({
-      description: `Stockpile signage${surcharge ? " (+50%, >50 signs)" : ""}`,
+      description: `Stockpile signage${large ? " (80+ signs)" : ""}`,
       quantity: 1,
       unitCents: cents,
       section: "service",
     });
-    reasons.push(`Stockpile → ${money(cents)}${surcharge ? " (>50 signs surcharge)" : ""}`);
+    reasons.push(
+      `Stockpile → ${money(cents)} (${large ? "80+ signs" : "<80 signs"})`,
+    );
   }
 
   return { industry, complexity, lines, reasons };
