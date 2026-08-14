@@ -134,6 +134,13 @@ export default function Accounting() {
     onSuccess: () => utils.accounting.listInvoices.invalidate(),
     onError: (e) => toast.error(e.message),
   });
+  const setQbNumber = trpc.accounting.setQbNumber.useMutation({
+    onSuccess: () => {
+      toast.success("QB number saved");
+      utils.accounting.listInvoices.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const deleteInvoice = trpc.accounting.deleteInvoice.useMutation({
     onSuccess: () => {
       toast.success("Draft deleted");
@@ -894,6 +901,25 @@ export default function Accounting() {
                     <tr key={inv.id} className="hover:bg-accent/40 transition-colors">
                       <td className="px-4 py-2.5 font-semibold tabular-nums">
                         {inv.invoiceNumber}
+                        {inv.status === "in_qb" && (
+                          <div className="mt-0.5 flex items-center gap-1">
+                            <span className="text-[9px] font-bold uppercase text-teal-700">
+                              QB #
+                            </span>
+                            <input
+                              defaultValue={(inv as any).qbNumber ?? ""}
+                              placeholder="—"
+                              className="h-6 w-20 rounded border border-teal-200 bg-teal-50/50 px-1.5 text-[11px] tabular-nums"
+                              onBlur={(e) => {
+                                if (e.target.value !== ((inv as any).qbNumber ?? ""))
+                                  setQbNumber.mutate({
+                                    id: inv.id,
+                                    qbNumber: e.target.value || null,
+                                  });
+                              }}
+                            />
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="font-medium">{inv.clientName}</div>
@@ -1779,7 +1805,14 @@ export default function Accounting() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold">{printing.invoiceNumber}</div>
+                  <div className="text-lg font-bold">
+                    {printing.invoiceNumber}
+                    {(printing as any).qbNumber && (
+                      <span className="ml-2 text-sm font-semibold text-teal-700">
+                        QB #{(printing as any).qbNumber}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Issued {fmtDate(printing.issueDate)}
                     {printing.dueDate && <> · Due {fmtDate(printing.dueDate)}</>}

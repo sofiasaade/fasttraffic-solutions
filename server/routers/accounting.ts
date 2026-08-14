@@ -519,6 +519,18 @@ export const accountingRouter = router({
       return { ok: true as const, invoiceNumber: inv.invoiceNumber };
     }),
 
+  /** Record the QuickBooks invoice number once posted there. */
+  setQbNumber: accountingProcedure
+    .input(z.object({ id: z.number().int(), qbNumber: z.string().trim().max(32).nullable() }))
+    .mutation(async ({ input }) => {
+      const dbx = await db();
+      await dbx
+        .update(invoices)
+        .set({ qbNumber: input.qbNumber || null })
+        .where(eq(invoices.id, input.id));
+      return { ok: true as const };
+    }),
+
   setInvoiceStatus: accountingProcedure
     .input(
       z.object({

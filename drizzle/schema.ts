@@ -656,8 +656,10 @@ export const invoices = mysqlTable("invoices", {
   /** YYYY-MM-DD */
   issueDate: varchar("issueDate", { length: 10 }).notNull(),
   dueDate: varchar("dueDate", { length: 10 }),
-  /** draft -> sent -> paid (void = cancelled). */
+  /** draft -> sent -> paid -> in_qb (void = cancelled). */
   status: varchar("status", { length: 16 }).notNull().default("draft"),
+  /** QuickBooks invoice number, once posted there (e.g. "4707"). */
+  qbNumber: varchar("qbNumber", { length: 32 }),
   subtotalCents: int("subtotalCents").notNull().default(0),
   gstRate: double("gstRate").notNull().default(5),
   gstCents: int("gstCents").notNull().default(0),
