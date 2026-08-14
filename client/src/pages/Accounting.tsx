@@ -79,7 +79,7 @@ type NewItem = {
   quantity: string;
   /** Service lines: unit price $. Rental lines: computed (itemQty × rate). */
   unit: string;
-  group?: "rental" | "service";
+  group?: "rental" | "flaggers" | "service";
   /** Rental lines: number of devices (e.g. 16 signs). */
   itemQty?: string;
   /** Rental lines: per-device per-day rate in $ (e.g. 3.00). */
@@ -259,6 +259,17 @@ export default function Accounting() {
   /** Open an existing invoice in the editor (rental lines re-expand into columns). */
   const openEditInvoice = (inv: NonNullable<typeof invoicesQ.data>[number]) => {
     const items: NewItem[] = inv.items.map((it) => {
+      const fh = it.description.match(/^(.+) × (\d+(?:\.\d+)?) — \$([\d.]+)\/h$/);
+      if (fh) {
+        return {
+          description: fh[1],
+          quantity: String(it.quantity), // hours
+          unit: "",
+          group: "flaggers" as const,
+          itemQty: fh[2],
+          rate: fh[3],
+        };
+      }
       const m = it.description.match(/^(.+) × (\d+(?:\.\d+)?) — \$([\d.]+)\/day$/);
       if (m) {
         return {
@@ -356,18 +367,31 @@ export default function Accounting() {
         prev
           ? {
               ...prev,
-              items: q.lines.map((l) => ({
+              items: q.lines.map((l) => {
+                if (/^Flaggers/.test(l.description)) {
+                  const rate = l.unitCents / 100;
+                  return {
+                    description: rate >= 60 ? "Flaggers — Overtime (1.5×)" : "Flaggers — Regular time",
+                    quantity: String(l.quantity), // hours
+                    unit: "",
+                    group: "flaggers" as const,
+                    itemQty: "1",
+                    rate: rate.toFixed(2),
+                  };
+                }
+                return {
                 description: l.description,
                 quantity: String(l.quantity),
                 unit: (l.unitCents / 100).toFixed(2),
-                group: (l as any).section ?? "service",
+                group: ((l as any).section ?? "service") as "rental" | "service",
                 itemQty:
                   (l as any).itemQty != null ? String((l as any).itemQty) : undefined,
                 rate:
                   (l as any).rateCents != null
                     ? ((l as any).rateCents / 100).toFixed(2)
                     : undefined,
-              })),
+                };
+              }),
             }
           : prev,
       );
@@ -426,7 +450,7 @@ export default function Accounting() {
   const creatingTotals = useMemo(() => {
     if (!creating) return { sub: 0, gst: 0, total: 0 };
     const sub = creating.items.reduce((n, it) => {
-      if (it.group === "rental" && it.itemQty != null) {
+      if ((it.group === "rental" || it.group === "flaggers") && it.itemQty != null) {
         return (
           n +
           Math.round(
@@ -449,13 +473,14 @@ export default function Accounting() {
     if (!creating) return;
     const items = creating.items
       .map((it) => {
-        if (it.group === "rental" && it.itemQty != null) {
+        if ((it.group === "rental" || it.group === "flaggers") && it.itemQty != null) {
           const n = Number(it.itemQty) || 0;
           const rate = Number(it.rate) || 0;
           const days = Number(it.quantity) || 0;
           if (!it.description.trim() || n <= 0 || rate <= 0 || days <= 0) return null;
+          const per = it.group === "flaggers" ? "h" : "day";
           return {
-            description: `${it.description.trim()} × ${n} — $${rate.toFixed(2)}/day`,
+            description: `${it.description.trim()} × ${n} — $${rate.toFixed(2)}/${per}`,
             quantity: days,
             unitCents: Math.round(n * rate * 100),
           };
@@ -1012,9 +1037,9 @@ export default function Accounting() {
                 </div>
               </div>
 
-              {(["rental", "service"] as const).map((group) => {
+              {(["rental", "flaggers", "service"] as const).map((group) => {
                 const lineTotal = (it: NewItem) =>
-                  it.group === "rental" && it.itemQty != null
+                  (it.group === "rental" || it.group === "flaggers") && it.itemQty != null
                     ? Math.round(
                         (Number(it.itemQty) || 0) *
                           (Number(it.rate) || 0) *
@@ -1034,16 +1059,62 @@ export default function Accounting() {
                       <label
                         className={cn(
                           "text-xs font-bold uppercase tracking-wide",
-                          group === "rental" ? "text-blue-700" : "text-purple-700",
+                          group === "rental"
+                            ? "text-blue-700"
+                            : group === "flaggers"
+                              ? "text-orange-700"
+                              : "text-purple-700",
                         )}
                       >
                         {group === "rental"
                           ? "Sign & equipment rental"
-                          : "Charges & services"}
+                          : group === "flaggers"
+                            ? "Flaggers"
+                            : "Charges & services"}
                         <span className="ml-2 font-semibold normal-case tabular-nums text-muted-foreground">
                           {money(groupTotal)}
                         </span>
                       </label>
+                      {group === "flaggers" ? (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-orange-700"
+                            onClick={() =>
+                              setCreating({
+                                ...creating,
+                                items: [
+                                  ...creating.items,
+                                  { description: "Flaggers — Regular time", quantity: "8", unit: "", group, itemQty: "1", rate: "40.00" },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus className="size-3.5 mr-1" /> Regular ($40/h)
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-orange-700"
+                            onClick={() => {
+                              const reg = creating.items.find(
+                                (x) => x.group === "flaggers" && /regular/i.test(x.description),
+                              );
+                              const otRate = ((Number(reg?.rate) || 40) * 1.5).toFixed(2);
+                              setCreating({
+                                ...creating,
+                                items: [
+                                  ...creating.items,
+                                  { description: "Flaggers — Overtime (1.5×)", quantity: "1", unit: "", group, itemQty: "1", rate: otRate },
+                                ],
+                              });
+                            }}
+                          >
+                            <Plus className="size-3.5 mr-1" /> Overtime (1.5×)
+                          </Button>
+                        </div>
+                      ) : (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1062,13 +1133,16 @@ export default function Accounting() {
                       >
                         <Plus className="size-3.5 mr-1" /> Add line
                       </Button>
+                      )}
                     </div>
                     <div
                       className={cn(
                         "space-y-1.5 rounded-lg border p-2 mb-2",
                         group === "rental"
                           ? "border-blue-200 bg-blue-50/40"
-                          : "border-purple-200 bg-purple-50/40",
+                          : group === "flaggers"
+                            ? "border-orange-200 bg-orange-50/40"
+                            : "border-purple-200 bg-purple-50/40",
                       )}
                     >
                       {/* Column headers */}
@@ -1079,6 +1153,12 @@ export default function Accounting() {
                             <span className="w-14 text-right"># Signs</span>
                             <span className="w-20 text-right">$/day</span>
                             <span className="w-14 text-right">Days</span>
+                          </>
+                        ) : group === "flaggers" ? (
+                          <>
+                            <span className="w-14 text-right"># Flag.</span>
+                            <span className="w-20 text-right">$/hr</span>
+                            <span className="w-14 text-right">Hours</span>
                           </>
                         ) : (
                           <>
@@ -1092,7 +1172,9 @@ export default function Accounting() {
                       {creating.items.filter((it) => (it.group ?? "service") === group)
                         .length === 0 && (
                         <div className="text-[11px] text-muted-foreground px-1 py-0.5">
-                          No lines — use “Add line”.
+                          {group === "flaggers"
+                            ? "No flaggers — 8 regular hours per day; past 8h is overtime at 1.5×."
+                            : "No lines — use “Add line”."}
                         </div>
                       )}
                       {creating.items.map((it, i) => {
@@ -1102,7 +1184,7 @@ export default function Accounting() {
                           items[i] = { ...it, ...patch };
                           setCreating({ ...creating, items });
                         };
-                        const isRental = group === "rental" && it.itemQty != null;
+                        const isRental = (group === "rental" || group === "flaggers") && it.itemQty != null;
                         return (
                           <div key={i} className="space-y-1">
                             <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
