@@ -485,10 +485,10 @@ export const accountingRouter = router({
         .where(eq(invoices.id, input.id))
         .limit(1);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      if (inv.status === "paid" || inv.status === "void") {
+      if (inv.status === "paid" || inv.status === "void" || inv.status === "in_qb") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `A ${inv.status} invoice can't be edited — change its status first.`,
+          message: `A ${inv.status === "in_qb" ? "QuickBooks-posted" : inv.status} invoice can't be edited — change its status first.`,
         });
       }
       const totals = computeTotals(input.items, input.gstRate);
@@ -523,7 +523,7 @@ export const accountingRouter = router({
     .input(
       z.object({
         id: z.number().int(),
-        status: z.enum(["draft", "sent", "paid", "void"]),
+        status: z.enum(["draft", "sent", "paid", "void", "in_qb"]),
       }),
     )
     .mutation(async ({ input }) => {

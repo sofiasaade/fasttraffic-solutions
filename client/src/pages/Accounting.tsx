@@ -63,6 +63,7 @@ const STATUS_BADGE: Record<string, string> = {
   sent: "bg-blue-100 text-blue-700",
   paid: "bg-green-100 text-green-700",
   void: "bg-rose-100 text-rose-700",
+  in_qb: "bg-teal-100 text-teal-700",
 };
 
 // Setup-fee hourly rules (Sofia's matrix) for the quick-correct dropdown.
@@ -168,6 +169,8 @@ export default function Accounting() {
   const [invoiceFilter, setInvoiceFilter] = useState<"all" | "invoiced" | "not">(
     "all",
   );
+  // Invoices tab: keep QuickBooks-posted invoices separate from the rest.
+  const [invoicesView, setInvoicesView] = useState<"active" | "qb">("active");
   const statusCounts = useMemo(() => {
     const rows = airtableQ.data ?? [];
     return {
@@ -823,7 +826,42 @@ export default function Accounting() {
       )}
 
       {tab === "invoices" && (
-        <div className="rounded-2xl border border-border bg-card overflow-hidden print:hidden">
+        <div className="space-y-3 print:hidden">
+          <div className="flex items-center gap-1.5">
+            {(() => {
+              const all = invoicesQ.data ?? [];
+              const qbN = all.filter((i) => i.status === "in_qb").length;
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("active")}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      invoicesView === "active"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent",
+                    )}
+                  >
+                    Active ({all.length - qbN})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("qb")}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      invoicesView === "qb"
+                        ? "bg-teal-600 text-white"
+                        : "bg-teal-100 text-teal-700 hover:bg-teal-200",
+                    )}
+                  >
+                    ✓ In QuickBooks ({qbN})
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        <div className="rounded-2xl border border-border bg-card overflow-hidden">
           {invoicesQ.isLoading ? (
             <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Loading invoices…
@@ -846,7 +884,13 @@ export default function Accounting() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {(invoicesQ.data ?? []).map((inv) => (
+                  {(invoicesQ.data ?? [])
+                    .filter((inv) =>
+                      invoicesView === "qb"
+                        ? inv.status === "in_qb"
+                        : inv.status !== "in_qb",
+                    )
+                    .map((inv) => (
                     <tr key={inv.id} className="hover:bg-accent/40 transition-colors">
                       <td className="px-4 py-2.5 font-semibold tabular-nums">
                         {inv.invoiceNumber}
@@ -880,6 +924,7 @@ export default function Accounting() {
                             <SelectItem value="draft">draft</SelectItem>
                             <SelectItem value="sent">sent</SelectItem>
                             <SelectItem value="paid">paid</SelectItem>
+                            <SelectItem value="in_qb">in QB ✓</SelectItem>
                             <SelectItem value="void">void</SelectItem>
                           </SelectContent>
                         </Select>
@@ -888,7 +933,7 @@ export default function Accounting() {
                         {money(inv.totalCents)}
                       </td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                        {inv.status !== "paid" && inv.status !== "void" && (
+                        {inv.status !== "paid" && inv.status !== "void" && inv.status !== "in_qb" && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -923,6 +968,7 @@ export default function Accounting() {
               </table>
             </div>
           )}
+        </div>
         </div>
       )}
 
