@@ -29,6 +29,10 @@ export type OsmPermitJob = {
 export type OsmPermitMapHandle = {
   /** Pan/zoom to a job's pin and open its popup (list-click focus). */
   focus: (jobId: string) => void;
+  /** Drop (or move) the purple reference pin for the address locator. */
+  setRefPin: (lat: number, lon: number, label: string) => void;
+  /** Remove the reference pin. */
+  clearRefPin: () => void;
 };
 
 const DEFAULT_CENTER: [number, number] = [51.0447, -114.0719]; // Calgary
@@ -132,6 +136,7 @@ function OsmPermitMapInner<J extends OsmPermitJob>(
     cbRef.current.onUnlocated(missing);
   }, [jobs]);
 
+  const refPinRef = useRef<L.Marker | null>(null);
   useImperativeHandle(
     ref,
     () => ({
@@ -141,6 +146,27 @@ function OsmPermitMapInner<J extends OsmPermitJob>(
         if (!map || !marker) return;
         map.setView(marker.getLatLng(), 15);
         marker.openPopup();
+      },
+      setRefPin: (lat: number, lon: number, label: string) => {
+        const map = mapRef.current;
+        if (!map) return;
+        if (refPinRef.current) refPinRef.current.remove();
+        const icon = L.divIcon({
+          className: "",
+          html: pinHtml("#9333ea", "#6b21a8"),
+          iconSize: [26, 36],
+          iconAnchor: [13, 36],
+        });
+        refPinRef.current = L.marker([lat, lon], { icon, zIndexOffset: 9999 })
+          .addTo(map)
+          .bindPopup(`<b>📍 ${label}</b>`);
+        map.setView([lat, lon], 15);
+      },
+      clearRefPin: () => {
+        if (refPinRef.current) {
+          refPinRef.current.remove();
+          refPinRef.current = null;
+        }
       },
     }),
     [],

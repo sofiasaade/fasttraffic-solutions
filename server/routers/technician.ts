@@ -3,6 +3,11 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { fetchJobById } from "../airtable";
 import { JobRecord } from "../../shared/airtableFields";
+import {
+  INTERNAL_ACTIVITIES,
+  isInternalJobId,
+  internalLabel,
+} from "../../shared/internalTasks";
 import { deriveZone, getPayPeriodFor } from "../../shared/opsLogic";
 import { storageGetSignedUrl, storagePut } from "../storage";
 import {
@@ -195,6 +200,59 @@ export const technicianRouter = router({
 
     const results = [];
     for (const jobId of jobIds) {
+      // Internal (non-project) activities have no Airtable record — build a
+      // synthetic job so the tech sees the task like any other assignment.
+      if (isInternalJobId(jobId)) {
+        const mine = rows.filter((r) => r.airtableJobId === jobId);
+        const days = mine
+          .map((r) => r.scheduledDate)
+          .filter((d): d is string => !!d)
+          .sort();
+        const timed =
+          mine.find((r) => r.scheduledDate === today && r.startTime) ??
+          mine.find((r) => r.startTime) ??
+          null;
+        const noted = mine.find((r) => r.note) ?? null;
+        const synthetic: JobRecord = {
+          id: jobId,
+          company: "Fast Traffic — Internal",
+          jobAddress: internalLabel(jobId),
+          projectTitle: internalLabel(jobId),
+          startDate: days[0] ?? today,
+          endDate: days[days.length - 1] ?? days[0] ?? today,
+          setupDuration: null,
+          status: "CONFIRMED",
+          subStatus: null,
+          requestId: null,
+          municipality: null,
+          lat: null,
+          lon: null,
+          siteContactPhone: null,
+          requestorName: null,
+          techPrep: [],
+          techSetup: [],
+          techPickup: [],
+          planFile: [],
+          fieldPhotos: [],
+          fieldComments: null,
+          closureType: null,
+          impact: null,
+          calendarInfo: null,
+          emoji:
+            INTERNAL_ACTIVITIES.find((a) => a.id === jobId)?.emoji ?? "🔧",
+          clientMessage: null,
+          signsCount: null,
+        };
+        results.push({
+          ...(await buildMyJob(synthetic, tech.airtableName, byJob.get(jobId) ?? [])),
+          assignedStartTime: timed?.startTime ?? null,
+          assignedEndTime: timed?.endTime ?? null,
+          coordinatorNote: noted?.note ?? null,
+          completedAt: mine.find((r) => r.completedAt)?.completedAt ?? null,
+          hazardDoneToday: hazardsDone.has(jobId),
+        });
+        continue;
+      }
       try {
         const job = await fetchJobById(jobId);
         const phases = byJob.get(jobId) ?? [];

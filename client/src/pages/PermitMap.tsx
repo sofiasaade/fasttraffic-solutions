@@ -96,6 +96,91 @@ export default function PermitMap() {
   const [search, setSearch] = useState("");
   // Date filter: show only jobs whose window covers this date ("" = all).
   const [onDate, setOnDate] = useState("");
+  // "What job was here?" locator: geocode ANY address, drop a reference pin
+  // and list the nearest jobs (any status, last 18 months).
+  const [locQuery, setLocQuery] = useState("");
+  const [refPoint, setRefPoint] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const refMarkerRef = useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
+  const nearbyQ = trpc.coordinator.nearbyJobs.useQuery(
+    { lat: refPoint?.lat ?? 0, lon: refPoint?.lng ?? 0 },
+    { enabled: !!refPoint },
+  );
+
+  const dropRefPin = async (point: { lat: number; lng: number; label: string }) => {
+    setRefPoint(point);
+    if (USE_OSM_FALLBACK) {
+      osmRef.current?.setRefPin(point.lat, point.lng, point.label);
+      return;
+    }
+    const g = window.google;
+    const map = mapRef.current;
+    if (!g || !map) return;
+    const markerLib = (await g.maps.importLibrary("marker")) as google.maps.MarkerLibrary;
+    const { AdvancedMarkerElement, PinElement } = markerLib;
+    if (refMarkerRef.current) refMarkerRef.current.map = null;
+    const pin = new PinElement({
+      background: "#9333ea",
+      borderColor: "#6b21a8",
+      glyphColor: "#fff",
+      scale: 1.4,
+    });
+    refMarkerRef.current = new AdvancedMarkerElement({
+      map,
+      position: point,
+      content: pin.element,
+      title: point.label,
+      zIndex: 9999,
+    });
+    map.panTo(point);
+    map.setZoom(15);
+  };
+
+  const locateAddress = async () => {
+    const q = locQuery.trim();
+    if (!q) return;
+    if (!USE_OSM_FALLBACK && window.google && mapRef.current) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode(
+        { address: `${q}, Calgary, Alberta, Canada` },
+        (results, status) => {
+          if (status !== "OK" || !results?.[0]) {
+            alert("Address not found — try adding the quadrant (NW/SW/NE/SE).");
+            return;
+          }
+          const loc = results[0].geometry.location;
+          void dropRefPin({ lat: loc.lat(), lng: loc.lng(), label: results[0].formatted_address });
+        },
+      );
+      return;
+    }
+    // OSM mode: free Nominatim geocoding, biased to the Calgary area.
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=ca&q=${encodeURIComponent(`${q}, Calgary, Alberta`)}`,
+      );
+      const hits = await r.json();
+      if (!hits?.[0]) {
+        alert("Address not found — try adding the quadrant (NW/SW/NE/SE).");
+        return;
+      }
+      void dropRefPin({
+        lat: Number(hits[0].lat),
+        lng: Number(hits[0].lon),
+        label: hits[0].display_name.split(",").slice(0, 3).join(","),
+      });
+    } catch {
+      alert("Geocoding failed — check the connection.");
+    }
+  };
+  const clearLocator = () => {
+    setRefPoint(null);
+    setLocQuery("");
+    if (refMarkerRef.current) {
+      refMarkerRef.current.map = null;
+      refMarkerRef.current = null;
+    }
+    osmRef.current?.clearRefPin();
+  };
 
   // Visible status filters (toggles). All on by default.
   const [visible, setVisible] = useState<Record<StatusKey, boolean>>({
@@ -379,6 +464,78 @@ export default function PermitMap() {
                 </button>
               )}
             </div>
+            {/* "What job was here?" — locate ANY address and list nearby jobs */}
+            <div className="mt-2 flex items-center gap-1.5">
+              <Input
+                value={locQuery}
+                onChange={(e) => setLocQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && locateAddress()}
+                placeholder="Locate any address (abandoned signs…)"
+                className="h-8 text-xs flex-1"
+              />
+              <button
+                type="button"
+                onClick={locateAddress}
+                className="h-8 rounded-md bg-purple-600 px-2.5 text-xs font-semibold text-white hover:bg-purple-700"
+                title="Drop a pin at this address and list nearby jobs"
+              >
+                📍
+              </button>
+              {refPoint && (
+                <button
+                  type="button"
+                  onClick={clearLocator}
+                  className="h-8 rounded-md border border-border px-2 text-xs text-muted-foreground hover:bg-accent"
+                  aria-label="Clear located address"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </div>
+            {refPoint && (
+              <div className="mt-2 rounded-lg border border-purple-200 bg-purple-50/60 p-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-purple-800 mb-1">
+                  Jobs near 📍 {refPoint.label.slice(0, 46)}
+                </div>
+                {nearbyQ.isLoading ? (
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground py-1">
+                    <Loader2 className="size-3 animate-spin" /> Searching 18 months of jobs…
+                  </div>
+                ) : (nearbyQ.data?.length ?? 0) === 0 ? (
+                  <div className="text-[11px] text-muted-foreground">No jobs found nearby.</div>
+                ) : (
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {nearbyQ.data!.map((j) => (
+                      <button
+                        key={j.id}
+                        type="button"
+                        onClick={() => {
+                          if (typeof j.lat === "number" && typeof j.lon === "number") {
+                            if (USE_OSM_FALLBACK) osmRef.current?.setRefPin(j.lat, j.lon, j.company ?? "job");
+                            else {
+                              mapRef.current?.panTo({ lat: j.lat, lng: j.lon });
+                              mapRef.current?.setZoom(16);
+                            }
+                          }
+                        }}
+                        className="w-full text-left rounded-md bg-card border border-border px-2 py-1.5 hover:border-purple-300 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold truncate">{j.company ?? "—"}</span>
+                          <span className="shrink-0 text-[10px] font-bold tabular-nums text-purple-700">
+                            {j.distanceM < 1000 ? `${j.distanceM} m` : `${(j.distanceM / 1000).toFixed(1)} km`}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">{j.jobAddress ?? ""}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {fmtDate(j.startDate)} → {fmtDate(j.endDate)} · <span className="font-medium">{j.status ?? "—"}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {isLoading ? (
             <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">

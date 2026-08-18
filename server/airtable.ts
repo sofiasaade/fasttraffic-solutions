@@ -228,6 +228,51 @@ export async function fetchJobById(recordId: string): Promise<JobRecord> {
 }
 
 /**
+ * Slim location records for the "what job was here?" search: ALL jobs of the
+ * last 18 months (any status except cancelled/declined) with coordinates.
+ */
+export async function fetchJobsForNearby(): Promise<
+  {
+    id: string;
+    company: string | null;
+    jobAddress: string | null;
+    status: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    lat: number | null;
+    lon: number | null;
+  }[]
+> {
+  const formula = `AND(IS_AFTER({${AF.startDate}}, DATEADD(TODAY(), -18, 'months')), {${AF.status}}!='Cancelled', {${AF.status}}!='Permit Declined')`;
+  const wanted = [AF.company, AF.jobAddress, AF.status, AF.startDate, AF.endDate, AF.lat, AF.lon];
+  const records: any[] = [];
+  let offset: string | undefined = undefined;
+  do {
+    const params = new URLSearchParams();
+    params.set("filterByFormula", formula);
+    params.set("pageSize", "100");
+    for (const f of wanted) params.append("fields[]", f);
+    if (offset) params.set("offset", offset);
+    const data: any = await airtableFetch(`${baseUrl()}?${params.toString()}`);
+    records.push(...(data.records ?? []));
+    offset = data.offset;
+  } while (offset);
+  return records.map((r) => {
+    const f = r.fields ?? {};
+    return {
+      id: r.id,
+      company: asString(f[AF.company]),
+      jobAddress: asString(f[AF.jobAddress]),
+      status: asString(f[AF.status]),
+      startDate: asString(f[AF.startDate]),
+      endDate: asString(f[AF.endDate]),
+      lat: asNumber(f[AF.lat]),
+      lon: asNumber(f[AF.lon]),
+    };
+  });
+}
+
+/**
  * EVERY non-empty field on the Airtable record, normalized to display strings
  * in the table's field order. Attachments show their filenames; collaborator
  * and AI fields show their readable value. Read-only.

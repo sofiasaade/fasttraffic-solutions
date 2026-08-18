@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { subStatusColor } from "@shared/subStatusColors";
+import { INTERNAL_ACTIVITIES, isInternalJobId } from "@shared/internalTasks";
 import { is24HourSetup } from "@shared/dashboardDay";
 import { fmtTime12 } from "@/lib/format";
 
@@ -96,6 +97,7 @@ const TASK_TIMES: Record<string, { start: string; end: string }> = {
   "No Parking": { start: "07:00", end: "09:00" },
   Flagger: { start: "07:00", end: "17:00" },
   "Check up": { start: "10:00", end: "11:00" },
+  Internal: { start: "07:00", end: "15:00" },
   Pickup: { start: "15:00", end: "17:00" },
 };
 
@@ -260,7 +262,12 @@ export default function DailyBoard() {
       const job = JSON.parse(e.dataTransfer.getData("application/json"));
       if (!job?.id) return;
       // Default task follows the job's phase for the day; times follow the task.
-      const task = job.phase === "pickup" ? "Pickup" : "Setup";
+      const task =
+        job.phase === "internal"
+          ? "Internal"
+          : job.phase === "pickup"
+            ? "Pickup"
+            : "Setup";
       const t = TASK_TIMES[task];
       setPending({ job, techName, task, start: t.start, end: t.end });
     } catch {
@@ -507,6 +514,70 @@ export default function DailyBoard() {
                   No active jobs for this day.
                 </div>
               )}
+
+              {/* Internal (non-project) activities — drag onto a technician to
+                  fill dead time: shop work, sign recovery, maintenance… */}
+              <div>
+                <div
+                  className="flex items-center gap-2 mb-2 pb-1 border-b-2"
+                  style={{ borderColor: "#64748b" }}
+                >
+                  <span
+                    className="size-3 rounded-full"
+                    style={{ background: "#64748b" }}
+                  />
+                  <span className="text-sm font-extrabold">Internal tasks</span>
+                  <span className="text-xs text-muted-foreground">
+                    (shop · no project)
+                  </span>
+                </div>
+                <div className="space-y-1.5 ml-1">
+                  {INTERNAL_ACTIVITIES.map((act) => {
+                    const n = assignedCount.get(act.id) ?? 0;
+                    return (
+                      <div
+                        key={act.id}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData(
+                            "application/json",
+                            JSON.stringify({
+                              id: act.id,
+                              phase: "internal",
+                              company: act.label,
+                            }),
+                          );
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-2.5 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all select-none"
+                        title="Drag onto a technician"
+                      >
+                        <GripVertical className="size-4 text-muted-foreground/50 shrink-0" />
+                        <span className="text-base shrink-0">{act.emoji}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate">
+                            {act.label}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Internal — not tied to a project
+                          </div>
+                        </div>
+                        {n > 0 && (
+                          <span
+                            className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 shrink-0"
+                            title={`Assigned to ${n} technician(s) today`}
+                          >
+                            ×{n} assigned
+                          </span>
+                        )}
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-700">
+                          Internal
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -668,6 +739,11 @@ export default function DailyBoard() {
             </div>
 
             <div className="text-xs font-medium text-muted-foreground mb-1">Task</div>
+            {isInternalJobId(editing.jobId) ? (
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">
+                Internal task
+              </div>
+            ) : (
             <div className="grid grid-cols-3 gap-1.5 mb-3">
               {TASKS.map((t) => (
                 <button
@@ -684,6 +760,7 @@ export default function DailyBoard() {
                 </button>
               ))}
             </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2 mb-3">
               <div>
@@ -772,6 +849,11 @@ export default function DailyBoard() {
             <div className="text-xs font-medium text-muted-foreground mb-1">
               Task
             </div>
+            {isInternalJobId(pending.job.id) ? (
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700">
+                Internal task — just pick the hours
+              </div>
+            ) : (
             <div className="grid grid-cols-3 gap-1.5 mb-3">
               {TASKS.map((t) => (
                 <button
@@ -799,6 +881,7 @@ export default function DailyBoard() {
                 </button>
               ))}
             </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2 mb-4">
               <div>

@@ -13,7 +13,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { fmtDate, dayKey, fmtTimeRange, fmtTime12 } from "@/lib/format";
+import { dayKey, fmtTimeRange, fmtTime12 } from "@/lib/format";
 import type { MyJob } from "@/lib/jobTypes";
 import DayBar from "./DayBar";
 import TechDayMap from "@/components/TechDayMap";
@@ -84,49 +84,71 @@ export default function MyJobs() {
   // Filter my jobs by client / address (find a specific customer fast).
   const [clientFilter, setClientFilter] = useState("");
 
-  const { today, upcoming, later } = useMemo(() => {
+  // ONE day at a time: the tech picks a WORK DAY and sees only that day's
+  // jobs (replaces the confusing "Next 7 days" list). Days are CALGARY days —
+  // a UTC key would flip "today" to tomorrow every evening after 6 PM.
+  const calgaryDay = (offsetDays: number) =>
+    new Date(Date.now() + offsetDays * 86400000).toLocaleDateString("en-CA", {
+      timeZone: "America/Edmonton",
+    });
+  const todayKey = calgaryDay(0);
+  const [selDay, setSelDay] = useState(todayKey);
+
+  const { dayJobs, workDays } = useMemo(() => {
     const q = clientFilter.trim().toLowerCase();
     const jobs = ((jobsQuery.data ?? []) as MyJob[]).filter(
       (j) =>
         !q ||
         `${j.company ?? ""} ${j.jobAddress ?? ""}`.toLowerCase().includes(q),
     );
-    const todayKey = dayKey(new Date().toISOString());
-    const weekFromNow = dayKey(
-      new Date(Date.now() + 7 * 86400000).toISOString(),
-    );
-    const today: MyJob[] = [];
-    const upcoming: MyJob[] = [];
-    const later: MyJob[] = [];
-    for (const j of jobs) {
+    const covers = (j: MyJob, d: string) => {
       const start = dayKey(j.startDate);
       const end = dayKey(j.endDate) || start;
-      if (start && end && todayKey >= start && todayKey <= end) {
-        today.push(j);
-      } else if (start > todayKey && start <= weekFromNow) {
-        upcoming.push(j);
-      } else if (start > weekFromNow) {
-        later.push(j);
-      }
+      return !!start && d >= start && d <= end;
+    };
+    // Chips: today + the next 14 days that actually have work.
+    const workDays: string[] = [];
+    for (let i = 0; i < 15; i++) {
+      const d = calgaryDay(i);
+      if (i === 0 || jobs.some((j) => covers(j, d))) workDays.push(d);
     }
-    const sortByStart = (a: MyJob, b: MyJob) =>
-      dayKey(a.startDate).localeCompare(dayKey(b.startDate));
-    upcoming.sort(sortByStart);
-    later.sort(sortByStart);
-    return { today, upcoming, later };
-  }, [jobsQuery.data, clientFilter]);
+    const dayJobs = jobs
+      .filter((j) => covers(j, selDay))
+      .sort((a, b) => dayKey(a.startDate).localeCompare(dayKey(b.startDate)));
+    return { dayJobs, workDays };
+  }, [jobsQuery.data, clientFilter, selDay]);
 
   const todayPins = useMemo(
     () =>
-      today
+      dayJobs
         .filter((j) => typeof j.lat === "number" && typeof j.lon === "number")
         .map((j) => ({
           lat: j.lat as number,
           lon: j.lon as number,
           label: `${j.company ?? "Job"} — ${j.jobAddress ?? ""}`,
         })),
-    [today],
+    [dayJobs],
   );
+
+  const chipLabel = (d: string) => {
+    if (d === todayKey) return "Today";
+    const [y, m, dd] = d.split("-").map(Number);
+    return new Date(y, m - 1, dd).toLocaleDateString(undefined, {
+      weekday: "short",
+      day: "numeric",
+    });
+  };
+
+  // Header label for the selected day — parse components locally so a plain
+  // "YYYY-MM-DD" never shifts a day across timezones (fmtDate would).
+  const dayHeading = (d: string) => {
+    const [y, m, dd] = d.split("-").map(Number);
+    return new Date(y, m - 1, dd).toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
 
   return (
     <div className="p-4">
@@ -166,66 +188,50 @@ export default function MyJobs() {
 
       {jobsQuery.data && (
         <>
+          {/* Work-day filter: pick the day, see only that day's jobs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-3">
+            {workDays.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setSelDay(d)}
+                className={
+                  "shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition-colors " +
+                  (selDay === d
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground")
+                }
+              >
+                {chipLabel(d)}
+              </button>
+            ))}
+            <input
+              type="date"
+              value={selDay}
+              onChange={(e) => e.target.value && setSelDay(e.target.value)}
+              className="shrink-0 h-8 rounded-lg border border-border bg-card px-2 text-xs"
+              aria-label="Pick a work day"
+            />
+          </div>
+
           <section className="mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="size-4 text-primary" />
-              <h2 className="font-bold">Today</h2>
-              <Badge>{today.length}</Badge>
+              <h2 className="font-bold">
+                {selDay === todayKey ? "Today" : dayHeading(selDay)}
+              </h2>
+              <Badge>{dayJobs.length}</Badge>
             </div>
             <div className="space-y-2">
-              {today.length === 0 ? (
+              {dayJobs.length === 0 ? (
                 <div className="text-sm text-muted-foreground border border-dashed rounded-xl p-5 text-center">
-                  No jobs scheduled for today.
+                  No jobs scheduled for this day.
                 </div>
               ) : (
-                today.map((j) => <JobRow key={j.id} job={j} />)
+                dayJobs.map((j) => <JobRow key={j.id} job={j} />)
               )}
             </div>
           </section>
-
-          <section className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarDays className="size-4 text-primary" />
-              <h2 className="font-bold">Next 7 days</h2>
-              <Badge variant="secondary">{upcoming.length}</Badge>
-            </div>
-            <div className="space-y-2">
-              {upcoming.length === 0 ? (
-                <div className="text-sm text-muted-foreground border border-dashed rounded-xl p-5 text-center">
-                  Nothing scheduled this week.
-                </div>
-              ) : (
-                upcoming.map((j) => (
-                  <div key={j.id}>
-                    <div className="text-xs text-muted-foreground mb-1 ml-1">
-                      {fmtDate(j.startDate)}
-                    </div>
-                    <JobRow job={j} />
-                  </div>
-                ))
-              )}
-            </div>
-          </section>
-
-          {later.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-2">
-                <CalendarDays className="size-4 text-muted-foreground" />
-                <h2 className="font-bold text-muted-foreground">Later</h2>
-                <Badge variant="outline">{later.length}</Badge>
-              </div>
-              <div className="space-y-2">
-                {later.map((j) => (
-                  <div key={j.id}>
-                    <div className="text-xs text-muted-foreground mb-1 ml-1">
-                      {fmtDate(j.startDate)}
-                    </div>
-                    <JobRow job={j} />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
         </>
       )}
     </div>

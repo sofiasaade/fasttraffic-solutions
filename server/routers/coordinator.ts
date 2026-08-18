@@ -10,6 +10,7 @@ import {
   timeBucketFromSetupDuration,
 } from "../../shared/dashboardDay";
 import { deriveAssignmentState } from "../../shared/jobStatus";
+import { isInternalJobId, internalLabel } from "../../shared/internalTasks";
 import { getPermitSchedulesForJobs } from "../permitExtraction";
 import {
   classifyNineAm,
@@ -136,6 +137,7 @@ const taskSchema = z.enum([
   "No Parking",
   "Flagger",
   "Check up",
+  "Internal",
   "Pickup",
 ]);
 
@@ -517,6 +519,32 @@ export const coordinatorRouter = router({
 
   // Airtable fields for the info panel — internal/derived fields (formulas,
   // design-team timers, geo caches, PR matrices…) are hidden per Sofia.
+  /**
+   * "What job was here?" — jobs (any status, last 18 months) nearest to a
+   * point. Used by the Permit Map address locator for abandoned-sign calls.
+   */
+  nearbyJobs: adminProcedure
+    .input(z.object({ lat: z.number(), lon: z.number() }))
+    .query(async ({ input }) => {
+      const { fetchJobsForNearby } = await import("../airtable");
+      const jobs = await fetchJobsForNearby();
+      const R = 6371000;
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const dist = (lat: number, lon: number) => {
+        const dLat = toRad(lat - input.lat);
+        const dLon = toRad(lon - input.lon);
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(toRad(input.lat)) * Math.cos(toRad(lat)) * Math.sin(dLon / 2) ** 2;
+        return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+      };
+      return jobs
+        .filter((j) => typeof j.lat === "number" && typeof j.lon === "number")
+        .map((j) => ({ ...j, distanceM: dist(j.lat as number, j.lon as number) }))
+        .sort((a, b) => a.distanceM - b.distanceM)
+        .slice(0, 12);
+    }),
+
   jobAllFields: adminProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
@@ -830,6 +858,7 @@ export const coordinatorRouter = router({
       const assignmentsByTech: Record<string, any[]> = {};
       for (const r of scheduled as any[]) {
         const jobRec = (jobs as any[]).find((j) => j.id === r.airtableJobId);
+        const internal = isInternalJobId(r.airtableJobId);
         (assignmentsByTech[r.technicianName] ??= []).push({
           id: r.id,
           jobId: r.airtableJobId,
@@ -838,7 +867,8 @@ export const coordinatorRouter = router({
           endTime: r.endTime,
           status: r.status,
           note: r.note ?? null,
-          company: jobRec?.company ?? null,
+          company:
+            jobRec?.company ?? (internal ? internalLabel(r.airtableJobId) : null),
           // Airtable "Sub-Status Field Operations" — drives the chip color.
           subStatus: jobRec?.subStatus ?? null,
         });
@@ -1246,11 +1276,15 @@ export const coordinatorRouter = router({
       );
       if (conflict && !input.force) {
         let label = conflict.airtableJobId;
-        try {
-          const oj = await fetchJobById(conflict.airtableJobId);
-          label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
-        } catch {
-          /* keep id */
+        if (isInternalJobId(conflict.airtableJobId)) {
+          label = internalLabel(conflict.airtableJobId);
+        } else {
+          try {
+            const oj = await fetchJobById(conflict.airtableJobId);
+            label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
+          } catch {
+            /* keep id */
+          }
         }
         return {
           ok: false as const,
@@ -1331,11 +1365,15 @@ export const coordinatorRouter = router({
       );
       if (conflict && !input.force) {
         let label = conflict.airtableJobId;
-        try {
-          const oj = await fetchJobById(conflict.airtableJobId);
-          label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
-        } catch {
-          /* keep id */
+        if (isInternalJobId(conflict.airtableJobId)) {
+          label = internalLabel(conflict.airtableJobId);
+        } else {
+          try {
+            const oj = await fetchJobById(conflict.airtableJobId);
+            label = `${oj.company ?? "Job"} — ${oj.jobAddress ?? ""}`;
+          } catch {
+            /* keep id */
+          }
         }
         return {
           ok: false as const,
