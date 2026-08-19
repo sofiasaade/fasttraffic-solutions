@@ -1186,25 +1186,95 @@ export default function Accounting() {
                             <Plus className="size-3.5 mr-1" /> Overtime (1.5×)
                           </Button>
                         </div>
+                      ) : group === "rental" ? (
+                        <div className="flex flex-wrap items-center gap-1 justify-end">
+                          {/* Quick-add per-day equipment: days copied from an
+                              existing rental line so all rentals stay in sync. */}
+                          {([
+                            { label: "Arrow board", rate: "45.00" },
+                            { label: "Message board", rate: "95.00" },
+                          ] as const).map((eq) => (
+                            <Button
+                              key={eq.label}
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-blue-700"
+                              onClick={() => {
+                                const days =
+                                  creating.items.find(
+                                    (x) => x.group === "rental" && Number(x.quantity) > 0,
+                                  )?.quantity ?? "1";
+                                setCreating({
+                                  ...creating,
+                                  items: [
+                                    ...creating.items,
+                                    {
+                                      description: `${eq.label} rental`,
+                                      quantity: days,
+                                      unit: "",
+                                      group,
+                                      itemQty: "1",
+                                      rate: eq.rate,
+                                    },
+                                  ],
+                                });
+                              }}
+                            >
+                              <Plus className="size-3.5 mr-1" /> {eq.label} (${eq.rate.replace(".00", "")}/day)
+                            </Button>
+                          ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() =>
+                              setCreating({
+                                ...creating,
+                                items: [
+                                  ...creating.items,
+                                  { description: "", quantity: "1", unit: "", group, itemQty: "1", rate: "" },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus className="size-3.5 mr-1" /> Add line
+                          </Button>
+                        </div>
                       ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() =>
-                          setCreating({
-                            ...creating,
-                            items: [
-                              ...creating.items,
-                              group === "rental"
-                                ? { description: "", quantity: "1", unit: "", group, itemQty: "1", rate: "" }
-                                : { description: "", quantity: "1", unit: "", group },
-                            ],
-                          })
-                        }
-                      >
-                        <Plus className="size-3.5 mr-1" /> Add line
-                      </Button>
+                        <div className="flex flex-wrap items-center gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-purple-700"
+                            onClick={() =>
+                              setCreating({
+                                ...creating,
+                                items: [
+                                  ...creating.items,
+                                  { description: "Out of town fee", quantity: "1", unit: "", group },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus className="size-3.5 mr-1" /> Out of town fee
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() =>
+                              setCreating({
+                                ...creating,
+                                items: [
+                                  ...creating.items,
+                                  { description: "", quantity: "1", unit: "", group },
+                                ],
+                              })
+                            }
+                          >
+                            <Plus className="size-3.5 mr-1" /> Add line
+                          </Button>
+                        </div>
                       )}
                     </div>
                     <div
