@@ -1,8 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import { Loader2, MessageSquare, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, MessageSquare, ChevronRight, Send, Users } from "lucide-react";
 
 const CAT_EMOJI: Record<string, string> = {
   stolen: "🚨",
@@ -32,6 +35,32 @@ export default function Messages() {
   const markSeen = trpc.coordinator.markMessagesSeen.useMutation({
     onSuccess: () => utils.coordinator.messagesBadge.invalidate(),
   });
+
+  // Composer: whole crew or one technician; general or tied to a project.
+  const techsQ = trpc.coordinator.technicians.useQuery();
+  const jobsQ = trpc.coordinator.mapJobs.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const [toTech, setToTech] = useState<string>(""); // "" = all crew
+  const [aboutJob, setAboutJob] = useState<string>(""); // "" = general
+  const [text, setText] = useState("");
+  const sendMessage = trpc.coordinator.sendMessage.useMutation({
+    onSuccess: (r) => {
+      setText("");
+      utils.coordinator.messagesInbox.invalidate();
+      toast.success(`Sent — ${r.notified} technician(s) notified`);
+    },
+    onError: (e) => toast.error(e.message || "Could not send"),
+  });
+  const jobOptions = useMemo(() => {
+    const jobs = (jobsQ.data ?? []) as any[];
+    return jobs
+      .map((j) => ({
+        id: j.id,
+        label: `${j.company ?? "Job"} — ${j.jobAddress ?? j.municipality ?? ""}`,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [jobsQ.data]);
 
   // Mark as seen once the inbox has loaded — the sidebar badge clears.
   useEffect(() => {
@@ -77,6 +106,86 @@ export default function Messages() {
           Field notes and messages from technicians, grouped by project. Click
           one to open the project's chat and reply.
         </p>
+      </div>
+
+      {/* Composer — whole crew or one worker; general or per project */}
+      <div className="rounded-xl border bg-card p-3.5 space-y-2.5">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Send className="size-4 text-primary" /> New message
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">
+              To
+            </label>
+            <select
+              value={toTech}
+              onChange={(e) => setToTech(e.target.value)}
+              className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">👷 All crew ({(techsQ.data ?? []).filter((t: any) => t.active !== false).length})</option>
+              {(techsQ.data ?? [])
+                .filter((t: any) => t.active !== false)
+                .map((t: any) => (
+                  <option key={t.airtableName} value={t.airtableName}>
+                    {t.displayName}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">
+              About
+            </label>
+            <select
+              value={aboutJob}
+              onChange={(e) => setAboutJob(e.target.value)}
+              className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
+            >
+              <option value="">📢 General — no project</option>
+              {jobOptions.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <Textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={
+            toTech
+              ? `Message to ${toTech}…`
+              : "Message to the whole crew…"
+          }
+          rows={2}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Users className="size-3" />
+            {toTech ? "Only this worker gets it" : "Every active worker gets it"}
+            {aboutJob ? " · also saved in the project's chat" : ""}
+          </span>
+          <Button
+            size="sm"
+            disabled={!text.trim() || sendMessage.isPending}
+            onClick={() =>
+              sendMessage.mutate({
+                note: text.trim(),
+                technicianName: toTech || null,
+                jobId: aboutJob || null,
+              })
+            }
+          >
+            {sendMessage.isPending ? (
+              <Loader2 className="size-4 mr-1 animate-spin" />
+            ) : (
+              <Send className="size-4 mr-1" />
+            )}
+            Send
+          </Button>
+        </div>
       </div>
 
       {q.isLoading ? (

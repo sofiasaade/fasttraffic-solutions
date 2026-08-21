@@ -645,6 +645,58 @@ export const coordinatorRouter = router({
     return { ok: true as const };
   }),
 
+  // Direct message composer: to the WHOLE crew or one technician, either
+  // general or tied to a project. Delivery = in-app notification (the tech's
+  // Messages tab); project messages also land in that job's chat thread.
+  sendMessage: adminProcedure
+    .input(
+      z.object({
+        note: z.string().min(1).max(2000),
+        technicianName: z.string().nullable().optional(),
+        jobId: z.string().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const authorName = ctx.user.name ?? "Coordinator";
+      const targets = input.technicianName
+        ? [input.technicianName]
+        : (await listTechnicians())
+            .filter((t: any) => t.active !== false)
+            .map((t: any) => t.airtableName);
+      // Project messages stay on that job's record (chat thread).
+      if (input.jobId) {
+        await createJobNote({
+          airtableJobId: input.jobId,
+          authorName,
+          authorRole: "coordinator",
+          category: "general",
+          note: input.technicianName
+            ? `[para ${input.technicianName}] ${input.note}`
+            : input.note,
+        });
+      }
+      for (const t of targets) {
+        await createNotification({
+          technicianName: t,
+          airtableJobId: input.jobId ?? null,
+          type: "info",
+          title: "💬 Message from the coordinator",
+          body: input.note.slice(0, 300),
+        });
+      }
+      await appendChangeHistory({
+        airtableJobId: input.jobId ?? "__crew__",
+        actorUserId: ctx.user.id,
+        actorName: authorName,
+        action: "coordinator_message",
+        fieldName: input.technicianName ?? "ALL CREW",
+        oldValue: null,
+        newValue: input.note,
+        details: `Delivered to ${targets.length} technician(s)`,
+      });
+      return { ok: true as const, notified: targets.length };
+    }),
+
   // Coordinator reply into a job's notes thread. Notifies every technician
   // assigned to the job so the message reaches their app.
   sendJobNote: adminProcedure
