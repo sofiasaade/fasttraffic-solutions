@@ -148,9 +148,19 @@ export default function QuoteTool() {
     [flaggerRows],
   );
 
+  // An untouched form quotes nothing — avoids a misleading default setup fee.
+  const formTouched =
+    !!client.trim() ||
+    !!impact ||
+    plan !== "none" ||
+    num(permitCost) > 0 ||
+    parkingBan ||
+    stockpile ||
+    flaggerRows.length > 0 ||
+    Object.values(eq).some((v) => num(v) > 0);
   const allLines = useMemo(
-    () => [...quote.lines, ...flaggerLines],
-    [quote.lines, flaggerLines],
+    () => (formTouched ? [...quote.lines, ...flaggerLines] : []),
+    [quote.lines, flaggerLines, formTouched],
   );
   const subtotal = allLines.reduce(
     (n, l) => n + l.quantity * l.unitCents,
@@ -250,25 +260,43 @@ export default function QuoteTool() {
     />
   );
 
+  // Pill-style boolean toggle — tidier than a raw checkbox row.
+  const pill = (label: string, on: boolean, toggle: () => void, title?: string) => (
+    <button
+      type="button"
+      onClick={toggle}
+      title={title}
+      className={
+        "rounded-full border px-3 py-1.5 text-[12px] font-semibold transition-colors " +
+        (on
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border bg-background text-muted-foreground hover:bg-accent")
+      }
+    >
+      {on ? "✓ " : ""}
+      {label}
+    </button>
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[5fr_6fr] gap-4">
       {/* ============ form ============ */}
       <div className="space-y-3">
-        <div className="rounded-xl border bg-card p-3.5 space-y-2.5">
-          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Job
+        <div className="rounded-xl border bg-card p-4 space-y-3">
+          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground border-b pb-1.5">
+            1 · Job
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Client</label>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Client</label>
               <Input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Client name" className="h-9" />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Address (optional)</label>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Address (optional)</label>
               <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Job location" className="h-9" />
             </div>
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Type of Submission</label>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Type of Submission</label>
               <select
                 value={submission}
                 onChange={(e) => setSubmission(e.target.value as SubmissionType)}
@@ -280,7 +308,7 @@ export default function QuoteTool() {
               </select>
             </div>
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Impact</label>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Impact</label>
               <select
                 value={impact}
                 onChange={(e) => setImpact(e.target.value as any)}
@@ -292,21 +320,15 @@ export default function QuoteTool() {
                 <option value="high">High (multiple lane closures)</option>
               </select>
             </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Days</label>
-              <Input value={days} onChange={(e) => setDays(e.target.value)} className="h-9 w-24 text-right" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <div className="flex items-center gap-1.5 mr-1">
+              <label className="text-[12px] font-medium text-muted-foreground">Days</label>
+              <Input value={days} onChange={(e) => setDays(e.target.value)} className="h-8 w-16 text-right" />
             </div>
-            <div className="flex items-end gap-3 pb-1 text-sm flex-wrap">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={night} onChange={(e) => setNight(e.target.checked)} /> Night
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} /> Weekend
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer" title="Daily setup, several days — setup fee bills each day">
-                <input type="checkbox" checked={dailySeveral} onChange={(e) => setDailySeveral(e.target.checked)} /> Daily × days
-              </label>
-            </div>
+            {pill("🌙 Night", night, () => setNight(!night))}
+            {pill("📅 Weekend", weekend, () => setWeekend(!weekend))}
+            {pill("🔁 Daily × days", dailySeveral, () => setDailySeveral(!dailySeveral), "Daily setup, several days — the setup fee bills each day")}
           </div>
           {submissionTypeBillingNote(submission) && (
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[11px] text-blue-800">
@@ -315,27 +337,30 @@ export default function QuoteTool() {
           )}
         </div>
 
-        <div className="rounded-xl border bg-card p-3.5 space-y-2">
-          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Equipment (units on site)
+        <div className="rounded-xl border bg-card p-4 space-y-2.5">
+          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground border-b pb-1.5">
+            2 · Equipment on site
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5">
             {EQUIPMENT_FIELDS.map((f) => (
-              <label key={f.key} className="flex items-center justify-between gap-1.5 text-[12px]">
-                <span className="truncate">{f.label}</span>
-                {numInput(eq[f.key], (v) => setEq({ ...eq, [f.key]: v }), "w-14")}
+              <label
+                key={f.key}
+                className="flex items-center justify-between gap-2 text-[12px] py-1 border-b border-border/40 last:border-0"
+              >
+                <span className="truncate text-foreground">{f.label}</span>
+                {numInput(eq[f.key], (v) => setEq({ ...eq, [f.key]: v }), "w-16")}
               </label>
             ))}
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-3.5 space-y-2.5">
-          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            Plan · Permits · Extras
+        <div className="rounded-xl border bg-card p-4 space-y-2.5">
+          <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground border-b pb-1.5">
+            3 · Plan · Permits · Extras
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground">Plan</label>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Plan</label>
               <select
                 value={plan}
                 onChange={(e) => setPlan(e.target.value as any)}
@@ -346,35 +371,31 @@ export default function QuoteTool() {
                 <option value="stamp">Engineering stamp — $550 each</option>
               </select>
             </div>
-            {plan === "stamp" && (
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground">
-                  Stamp codes (comma separated — one $550 each)
-                </label>
-                <Input value={stampCodes} onChange={(e) => setStampCodes(e.target.value)} placeholder="FTS-26-0001, FTS-26-0002" className="h-9" />
-              </div>
-            )}
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground">
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
                 City permit cost $ (pass-through)
               </label>
-              <Input value={permitCost} onChange={(e) => setPermitCost(e.target.value)} placeholder="0.00" className="h-9 w-28 text-right" />
+              <Input value={permitCost} onChange={(e) => setPermitCost(e.target.value)} placeholder="0.00" className="h-9 text-right" />
             </div>
-            <div className="flex items-end gap-4 pb-1 text-sm">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={parkingBan} onChange={(e) => setParkingBan(e.target.checked)} /> Parking ban ($350)
+          </div>
+          {plan === "stamp" && (
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">
+                Stamp codes (comma separated — one $550 each)
               </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={stockpile} onChange={(e) => setStockpile(e.target.checked)} /> Stockpile
-              </label>
+              <Input value={stampCodes} onChange={(e) => setStampCodes(e.target.value)} placeholder="FTS-26-0001, FTS-26-0002" className="h-9" />
             </div>
+          )}
+          <div className="flex flex-wrap gap-2 pt-0.5">
+            {pill("🅿️ Parking ban ($350)", parkingBan, () => setParkingBan(!parkingBan))}
+            {pill("🏗️ Stockpile", stockpile, () => setStockpile(!stockpile))}
           </div>
         </div>
 
-        <div className="rounded-xl border bg-card p-3.5 space-y-2">
-          <div className="flex items-center justify-between">
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <div className="flex items-center justify-between border-b pb-1.5">
             <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-              Flaggers
+              4 · Flaggers
             </div>
             <Button
               variant="ghost"
@@ -502,7 +523,7 @@ export default function QuoteTool() {
           )}
         </div>
 
-        {quote.reasons.length > 0 && (
+        {formTouched && quote.reasons.length > 0 && (
           <div className="rounded-xl border bg-muted/30 p-3.5">
             <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5">
               How this quote was built
