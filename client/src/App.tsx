@@ -20,7 +20,6 @@ import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Messages from "./pages/Messages";
 import Scheduler from "./pages/Scheduler";
-import DailyBoard from "./pages/DailyBoard";
 import WorkersCalendar from "./pages/WorkersCalendar";
 import PendingJobs from "./pages/PendingJobs";
 import ProjectDetail from "./pages/ProjectDetail";
@@ -73,11 +72,6 @@ function Router() {
           <Route path="/scheduler">
             <CoordinatorShell>
               <Scheduler />
-            </CoordinatorShell>
-          </Route>
-          <Route path="/daily">
-            <CoordinatorShell>
-              <DailyBoard />
             </CoordinatorShell>
           </Route>
           <Route path="/projects/:id">
