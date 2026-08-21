@@ -9,6 +9,7 @@ import MyJobs from "./tech/MyJobs";
 import MyHours from "./tech/MyHours";
 import JobDetail from "./tech/JobDetail";
 import Notifications from "./tech/Notifications";
+import TechMessages from "./tech/TechMessages";
 
 export default function TechnicianApp() {
   const { isCoordinator } = useSession();
@@ -40,6 +41,7 @@ export default function TechnicianApp() {
         <Route path="/app" component={MyJobs} />
         <Route path="/app/hours" component={MyHours} />
         <Route path="/app/notifications" component={Notifications} />
+        <Route path="/app/messages" component={TechMessages} />
         <Route path="/app/job/:id" component={JobDetail} />
       </Switch>
     </TechShell>

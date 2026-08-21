@@ -657,10 +657,18 @@ export const technicianRouter = router({
 
   notifications: protectedProcedure.query(async ({ ctx }) => {
     const tech = await resolveTechnician(ctx.user.id);
-    if (!tech) return { items: [], unread: 0 };
+    if (!tech) return { items: [], unread: 0, chatUnread: 0 };
     const items = await listNotificationsForTechnician(tech.airtableName);
-    const unread = await countUnreadNotifications(tech.airtableName);
-    return { items, unread };
+    // Chat messages get their own screen in the app — split the unread counts
+    // so coordinator messages never mix with assignment alarms.
+    const isChat = (n: { title: string }) => n.title.startsWith("💬");
+    const chatUnread = items.filter((n) => !n.readAt && isChat(n)).length;
+    const unread = items.filter((n) => !n.readAt && !isChat(n)).length;
+    return {
+      items: items.map((n) => ({ ...n, isChat: isChat(n) })),
+      unread,
+      chatUnread,
+    };
   }),
 
   markNotificationRead: protectedProcedure

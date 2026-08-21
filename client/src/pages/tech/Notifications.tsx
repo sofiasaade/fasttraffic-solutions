@@ -23,7 +23,8 @@ export default function Notifications() {
     onSuccess: () => utils.technician.notifications.invalidate(),
   });
 
-  const items = query.data?.items ?? [];
+  // Chat messages live on their own "Messages" screen — alerts only here.
+  const items = (query.data?.items ?? []).filter((n: any) => !n.isChat);
 
   return (
     <div className="p-4">

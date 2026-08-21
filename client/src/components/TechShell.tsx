@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Cone, ClipboardList, Bell, LogOut, Clock, Users, ArrowLeft } from "lucide-react";
+import { Cone, ClipboardList, Bell, LogOut, Clock, Users, ArrowLeft, MessageSquare } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ export default function TechShell({
     refetchInterval: 30000,
   });
   const unread = notifQuery.data?.unread ?? 0;
+  const chatUnread = (notifQuery.data as any)?.chatUnread ?? 0;
   // Entered from the coordinator's technician list → offer a way back to it.
   const cameFromRoster = user?.loginMethod === "dev-tech";
 
@@ -75,7 +76,7 @@ export default function TechShell({
       <main className="flex-1 pb-20">{children}</main>
 
       <nav className="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-card border-t border-border z-20">
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           <TabLink
             href="/app"
             active={location === "/app"}
@@ -87,6 +88,13 @@ export default function TechShell({
             active={location === "/app/hours"}
             icon={Clock}
             label="Hours"
+          />
+          <TabLink
+            href="/app/messages"
+            active={location === "/app/messages"}
+            icon={MessageSquare}
+            label="Messages"
+            badge={chatUnread}
           />
           <TabLink
             href="/app/notifications"
