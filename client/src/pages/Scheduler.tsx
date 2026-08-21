@@ -3600,12 +3600,12 @@ export default function Scheduler() {
               Cancel
             </Button>
             <Button onClick={doSaveDayNote} disabled={setDayNote.isPending}>
-              {setDayNote.isPending && (
+              {setDayNote.isPending ? (
                 <Loader2 className="size-4 mr-1 animate-spin" />
+              ) : (
+                <Check className="size-4 mr-1" />
               )}
-              {noteText.trim() || standingText.trim() !== standingOrig.trim()
-                ? "Save note"
-                : "Clear note"}
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
