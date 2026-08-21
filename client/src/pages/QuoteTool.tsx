@@ -184,16 +184,32 @@ export default function QuoteTool() {
     return Array.from(s).sort((a, b) => a.localeCompare(b));
   }, [jobsQ.data]);
 
-  // ---- save as draft invoice (shows up in the Invoices tab) ----
+  // ---- saved quotes: FTS-Q numbering, own list below the builder ----
   const utils = trpc.useUtils();
+  const invoicesQ = trpc.accounting.listInvoices.useQuery();
+  const savedQuotes = useMemo(
+    () => ((invoicesQ.data ?? []) as any[]).filter((i) => i.status === "quote"),
+    [invoicesQ.data],
+  );
   const createInvoice = trpc.accounting.createInvoice.useMutation({
-    onSuccess: () => {
+    onSuccess: (r) => {
       utils.accounting.listInvoices.invalidate();
-      toast.success("Draft invoice created — see the Invoices tab");
+      toast.success(`Quote ${r.invoiceNumber} saved`);
     },
     onError: (e) => toast.error(e.message || "Could not save"),
   });
-  const saveAsInvoice = () => {
+  const convertQuote = trpc.accounting.convertQuoteToInvoice.useMutation({
+    onSuccess: (r) => {
+      utils.accounting.listInvoices.invalidate();
+      toast.success(`Now invoice ${r.invoiceNumber} — see the Invoices tab`);
+    },
+    onError: (e) => toast.error(e.message || "Could not convert"),
+  });
+  const deleteInvoice = trpc.accounting.deleteInvoice.useMutation({
+    onSuccess: () => utils.accounting.listInvoices.invalidate(),
+    onError: (e) => toast.error(e.message || "Could not delete"),
+  });
+  const saveQuote = () => {
     if (!client.trim()) {
       toast.error("Client name is required");
       return;
@@ -205,7 +221,8 @@ export default function QuoteTool() {
       issueDate: new Date().toISOString().slice(0, 10),
       dueDate: null,
       gstRate: Number(gst) || 5,
-      notes: "QUOTE — created from the Quotes tool",
+      notes: "Quote — created from the Quotes tool",
+      asQuote: true,
       items: allLines.map((l: any) => ({
         description: l.description,
         quantity: l.quantity,
@@ -219,17 +236,25 @@ export default function QuoteTool() {
     } as any);
   };
 
-  // ---- printable quote ----
-  const printQuote = () => {
+  // ---- printable quote (also used for saved quotes) ----
+  const printQuoteDoc = (opts: {
+    number?: string | null;
+    clientName: string;
+    addr?: string | null;
+    lines: { description: string; quantity: number; unitCents: number }[];
+    gstRate: number;
+  }) => {
     const w = window.open("", "_blank", "width=800,height=900");
     if (!w) return;
-    const rows = allLines
+    const sub = opts.lines.reduce((n, l) => n + l.quantity * l.unitCents, 0);
+    const g = Math.round((sub * opts.gstRate) / 100);
+    const rows = opts.lines
       .map(
-        (l: any) =>
+        (l) =>
           `<tr><td>${l.description}</td><td class="r">${l.quantity}</td><td class="r">${money(l.unitCents)}</td><td class="r">${money(l.quantity * l.unitCents)}</td></tr>`,
       )
       .join("");
-    w.document.write(`<!doctype html><html><head><title>Quote — ${client || "Fast Traffic"}</title>
+    w.document.write(`<!doctype html><html><head><title>${opts.number ?? "Quote"} — ${opts.clientName || "Fast Traffic"}</title>
       <style>
         body{font-family:Arial,sans-serif;margin:40px;color:#111}
         h1{font-size:20px;margin:0}
@@ -241,23 +266,31 @@ export default function QuoteTool() {
         .tot{font-weight:bold}
         .note{margin-top:24px;font-size:11px;color:#777}
       </style></head><body>
-      <h1>FAST TRAFFIC SOLUTIONS — QUOTE</h1>
+      <h1>FAST TRAFFIC SOLUTIONS — QUOTE${opts.number ? ` ${opts.number}` : ""}</h1>
       <div class="sub">
-        ${client ? `Client: <b>${client}</b><br/>` : ""}
-        ${address ? `Location: ${address}<br/>` : ""}
-        Type: ${submissionTypeLabel(submission)} · ${new Date().toLocaleDateString("en-CA")}
+        ${opts.clientName ? `Client: <b>${opts.clientName}</b><br/>` : ""}
+        ${opts.addr ? `Location: ${opts.addr}<br/>` : ""}
+        ${new Date().toLocaleDateString("en-CA")}
       </div>
       <table>
         <tr><th>Description</th><th class="r">Qty</th><th class="r">Unit</th><th class="r">Total</th></tr>
         ${rows}
-        <tr><td colspan="3" class="r">Subtotal</td><td class="r">${money(subtotal)}</td></tr>
-        <tr><td colspan="3" class="r">GST ${gst}%</td><td class="r">${money(gstCents)}</td></tr>
-        <tr class="tot"><td colspan="3" class="r">TOTAL</td><td class="r">${money(total)}</td></tr>
+        <tr><td colspan="3" class="r">Subtotal</td><td class="r">${money(sub)}</td></tr>
+        <tr><td colspan="3" class="r">GST ${opts.gstRate}%</td><td class="r">${money(g)}</td></tr>
+        <tr class="tot"><td colspan="3" class="r">TOTAL</td><td class="r">${money(sub + g)}</td></tr>
       </table>
       <div class="note">Estimate only — final invoice may vary with actual days, equipment and permit costs.</div>
       <script>window.print()</script></body></html>`);
     w.document.close();
   };
+  const printQuote = () =>
+    printQuoteDoc({
+      number: null,
+      clientName: client,
+      addr: address,
+      lines: allLines as any,
+      gstRate: Number(gst) || 5,
+    });
 
   const numInput = (
     value: string | undefined,
@@ -473,13 +506,13 @@ export default function QuoteTool() {
               <Button size="sm" variant="outline" onClick={printQuote} disabled={allLines.length === 0}>
                 <Printer className="size-4 mr-1" /> Print / PDF
               </Button>
-              <Button size="sm" onClick={saveAsInvoice} disabled={allLines.length === 0 || createInvoice.isPending}>
+              <Button size="sm" onClick={saveQuote} disabled={allLines.length === 0 || createInvoice.isPending}>
                 {createInvoice.isPending ? (
                   <Loader2 className="size-4 mr-1 animate-spin" />
                 ) : (
                   <FileText className="size-4 mr-1" />
                 )}
-                Save as draft invoice
+                Save quote
               </Button>
             </div>
           </div>
@@ -556,6 +589,78 @@ export default function QuoteTool() {
                 <li key={i}>{r}</li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* Saved quotes — FTS-Q numbers; convert to invoice when the job is won */}
+        {savedQuotes.length > 0 && (
+          <div className="rounded-xl border bg-card p-3.5 space-y-1.5">
+            <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground border-b pb-1.5">
+              Saved quotes ({savedQuotes.length})
+            </div>
+            {savedQuotes.map((q: any) => (
+              <div
+                key={q.id}
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background px-2.5 py-2 text-sm"
+              >
+                <span className="font-bold text-primary tabular-nums">
+                  {q.invoiceNumber}
+                </span>
+                <span className="truncate flex-1 min-w-[120px]">
+                  {q.clientName}
+                  {q.jobAddress ? (
+                    <span className="text-muted-foreground"> — {q.jobAddress}</span>
+                  ) : null}
+                </span>
+                <span className="text-muted-foreground text-[12px]">{q.issueDate}</span>
+                <span className="font-semibold tabular-nums">{money(q.totalCents)}</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    title="Print / PDF"
+                    onClick={() =>
+                      printQuoteDoc({
+                        number: q.invoiceNumber,
+                        clientName: q.clientName,
+                        addr: q.jobAddress,
+                        lines: (q.items ?? []).map((it: any) => ({
+                          description: it.description,
+                          quantity: it.quantity,
+                          unitCents: it.unitCents,
+                        })),
+                        gstRate: q.gstRate ?? 5,
+                      })
+                    }
+                  >
+                    <Printer className="size-3.5" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    disabled={convertQuote.isPending}
+                    title="Job won — turn this quote into a draft invoice"
+                    onClick={() => convertQuote.mutate({ id: q.id })}
+                  >
+                    → Invoice
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-red-600"
+                    title="Delete quote"
+                    onClick={() => {
+                      if (window.confirm(`Delete quote ${q.invoiceNumber}?`))
+                        deleteInvoice.mutate({ id: q.id });
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

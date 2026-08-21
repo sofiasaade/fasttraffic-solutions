@@ -642,9 +642,9 @@ export default function Accounting() {
             onClick={() => setTab("invoices")}
           >
             <Receipt className="size-4 mr-1" /> Invoices
-            {(invoicesQ.data?.length ?? 0) > 0 && (
+            {(invoicesQ.data?.filter((i) => i.status !== "quote").length ?? 0) > 0 && (
               <span className="ml-1.5 rounded-full bg-primary-foreground/20 px-1.5 text-[10px] tabular-nums">
-                {invoicesQ.data?.length}
+                {invoicesQ.data?.filter((i) => i.status !== "quote").length}
               </span>
             )}
           </Button>
@@ -874,7 +874,7 @@ export default function Accounting() {
         <div className="space-y-3 print:hidden">
           <div className="flex items-center gap-1.5">
             {(() => {
-              const all = invoicesQ.data ?? [];
+              const all = (invoicesQ.data ?? []).filter((i) => i.status !== "quote");
               const qbN = all.filter((i) => i.status === "in_qb").length;
               return (
                 <>
@@ -911,7 +911,7 @@ export default function Accounting() {
             <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Loading invoices…
             </div>
-          ) : (invoicesQ.data?.length ?? 0) === 0 ? (
+          ) : (invoicesQ.data?.filter((i) => i.status !== "quote").length ?? 0) === 0 ? (
             <div className="p-12 text-center text-sm text-muted-foreground">
               No invoices yet — create one with “New invoice”.
             </div>
@@ -930,6 +930,7 @@ export default function Accounting() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(invoicesQ.data ?? [])
+                    .filter((inv) => inv.status !== "quote")
                     .filter((inv) =>
                       invoicesView === "qb"
                         ? inv.status === "in_qb"

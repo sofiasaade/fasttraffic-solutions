@@ -448,19 +448,22 @@ export const accountingRouter = router({
           )
           .nullable()
           .optional(),
+        /** Save as a QUOTE (own FTS-Q number) instead of an invoice. */
+        asQuote: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input }) => {
       const dbx = await db();
-      // Next sequential number: FTS-INV-0001, 0002, ...
-      const last = await dbx
+      // Quotes and invoices number independently: FTS-Q-0001 / FTS-INV-0001.
+      const prefix = input.asQuote ? "FTS-Q-" : "FTS-INV-";
+      const all = await dbx
         .select({ n: invoices.invoiceNumber })
-        .from(invoices)
-        .orderBy(desc(invoices.id))
-        .limit(1);
-      const lastNum = last[0]?.n?.match(/(\d+)$/)?.[1];
-      const next = (lastNum ? Number(lastNum) : 0) + 1;
-      const invoiceNumber = `FTS-INV-${String(next).padStart(4, "0")}`;
+        .from(invoices);
+      const next =
+        all
+          .map((r) => (r.n?.startsWith(prefix) ? Number(r.n.match(/(\d+)$/)?.[1] ?? 0) : 0))
+          .reduce((a, b) => Math.max(a, b), 0) + 1;
+      const invoiceNumber = `${prefix}${String(next).padStart(4, "0")}`;
 
       const totals = computeTotals(input.items, input.gstRate);
       const [res] = await dbx.insert(invoices).values({
@@ -470,7 +473,7 @@ export const accountingRouter = router({
         jobAddress: input.jobAddress ?? null,
         issueDate: input.issueDate,
         dueDate: input.dueDate ?? null,
-        status: "draft",
+        status: input.asQuote ? "quote" : "draft",
         gstRate: input.gstRate,
         notes: input.notes ?? null,
         suggestedJson: input.suggested ? JSON.stringify(input.suggested) : null,
@@ -489,6 +492,35 @@ export const accountingRouter = router({
         });
       }
       return { id: invoiceId, invoiceNumber };
+    }),
+
+  /** Promote a saved quote to a real draft invoice (new FTS-INV number). */
+  convertQuoteToInvoice: accountingProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const dbx = await db();
+      const rows = await dbx
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, input.id))
+        .limit(1);
+      const q = rows[0];
+      if (!q || q.status !== "quote") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Not a quote." });
+      }
+      const all = await dbx
+        .select({ n: invoices.invoiceNumber })
+        .from(invoices);
+      const next =
+        all
+          .map((r) => (r.n?.startsWith("FTS-INV-") ? Number(r.n.match(/(\d+)$/)?.[1] ?? 0) : 0))
+          .reduce((a, b) => Math.max(a, b), 0) + 1;
+      const invoiceNumber = `FTS-INV-${String(next).padStart(4, "0")}`;
+      await dbx
+        .update(invoices)
+        .set({ status: "draft", invoiceNumber })
+        .where(eq(invoices.id, input.id));
+      return { ok: true as const, invoiceNumber };
     }),
 
   /** Edit an existing invoice (fields + all line items). Paid/void are locked. */
