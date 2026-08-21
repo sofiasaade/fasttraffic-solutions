@@ -1763,6 +1763,11 @@ export default function Scheduler() {
               );
             })()}
           </div>
+          {(job as any).standingNote && (
+            <div className="mb-1.5 rounded-md border border-amber-300 bg-amber-100/70 px-2 py-1 text-[11px] whitespace-pre-wrap text-amber-900">
+              📌 {(job as any).standingNote}
+            </div>
+          )}
           {(() => {
             const dn = noteFor(job.id, dk);
             return noteHasContent(dn) ? (
@@ -3598,7 +3603,9 @@ export default function Scheduler() {
               {setDayNote.isPending && (
                 <Loader2 className="size-4 mr-1 animate-spin" />
               )}
-              {noteText.trim() ? "Save note" : "Clear note"}
+              {noteText.trim() || standingText.trim() !== standingOrig.trim()
+                ? "Save note"
+                : "Clear note"}
             </Button>
           </DialogFooter>
         </DialogContent>

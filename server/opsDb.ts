@@ -1421,7 +1421,10 @@ export async function getJobOverride(airtableJobId: string) {
 }
 
 export async function getJobOverridesMap(jobIds: string[]) {
-  const map = new Map<string, { endDate: string | null; subStatus: string | null }>();
+  const map = new Map<
+    string,
+    { endDate: string | null; subStatus: string | null; standingNote: string | null }
+  >();
   if (jobIds.length === 0) return map;
   const d = await db();
   const rows = await d
@@ -1429,7 +1432,11 @@ export async function getJobOverridesMap(jobIds: string[]) {
     .from(jobOverrides)
     .where(inArray(jobOverrides.airtableJobId, jobIds));
   for (const r of rows) {
-    map.set(r.airtableJobId, { endDate: r.endDate, subStatus: r.subStatus });
+    map.set(r.airtableJobId, {
+      endDate: r.endDate,
+      subStatus: r.subStatus,
+      standingNote: (r as any).standingNote ?? null,
+    });
   }
   return map;
 }

@@ -218,7 +218,11 @@ async function getCachedWeather(
 function mergeJob(
   job: JobRecord,
   assigns?: { Preparation: string[]; Setup: string[]; Pickup: string[] },
-  override?: { endDate: string | null; subStatus: string | null },
+  override?: {
+    endDate: string | null;
+    subStatus: string | null;
+    standingNote?: string | null;
+  },
 ) {
   const merged: JobRecord = {
     ...job,
@@ -228,7 +232,12 @@ function mergeJob(
     endDate: override?.endDate ?? job.endDate,
     subStatus: override?.subStatus ?? job.subStatus,
   };
-  return { ...merged, zone: deriveZone(merged as any) };
+  return {
+    ...merged,
+    zone: deriveZone(merged as any),
+    // Permanent coordinator note — shown right on the job card.
+    standingNote: override?.standingNote ?? null,
+  };
 }
 
 /**
