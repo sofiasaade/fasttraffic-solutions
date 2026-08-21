@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,19 +102,44 @@ export default function ProjectDetail() {
   const [viewerIdx, setViewerIdx] = useState(0);
 
   const [note, setNote] = useState("");
+  // "Internal only" keeps the note in the change history — crew never sees it.
+  const [internalOnly, setInternalOnly] = useState(false);
+  const utils = trpc.useUtils();
+  const threadQ = trpc.coordinator.jobThread.useQuery(
+    { jobId },
+    { enabled: !!jobId, refetchInterval: 30000 },
+  );
   const addNote = trpc.coordinator.addInternalNote.useMutation({
     onSuccess: () => {
       setNote("");
       invalidateJobData();
-      toast.success("Note added");
+      toast.success("Internal note added (history only)");
     },
     onError: (e) => toast.error(e.message || "Could not add note"),
   });
+  const sendNote = trpc.coordinator.sendJobNote.useMutation({
+    onSuccess: (r) => {
+      setNote("");
+      utils.coordinator.jobThread.invalidate({ jobId });
+      invalidateJobData();
+      toast.success(
+        r.notified > 0
+          ? `Sent — ${r.notified} technician(s) notified`
+          : "Sent — no technicians assigned yet",
+      );
+    },
+    onError: (e) => toast.error(e.message || "Could not send"),
+  });
+  const submitNote = () => {
+    const text = note.trim();
+    if (!text) return;
+    if (internalOnly) addNote.mutate({ jobId, note: text });
+    else sendNote.mutate({ jobId, note: text });
+  };
 
   const job = data?.job;
   const history = data?.history ?? [];
   const photos = data?.photos ?? [];
-  const notes = data?.notes ?? [];
 
   const subColor = useMemo(() => subStatusColor(job?.subStatus), [job?.subStatus]);
 
@@ -428,53 +454,98 @@ export default function ProjectDetail() {
 
         {/* Right: notes + history */}
         <div className="space-y-5">
-          {/* Notes */}
+          {/* Notes thread — chat with the crew; everything stays on record. */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <StickyNote className="size-4" /> Notes
+                <StickyNote className="size-4" /> Notes / Chat with crew
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {(threadQ.data?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No messages yet — what you send here reaches the assigned
+                  technicians' app.
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto border rounded-lg p-2 bg-muted/20">
+                  {threadQ.data!.map((m: any) => {
+                    const coord = m.authorRole === "coordinator";
+                    const cat =
+                      m.category === "stolen"
+                        ? "🚨 "
+                        : m.category === "lost"
+                          ? "❓ "
+                          : m.category === "damaged"
+                            ? "🔧 "
+                            : "";
+                    return (
+                      <div
+                        key={m.id}
+                        className={cn(
+                          "flex",
+                          coord ? "justify-end" : "justify-start",
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "max-w-[85%] rounded-xl px-3 py-1.5 text-sm",
+                            coord
+                              ? "bg-primary text-primary-foreground rounded-br-sm"
+                              : "bg-background border rounded-bl-sm",
+                          )}
+                        >
+                          <div className="text-[10px] font-semibold opacity-75">
+                            {coord ? m.authorName : `🦺 ${m.authorName}`} ·{" "}
+                            {prettyDateTime(m.createdAt)}
+                          </div>
+                          <div className="whitespace-pre-wrap">
+                            {cat}
+                            {m.note}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Add an internal note…"
+                  placeholder={
+                    internalOnly
+                      ? "Internal note (history only)…"
+                      : "Message to the crew…"
+                  }
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && note.trim()) {
-                      addNote.mutate({ jobId, note: note.trim() });
-                    }
+                    if (e.key === "Enter") submitNote();
                   }}
                 />
                 <Button
                   size="sm"
-                  disabled={!note.trim() || addNote.isPending}
-                  onClick={() => addNote.mutate({ jobId, note: note.trim() })}
+                  disabled={
+                    !note.trim() || addNote.isPending || sendNote.isPending
+                  }
+                  onClick={submitNote}
                 >
-                  {addNote.isPending ? (
+                  {addNote.isPending || sendNote.isPending ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Plus className="size-4" />
                   )}
                 </Button>
               </div>
-              {notes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No notes yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {notes.map((n: any) => (
-                    <li key={n.id} className="rounded-md border bg-muted/30 p-2">
-                      <p className="whitespace-pre-wrap text-sm text-foreground">
-                        {n.note}
-                      </p>
-                      <div className="mt-1 text-[11px] text-muted-foreground">
-                        {n.authorName || "—"} · {prettyDateTime(n.createdAt)}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={internalOnly}
+                  onChange={(e) => setInternalOnly(e.target.checked)}
+                  className="size-3.5"
+                />
+                Internal only — goes to the change history, the crew does NOT
+                see it
+              </label>
             </CardContent>
           </Card>
 

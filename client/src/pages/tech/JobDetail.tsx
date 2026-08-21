@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
   MapPin,
@@ -96,9 +97,15 @@ export default function JobDetail() {
       toast.success("Note added");
       setNote("");
       utils.technician.myJobs.invalidate();
+      utils.technician.jobThread.invalidate({ jobId });
     },
     onError: (e) => toast.error(e.message),
   });
+  // Notes thread — chat with the coordinator; light polling keeps it fresh.
+  const threadQ = trpc.technician.jobThread.useQuery(
+    { jobId },
+    { refetchInterval: 30000 },
+  );
 
   if (jobsQuery.isLoading) {
     return (
@@ -373,9 +380,57 @@ export default function JobDetail() {
         </Button>
       </div>
 
-      {/* Notes — with "novedades" incident categories for signs */}
+      {/* Notes thread — chat with the coordinator + "novedades" incidents.
+          Everything about the job stays on record here. */}
       <div className="bg-card border rounded-xl p-4 space-y-3">
-        <span className="font-semibold">Field Notes / Novedades</span>
+        <span className="font-semibold">Notes / Chat with coordinator</span>
+        {(threadQ.data?.length ?? 0) > 0 && (
+          <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-2 bg-background">
+            {threadQ.data!.map((m) => {
+              const mine = (m as any).mine;
+              const coord = m.authorRole === "coordinator";
+              const cat =
+                m.category === "stolen"
+                  ? "🚨 "
+                  : m.category === "lost"
+                    ? "❓ "
+                    : m.category === "damaged"
+                      ? "🔧 "
+                      : "";
+              return (
+                <div
+                  key={m.id}
+                  className={cn("flex", mine ? "justify-end" : "justify-start")}
+                >
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-xl px-3 py-1.5 text-sm",
+                      mine
+                        ? "bg-primary text-primary-foreground rounded-br-sm"
+                        : coord
+                          ? "bg-amber-100 text-amber-900 border border-amber-200 rounded-bl-sm"
+                          : "bg-muted rounded-bl-sm",
+                    )}
+                  >
+                    <div className="text-[10px] font-semibold opacity-75">
+                      {coord ? `📣 ${m.authorName}` : m.authorName} ·{" "}
+                      {new Date(m.createdAt).toLocaleString("en-CA", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                    <div className="whitespace-pre-wrap">
+                      {cat}
+                      {m.note}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
         <Select value={noteCategory} onValueChange={setNoteCategory}>
           <SelectTrigger className="h-9">
             <SelectValue />
@@ -406,13 +461,8 @@ export default function JobDetail() {
           }
         >
           {addNote.isPending && <Loader2 className="size-4 animate-spin mr-1" />}
-          Add note
+          Send
         </Button>
-        {job.fieldComments && (
-          <div className="text-xs text-muted-foreground whitespace-pre-wrap border-t pt-2 max-h-40 overflow-y-auto">
-            {job.fieldComments}
-          </div>
-        )}
       </div>
 
       <HazardForm

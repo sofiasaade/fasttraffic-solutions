@@ -40,6 +40,7 @@ import {
 import {
   appendChangeHistory,
   createNotification,
+  createJobNote,
   confirmAssignmentsForDate,
   listDayNotifications,
   setAssignmentNote,
@@ -576,6 +577,62 @@ export const coordinatorRouter = router({
         override ? { endDate: override.endDate, subStatus: override.subStatus } : undefined,
       );
       return { job: merged, history, photos, notes };
+    }),
+
+  // Lightweight notes thread for a job (no Airtable round-trip) — the
+  // coordinator↔technician chat lives in job_notes so everything stays on record.
+  jobThread: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const notes = await listJobNotes(input.jobId);
+      return notes
+        .slice()
+        .reverse() // listJobNotes is newest-first; a chat reads oldest-first
+        .map((n) => ({
+          id: n.id,
+          authorName: n.authorName,
+          authorRole: n.authorRole,
+          category: n.category,
+          note: n.note,
+          createdAt: n.createdAt,
+        }));
+    }),
+
+  // Coordinator reply into a job's notes thread. Notifies every technician
+  // assigned to the job so the message reaches their app.
+  sendJobNote: adminProcedure
+    .input(z.object({ jobId: z.string(), note: z.string().min(1).max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const authorName = ctx.user.name ?? "Coordinator";
+      await createJobNote({
+        airtableJobId: input.jobId,
+        authorName,
+        authorRole: "coordinator",
+        category: "general",
+        note: input.note,
+      });
+      const { listTechniciansForJob } = await import("../opsDb");
+      const techs = await listTechniciansForJob(input.jobId);
+      for (const t of techs) {
+        await createNotification({
+          technicianName: t,
+          airtableJobId: input.jobId,
+          type: "info",
+          title: "💬 Message from the coordinator",
+          body: input.note.slice(0, 300),
+        });
+      }
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: authorName,
+        action: "coordinator_note",
+        fieldName: "Notes thread",
+        oldValue: null,
+        newValue: input.note,
+        details: techs.length ? `Notified: ${techs.join(", ")}` : null,
+      });
+      return { ok: true as const, notified: techs.length };
     }),
 
   technicians: adminProcedure.query(async () => {

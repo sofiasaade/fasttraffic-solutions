@@ -612,6 +612,16 @@ export async function listAssignmentsForJob(airtableJobId: string) {
     );
 }
 
+/** Distinct technicians with ANY assignment row (phase or day-pinned) on a job. */
+export async function listTechniciansForJob(airtableJobId: string) {
+  const d = await db();
+  const rows = await d
+    .select({ technicianName: jobAssignments.technicianName })
+    .from(jobAssignments)
+    .where(eq(jobAssignments.airtableJobId, airtableJobId));
+  return Array.from(new Set(rows.map((r) => r.technicianName)));
+}
+
 /** Assignment rows for many jobs at once, grouped into a Map keyed by jobId. */
 export async function getAssignmentsMap(jobIds: string[]) {
   const map = new Map<string, { Preparation: string[]; Setup: string[]; Pickup: string[] }>();

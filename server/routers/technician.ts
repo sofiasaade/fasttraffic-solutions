@@ -598,6 +598,27 @@ export const technicianRouter = router({
       return { ok: true as const, url };
     }),
 
+  // The job's notes thread — coordinator↔technician chat, everything on record.
+  jobThread: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const tech = await resolveTechnician(ctx.user.id);
+      if (!tech) return [];
+      const notes = await listJobNotes(input.jobId);
+      return notes
+        .slice()
+        .reverse()
+        .map((n) => ({
+          id: n.id,
+          authorName: n.authorName,
+          authorRole: n.authorRole,
+          category: n.category,
+          note: n.note,
+          createdAt: n.createdAt,
+          mine: n.authorRole === "technician" && n.authorName === tech.displayName,
+        }));
+    }),
+
   // Add a field note -> LOCAL job_notes (Airtable read-only).
   addFieldNote: protectedProcedure
     .input(
