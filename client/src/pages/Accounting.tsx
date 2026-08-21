@@ -36,6 +36,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { fmtDate, fmtTime12 } from "@/lib/format";
 import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
+import {
+  parseSubmissionType,
+  submissionTypeLabel,
+  submissionTypeBillingNote,
+  type SubmissionType,
+} from "@shared/pricingRules";
 
 function money(cents: number) {
   return (cents / 100).toLocaleString("en-CA", {
@@ -445,6 +451,23 @@ export default function Accounting() {
     { jobId: workJobId },
     { enabled: !!workJobId && signCheckOn, staleTime: 10 * 60 * 1000 },
   );
+  // Airtable "Type of Submission" — must be CLEAR and VISIBLE while billing:
+  // it decides which sections (plan / permits / setup / rental) are billable.
+  const submissionRaw =
+    (allFieldsQ.data ?? []).find((f: any) =>
+      /^type of submission$/i.test(String(f.name ?? "").trim()),
+    )?.value ?? null;
+  const submissionType = parseSubmissionType(submissionRaw);
+  const SUBMISSION_STYLE: Record<SubmissionType, string> = {
+    full_pack: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    plan_only: "border-sky-300 bg-sky-50 text-sky-800",
+    plan_and_setup: "border-amber-300 bg-amber-50 text-amber-800",
+    setup_only: "border-violet-300 bg-violet-50 text-violet-800",
+    no_parking_setup: "border-rose-300 bg-rose-50 text-rose-800",
+    plan_and_sign_rental: "border-indigo-300 bg-indigo-50 text-indigo-800",
+    unknown: "border-slate-300 bg-slate-100 text-slate-700",
+  };
+
   const viewDocs = useMemo(() => {
     const files = ((jobDetailQ.data?.job as any)?.planFile ?? []) as {
       filename?: string | null;
@@ -1058,6 +1081,28 @@ export default function Accounting() {
                   </>
                 )}
               </div>
+              {creating.jobId && (
+                <div
+                  className={cn(
+                    "rounded-lg border-2 px-3 py-2 flex flex-wrap items-baseline gap-x-3 gap-y-0.5",
+                    SUBMISSION_STYLE[submissionType],
+                  )}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-wide opacity-70">
+                    Type of Submission
+                  </span>
+                  <span className="text-sm font-extrabold">
+                    {submissionType === "unknown"
+                      ? (submissionRaw ?? "Not set in Airtable")
+                      : submissionTypeLabel(submissionType)}
+                  </span>
+                  {submissionTypeBillingNote(submissionType) && (
+                    <span className="text-[11px] font-medium basis-full sm:basis-auto">
+                      {submissionTypeBillingNote(submissionType)}
+                    </span>
+                  )}
+                </div>
+              )}
               {quoteReasons.length > 0 && (
                 <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5 text-[11px] text-muted-foreground space-y-0.5">
                   <div className="font-semibold text-primary text-xs mb-1">

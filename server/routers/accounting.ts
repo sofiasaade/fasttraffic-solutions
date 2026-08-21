@@ -128,11 +128,15 @@ export const accountingRouter = router({
   suggestQuote: accountingProcedure
     .input(z.object({ jobId: z.string() }))
     .query(async ({ input }) => {
-      const [{ fetchJobById, fetchJobRawFields }, { buildQuote, parseEquipment }] =
-        await Promise.all([
-          import("../airtable"),
-          import("../../shared/pricingRules"),
-        ]);
+      const [
+        { fetchJobById, fetchJobRawFields },
+        { buildQuote, parseEquipment, parseSubmissionType },
+        { isPermitPulledByFts },
+      ] = await Promise.all([
+        import("../airtable"),
+        import("../../shared/pricingRules"),
+        import("../../shared/permitSchedule"),
+      ]);
       const job = await fetchJobById(input.jobId);
       const raw = await fetchJobRawFields(input.jobId);
       const rawMap = new Map(raw.map((f) => [f.name.toLowerCase(), f.value]));
@@ -240,6 +244,7 @@ export const accountingRouter = router({
               (String(r.filename).match(/SU-?\d{2}-?\d+/i)?.[0] ?? null),
             from: r.validFromDate as string | null,
             to: r.validToDate as string | null,
+            onBehalfOf: (r.onBehalfOf as string | null) ?? null,
           }))
           .sort((a: any, b: any) => (a.from ?? "9999").localeCompare(b.from ?? "9999"));
       };
@@ -262,24 +267,40 @@ export const accountingRouter = router({
           day: "numeric",
         });
       };
-      const permitLines = costEntries.map((e, i) => {
-        const su = suPermits[i];
-        const dates = su?.from
-          ? `${fmtShort(su.from)}${su.to && su.to !== su.from ? ` – ${fmtShort(su.to)}` : ""}`
-          : e.dateText;
-        return {
-          label: `Street Use Permit${su?.code ? ` ${su.code}` : ""}${dates ? ` — ${dates}` : ""}`,
-          cents: e.cents,
-        };
-      });
+      const clientPulledPermits: string[] = [];
+      const permitLines = costEntries
+        .map((e, i) => {
+          const su = suPermits[i];
+          // Sofia's rule: the permit's "On Behalf Of (Onsite – In the
+          // right-of-way)" decides who pulled it. Fast Traffic → billable
+          // pass-through; any other name → the client pulled (and pays) it —
+          // keep it for reference only, never on the invoice.
+          if (su && !isPermitPulledByFts(su.onBehalfOf)) {
+            clientPulledPermits.push(
+              `${su.code ?? "Street Use Permit"} (On Behalf Of: ${su.onBehalfOf})`,
+            );
+            return null;
+          }
+          const dates = su?.from
+            ? `${fmtShort(su.from)}${su.to && su.to !== su.from ? ` – ${fmtShort(su.to)}` : ""}`
+            : e.dateText;
+          return {
+            label: `Street Use Permit${su?.code ? ` ${su.code}` : ""}${dates ? ` — ${dates}` : ""}`,
+            cents: e.cents,
+          };
+        })
+        .filter((p): p is { label: string; cents: number } => p !== null);
 
       const planOnly = /plan\s*only/i.test(
         `${job.jobAddress ?? ""} ${job.projectTitle ?? ""} ${rawGet("Type of Submission") ?? ""} ${rawGet("Location") ?? ""}`,
       );
+      const submissionRaw = rawGet("Type of Submission");
+      const submissionType = parseSubmissionType(submissionRaw);
 
       const quote = buildQuote({
         company: job.company,
         planOnly,
+        submissionType,
         equipment,
         signs,
         panelSigns: equipment.wmSigns + equipment.looseSigns,
@@ -327,9 +348,16 @@ export const accountingRouter = router({
           "Plan provided BY CLIENT (no FTS plan in the attachments) — TMP/stamp NOT charged",
         );
       }
+      for (const p of clientPulledPermits) {
+        quote.reasons.push(
+          `Permit pulled BY THE CLIENT — not billed (reference only): ${p}`,
+        );
+      }
 
       return {
         ...quote,
+        submissionType,
+        submissionRaw,
         inputs: { signs, days, setupDuration: job.setupDuration, weekendStart, hasStamp, parkingBan, stockpile, arrowBoards, messageBoards },
       };
     }),

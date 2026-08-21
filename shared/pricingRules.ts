@@ -229,6 +229,68 @@ export const FIXED = {
   flaggerOtHour: 6000,
 } as const;
 
+/**
+ * Airtable "Type of Submission" — gates WHAT is billable (Sofia, Aug 2026):
+ *  - full_pack: whole process (plan, permit acquisition, setup, pickup) → bill everything.
+ *  - plan_only: we only made the plan → bill just the plan.
+ *  - plan_and_setup: client pulls AND pays the permit → bill plan + setup + rental,
+ *    NO permit pass-through and NO $50 ACQ.
+ *  - setup_only: client made their own plans and pulled the permit → bill only
+ *    setup (+ our equipment rental); no plan, no ACQ, no permits.
+ *  - no_parking_setup: we only installed No Parking signs → Parking Ban install
+ *    + NP sign rental; no setup fee, no plan, no permits.
+ *  - plan_and_sign_rental: we made the plans (billed) + rental, client pulled
+ *    the permits → no ACQ, no permit pass-through, no setup fee.
+ */
+export type SubmissionType =
+  | "full_pack"
+  | "plan_only"
+  | "plan_and_setup"
+  | "setup_only"
+  | "no_parking_setup"
+  | "plan_and_sign_rental"
+  | "unknown";
+
+export function parseSubmissionType(
+  raw: string | null | undefined,
+): SubmissionType {
+  const s = (raw ?? "").toLowerCase();
+  if (!s.trim()) return "unknown";
+  if (/plan\s*only/.test(s)) return "plan_only";
+  if (/no\s*parking/.test(s)) return "no_parking_setup";
+  if (/plan\b.*(sign|rental)/.test(s)) return "plan_and_sign_rental";
+  if (/plan\b.*set\s*-?up|set\s*-?up.*\bplan/.test(s)) return "plan_and_setup";
+  if (/set\s*-?up\s*only/.test(s)) return "setup_only";
+  if (/full/.test(s)) return "full_pack";
+  return "unknown";
+}
+
+/** Short human label for the submission type (invoice workspace chip). */
+export function submissionTypeLabel(t: SubmissionType): string {
+  switch (t) {
+    case "full_pack": return "Full pack";
+    case "plan_only": return "Plan Only";
+    case "plan_and_setup": return "Plan and Set up";
+    case "setup_only": return "Set up Only";
+    case "no_parking_setup": return "No Parking Set up";
+    case "plan_and_sign_rental": return "Plan and Sign rental";
+    default: return "Unknown";
+  }
+}
+
+/** What the submission type means for billing (shown next to the chip). */
+export function submissionTypeBillingNote(t: SubmissionType): string | null {
+  switch (t) {
+    case "full_pack": return "Bill everything: plan, permits, setup, rental.";
+    case "plan_only": return "Bill ONLY the plan — no setup, no rental, no permits.";
+    case "plan_and_setup": return "Client pays the permit — do NOT bill permits or the $50 ACQ.";
+    case "setup_only": return "Client made plans & pulled permit — bill only setup + rental.";
+    case "no_parking_setup": return "Only NP signs installed — Parking Ban + NP sign rental only.";
+    case "plan_and_sign_rental": return "Bill plan + rental; client pulled permits — no ACQ, no permits, no setup fee.";
+    default: return null;
+  }
+}
+
 export interface QuoteInput {
   company: string | null;
   /** Per-category equipment tally (from parseEquipment on "Signs Count"). */
@@ -248,6 +310,8 @@ export interface QuoteInput {
   impact?: string | null;
   /** "Plan Only" job: ONLY the plan is billed — no setup, no rental, nothing else. */
   planOnly?: boolean;
+  /** Airtable "Type of Submission" — gates which sections are billable. */
+  submissionType?: SubmissionType;
   /**
    * Codes/names of the DISTINCT stamped plans — one $550 stamp line each
    * (Sofia: "se le cobra uno a uno si son 3 planos distintos").
@@ -330,9 +394,37 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   const reasons: string[] = [];
   const money = (c: number) => `$${(c / 100).toFixed(2)}`;
 
+  // ---- Type of Submission gates (Sofia, Aug 2026) ----
+  const st = input.submissionType ?? "unknown";
+  const billSetup = st !== "plan_and_sign_rental" && st !== "no_parking_setup";
+  const billPlan = st !== "setup_only" && st !== "no_parking_setup";
+  const billPermits = st === "full_pack" || st === "unknown";
+  if (st !== "unknown") {
+    reasons.push(`Type of Submission: ${submissionTypeLabel(st)} — ${submissionTypeBillingNote(st)}`);
+  }
+
+  // "No Parking Set up": we ONLY installed the No Parking signs — bill the
+  // Parking Ban install + NP sign rental; no setup fee, no plan, no permits.
+  if (st === "no_parking_setup") {
+    const np = input.equipment?.noParking ?? 0;
+    const npDays = Math.max(1, input.days);
+    if (np > 0) {
+      lines.push({
+        description: "No Parking signs",
+        quantity: npDays,
+        unitCents: np * RENTAL_RATES.noParking,
+        section: "rental",
+        itemQty: np,
+        rateCents: RENTAL_RATES.noParking,
+      });
+    }
+    lines.push({ description: "Parking Ban (NP install)", quantity: 1, unitCents: FIXED.parkingBan, section: "service" });
+    return { industry, complexity, lines, reasons };
+  }
+
   // "Plan Only": the client only got the plan — bill the plan (stamp or TMP)
-  // and any real city-permit costs; NO setup, NO rental, NO signs.
-  if (input.planOnly) {
+  // and any FTS-pulled city-permit costs; NO setup, NO rental, NO signs.
+  if (input.planOnly || st === "plan_only") {
     if (pushStampLines(lines, input)) {
       // stamped plan lines added
     } else if (input.hasPlan) {
@@ -352,6 +444,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   }
 
   // ---- Setup fee ----
+  if (billSetup) {
   const night = isNight(input.setupDuration);
   let setup: number | null = null;
   let setupWhy = "";
@@ -420,6 +513,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   reasons.push(
     `Setup ${money(setup)} × ${setupQty}: ${setupWhy}${setupQty > 1 ? " — daily setup bills each day" : ""}`,
   );
+  } // billSetup
 
   // ---- Equipment rental — per-category breakdown when we parsed the field ----
   const eq = input.equipment;
@@ -515,7 +609,9 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   }
 
   // ---- Plan / stamp ----
-  if (pushStampLines(lines, input)) {
+  if (!billPlan) {
+    // setup_only: the client made their own plans — nothing to bill here.
+  } else if (pushStampLines(lines, input)) {
     const n = input.stampedPlans?.length ?? 1;
     reasons.push(
       n > 1
@@ -528,6 +624,10 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   }
 
   // ---- Permits ----
+  if (!billPermits) {
+    // Client pulls (and pays) the permits under this submission type: no
+    // $50 ACQ and no city-cost pass-through.
+  } else {
   lines.push({ description: "Permit acquisition (ACQ)", quantity: 1, unitCents: FIXED.permitAcq, section: "service" });
   if (input.permitLines && input.permitLines.length > 0) {
     for (const p of input.permitLines) {
@@ -552,6 +652,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     });
     reasons.push(`City permit pass-through ${money(input.permitCostCents)}`);
   }
+  } // billPermits
 
   // ---- Extra services ----
   if (input.parkingBan) {

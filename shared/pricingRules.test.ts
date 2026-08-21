@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { isPermitPulledByFts } from "./permitSchedule";
 import {
   buildQuote,
   complexityForSigns,
   industryFor,
+  parseSubmissionType,
   type QuoteInput,
 } from "./pricingRules";
 
@@ -257,5 +259,88 @@ describe("plan-only jobs", () => {
     expect(q.lines.some((l) => l.description.startsWith("Setup fee"))).toBe(false);
     expect(q.lines.some((l) => l.section === "rental")).toBe(false);
     expect(q.lines.some((l) => l.description.includes("Stamp"))).toBe(true);
+  });
+});
+
+describe("Type of Submission gates (Sofia, Aug 2026)", () => {
+  it("parses the Airtable values", () => {
+    expect(parseSubmissionType("Full Pack")).toBe("full_pack");
+    expect(parseSubmissionType("Plan Only")).toBe("plan_only");
+    expect(parseSubmissionType("Plan and Set up")).toBe("plan_and_setup");
+    expect(parseSubmissionType("Set up Only")).toBe("setup_only");
+    expect(parseSubmissionType("No Parking Set up")).toBe("no_parking_setup");
+    expect(parseSubmissionType("Plan and Sign rental")).toBe("plan_and_sign_rental");
+    expect(parseSubmissionType(null)).toBe("unknown");
+  });
+
+  const withPermits = (): QuoteInput => ({
+    ...baseInput(),
+    hasPlan: true,
+    permitLines: [{ label: "Street Use Permit SU-26-1 — Jul 1", cents: 22105 }],
+  });
+  const has = (q: { lines: { description: string }[] }, re: RegExp) =>
+    q.lines.some((l) => re.test(l.description));
+
+  it("full pack bills everything", () => {
+    const q = buildQuote({ ...withPermits(), submissionType: "full_pack" });
+    expect(has(q, /^Setup fee/)).toBe(true);
+    expect(has(q, /Traffic Management Plan|Stamp/)).toBe(true);
+    expect(has(q, /Permit acquisition/)).toBe(true);
+    expect(has(q, /Street Use Permit/)).toBe(true);
+  });
+
+  it("plan and set up: client pays the permit — no ACQ, no pass-through", () => {
+    const q = buildQuote({ ...withPermits(), submissionType: "plan_and_setup" });
+    expect(has(q, /^Setup fee/)).toBe(true);
+    expect(has(q, /Traffic Management Plan|Stamp/)).toBe(true);
+    expect(has(q, /Permit acquisition/)).toBe(false);
+    expect(has(q, /Street Use Permit/)).toBe(false);
+  });
+
+  it("set up only: no plan, no permits — setup + rental still bill", () => {
+    const q = buildQuote({ ...withPermits(), submissionType: "setup_only" });
+    expect(has(q, /^Setup fee/)).toBe(true);
+    expect(q.lines.some((l) => l.section === "rental")).toBe(true);
+    expect(has(q, /Traffic Management Plan|Stamp/)).toBe(false);
+    expect(has(q, /Permit acquisition|Street Use Permit/)).toBe(false);
+  });
+
+  it("plan and sign rental: plan + rental only — no setup fee, no permits", () => {
+    const q = buildQuote({ ...withPermits(), submissionType: "plan_and_sign_rental" });
+    expect(has(q, /^Setup fee/)).toBe(false);
+    expect(q.lines.some((l) => l.section === "rental")).toBe(true);
+    expect(has(q, /Traffic Management Plan|Stamp/)).toBe(true);
+    expect(has(q, /Permit acquisition|Street Use Permit/)).toBe(false);
+  });
+
+  it("no parking set up: only Parking Ban + NP sign rental", () => {
+    const q = buildQuote({
+      ...withPermits(),
+      submissionType: "no_parking_setup",
+      equipment: { ...({} as any), wmSigns: 5, looseSigns: 0, noParking: 12, barricades: 2, cones: 0, flashers: 0, aFrames: 0, barrels: 0, pedestrianDetour: 0, sidewalkClosed: 0, arrowBoards: 0, messageBoards: 0, customSigns: 0, totalSigns: 17 },
+    });
+    expect(has(q, /^Setup fee/)).toBe(false);
+    expect(has(q, /Parking Ban/)).toBe(true);
+    const np = q.lines.find((l) => l.description === "No Parking signs");
+    expect(np?.itemQty).toBe(12);
+    expect(q.lines.filter((l) => l.section === "rental")).toHaveLength(1);
+    expect(has(q, /Permit acquisition|Street Use Permit|Traffic Management Plan/)).toBe(false);
+  });
+
+  it("plan_only via submission type behaves like planOnly", () => {
+    const q = buildQuote({ ...baseInput(), submissionType: "plan_only", hasStamp: true });
+    expect(has(q, /^Setup fee/)).toBe(false);
+    expect(q.lines.some((l) => l.section === "rental")).toBe(false);
+    expect(has(q, /Stamp/)).toBe(true);
+  });
+});
+
+describe("permit ownership (On Behalf Of)", () => {
+  it("FTS-pulled, unknown, and client-pulled permits", () => {
+    expect(isPermitPulledByFts("LBCO / FTS Fast Traffic Solutions")).toBe(true);
+    expect(isPermitPulledByFts("Fast Traffic Solutions")).toBe(true);
+    expect(isPermitPulledByFts(null)).toBe(true); // unknown → keep billing (safe default)
+    expect(isPermitPulledByFts("LBCO Contracting")).toBe(false);
+    expect(isPermitPulledByFts("Kobi Construction Ltd")).toBe(false);
   });
 });

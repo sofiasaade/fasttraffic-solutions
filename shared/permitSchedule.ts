@@ -20,6 +20,16 @@ export interface PermitSchedule {
   validToTime?: string | null;
   validToDay?: string | null;
   numberOfDays?: number | null;
+  /** "On Behalf Of (Onsite – In the right-of-way)" — who the permit was pulled for. */
+  onBehalfOf?: string | null;
+}
+
+/** True when the permit's On-Behalf-Of names Fast Traffic (WE pulled it → billable). */
+export function isPermitPulledByFts(onBehalfOf: string | null | undefined): boolean {
+  // Unknown/missing keeps today's behavior: assume ours (billable) — the
+  // husband can always delete the line; hiding a real cost is worse.
+  if (!onBehalfOf || !onBehalfOf.trim()) return true;
+  return /fast\s*traffic|\bFTS\b/i.test(onBehalfOf);
 }
 
 /**

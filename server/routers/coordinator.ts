@@ -2111,6 +2111,7 @@ export const coordinatorRouter = router({
       const jobById = new Map(jobs.map((j) => [j.id, j]));
       const assignments = assigns.map((a) => {
         const j = a.airtableJobId ? jobById.get(a.airtableJobId) : undefined;
+        const internal = isInternalJobId(a.airtableJobId);
         return {
           id: a.id,
           technicianName: a.technicianName,
@@ -2122,8 +2123,9 @@ export const coordinatorRouter = router({
           status: (a.status === "confirmed" ? "confirmed" : "tentative") as
             | "tentative"
             | "confirmed",
-          company: j?.company ?? null,
-          jobAddress: j?.jobAddress ?? null,
+          company:
+            j?.company ?? (internal ? internalLabel(a.airtableJobId) : null),
+          jobAddress: j?.jobAddress ?? (internal ? "Internal task" : null),
           municipality: j?.municipality ?? null,
         };
       });

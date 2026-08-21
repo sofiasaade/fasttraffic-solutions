@@ -11,7 +11,9 @@ import {
   Search,
   GraduationCap,
   Flag,
+  Plus,
 } from "lucide-react";
+import { INTERNAL_ACTIVITIES } from "@shared/internalTasks";
 import { cn } from "@/lib/utils";
 import { fmtTime12Range } from "@/lib/format";
 import { toast } from "sonner";
@@ -186,6 +188,45 @@ export default function WorkersCalendar() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  // Assign an INTERNAL (non-project) task to a worker on a day — fill dead
+  // time with shop work: sign recovery, organizing, truck maintenance…
+  const [assigning, setAssigning] = useState<{
+    techName: string;
+    displayName: string;
+    date: string;
+    activityId: string;
+    start: string;
+    end: string;
+  } | null>(null);
+  const setScheduled = trpc.coordinator.setScheduled.useMutation({
+    onSuccess: (res: any) => {
+      if (res?.ok === false) {
+        toast.error("Could not assign — the worker is already booked.");
+        return;
+      }
+      toast.success(
+        "Internal task assigned (tentative) — confirm the day in the Daily Board to notify.",
+      );
+      setAssigning(null);
+      utils.coordinator.workerWeek.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const saveInternal = () => {
+    if (!assigning) return;
+    setScheduled.mutate({
+      jobId: assigning.activityId,
+      phase: "Internal" as any,
+      technicianName: assigning.techName,
+      scheduledDate: assigning.date,
+      startTime: assigning.start || undefined,
+      endTime: assigning.end || undefined,
+      // Internal tasks FILL dead time around project work — never blocked by
+      // the same-day booking check.
+      force: true,
+    });
+  };
 
   // How many distinct technicians have at least one assignment TODAY.
   const workingTodayCount = useMemo(() => {
@@ -582,6 +623,25 @@ export default function WorkersCalendar() {
                           Off
                         </div>
                       )}
+                      {!unavailable && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAssigning({
+                              techName: t.airtableName,
+                              displayName: t.displayName,
+                              date: dateStr,
+                              activityId: INTERNAL_ACTIVITIES[0].id,
+                              start: "07:00",
+                              end: "15:00",
+                            })
+                          }
+                          title="Assign an internal task (shop work, sign recovery, maintenance…)"
+                          className="w-full flex items-center justify-center gap-0.5 rounded border border-dashed border-transparent py-0.5 text-[10px] text-muted-foreground/0 hover:text-muted-foreground hover:border-border hover:bg-accent/50 transition-colors"
+                        >
+                          <Plus className="size-3" /> task
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -590,6 +650,82 @@ export default function WorkersCalendar() {
           </div>
         </div>
       )}
+
+      {/* Assign an internal (non-project) task to a worker on a day. */}
+      <Dialog open={!!assigning} onOpenChange={(v) => !v && setAssigning(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Internal task</DialogTitle>
+            <DialogDescription>
+              {assigning
+                ? `${assigning.displayName} · ${assigning.date} — shop work, not tied to a project`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {assigning && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                {INTERNAL_ACTIVITIES.map((act) => (
+                  <button
+                    key={act.id}
+                    type="button"
+                    onClick={() =>
+                      setAssigning((a) => (a ? { ...a, activityId: act.id } : a))
+                    }
+                    className={cn(
+                      "w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-left transition-colors",
+                      assigning.activityId === act.id
+                        ? "border-primary bg-primary/10 font-semibold"
+                        : "border-border bg-background hover:bg-accent",
+                    )}
+                  >
+                    <span className="text-base">{act.emoji}</span> {act.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">
+                    Start time
+                  </div>
+                  <Input
+                    type="time"
+                    value={assigning.start}
+                    onChange={(e) =>
+                      setAssigning((a) => (a ? { ...a, start: e.target.value } : a))
+                    }
+                    className="h-9"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs font-medium text-muted-foreground mb-1">
+                    End time
+                  </div>
+                  <Input
+                    type="time"
+                    value={assigning.end}
+                    onChange={(e) =>
+                      setAssigning((a) => (a ? { ...a, end: e.target.value } : a))
+                    }
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" size="sm" onClick={() => setAssigning(null)}>
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={saveInternal} disabled={setScheduled.isPending}>
+                  {setScheduled.isPending && (
+                    <Loader2 className="size-3.5 mr-1 animate-spin" />
+                  )}
+                  Assign
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit an assigned chip: task, times, or remove the assignment. */}
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
@@ -623,6 +759,7 @@ export default function WorkersCalendar() {
                       "No Parking",
                       "Flagger",
                       "Check up",
+                      "Internal",
                       "Pickup",
                     ].map((t) => (
                       <SelectItem key={t} value={t}>

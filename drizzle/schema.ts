@@ -631,6 +631,12 @@ export const permitExtractions = mysqlTable("permit_extractions", {
   validToDay: varchar("validToDay", { length: 16 }),
   /** Number Of Days parsed from the permit, if present. */
   numberOfDays: int("numberOfDays"),
+  /**
+   * "On Behalf Of (Onsite – In the right-of-way)" from the permit. When it
+   * names Fast Traffic Solutions WE pulled the permit (billable pass-through);
+   * any other name means the client pulled it — reference only, never billed.
+   */
+  onBehalfOf: varchar("onBehalfOf", { length: 200 }),
   /** "ok" when parsed successfully, "error" when the LLM could not parse. */
   parseStatus: varchar("parseStatus", { length: 16 }).notNull().default("ok"),
   rawJson: text("rawJson"),

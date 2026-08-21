@@ -29,7 +29,31 @@ function rowToSchedule(r: PermitExtractionRow): PermitSchedule {
     validToTime: r.validToTime,
     validToDay: r.validToDay,
     numberOfDays: r.numberOfDays,
+    onBehalfOf: (r as any).onBehalfOf ?? null,
   };
+}
+
+/**
+ * "On Behalf Of (Onsite – In the right-of-way)" — the value prints on the line
+ * AFTER the label in the flat text stream (the label row carries other column
+ * headers like "Site Contact No:").
+ */
+function parseOnBehalf(text: string): string | null {
+  const i = text.search(/On\s*Behalf\s*Of/i);
+  if (i < 0) return null;
+  const lines = text.slice(i, i + 500).split(/\n/).slice(1);
+  for (const ln of lines) {
+    const s = ln.trim();
+    if (!s) continue;
+    if (
+      /^(Site\s*Contact|Additional\s*Conditions|Purpose|Location|Permit|Charge|Lane\/|Number\s*Of)/i.test(
+        s,
+      )
+    )
+      continue;
+    return s.slice(0, 200);
+  }
+  return null;
 }
 
 const PERMIT_SCHEMA = {
@@ -195,17 +219,24 @@ async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null>
   const buf = Buffer.from(await (await fetch(fileUrl)).arrayBuffer());
 
   // Positional table read first — exact for the Calgary Street Use form.
+  let positionalResult: PermitSchedule | null = null;
   try {
     const positional = await extractByPosition(new Uint8Array(buf));
     if (positional && (positional.validFromDate || positional.validToDate)) {
-      return positional;
+      positionalResult = positional;
     }
   } catch {
     // fall through to the flat-text heuristic
   }
 
+  // On-Behalf-Of lives in the flat text either way (billing needs to know WHO
+  // pulled the permit — FTS bills the cost, a client-pulled permit never bills).
   const parser = new PDFParse({ data: new Uint8Array(buf) });
   const text = (await parser.getText()).text ?? "";
+  if (positionalResult) {
+    positionalResult.onBehalfOf = parseOnBehalf(text);
+    return positionalResult;
+  }
   if (text.trim().length < 50) return null; // image-only scan — nothing to read
 
   const permitNumber =
@@ -271,6 +302,7 @@ async function extractOnePermit(fileUrl: string): Promise<PermitSchedule | null>
       const m = win.match(/Number\s*Of\s*Days[\s\S]{0,60}?(\d{1,3})/i);
       return m ? Number(m[1]) : null;
     })(),
+    onBehalfOf: parseOnBehalf(text),
   };
 }
 
@@ -497,6 +529,7 @@ export async function getJobPermitSchedule(
           validToTime: sched.validToTime ?? null,
           validToDay: sched.validToDay ?? null,
           numberOfDays: sched.numberOfDays ?? null,
+          onBehalfOf: sched.onBehalfOf ?? null,
           parseStatus: "ok",
           rawJson: JSON.stringify(sched),
         });
@@ -572,6 +605,7 @@ export async function getPermitSchedulesForJobs(
             validToTime: sched.validToTime ?? null,
             validToDay: sched.validToDay ?? null,
             numberOfDays: sched.numberOfDays ?? null,
+            onBehalfOf: sched.onBehalfOf ?? null,
             parseStatus: "ok",
             rawJson: JSON.stringify(sched),
           });

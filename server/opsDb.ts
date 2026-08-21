@@ -2175,6 +2175,7 @@ export async function upsertPermitExtraction(input: InsertPermitExtraction) {
         validToTime: input.validToTime,
         validToDay: input.validToDay,
         numberOfDays: input.numberOfDays,
+        onBehalfOf: input.onBehalfOf,
         parseStatus: input.parseStatus,
         rawJson: input.rawJson,
       })

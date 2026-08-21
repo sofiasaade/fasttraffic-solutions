@@ -20,7 +20,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { subStatusColor } from "@shared/subStatusColors";
-import { INTERNAL_ACTIVITIES, isInternalJobId } from "@shared/internalTasks";
+import { isInternalJobId } from "@shared/internalTasks";
 import { is24HourSetup } from "@shared/dashboardDay";
 import { fmtTime12 } from "@/lib/format";
 
@@ -515,69 +515,8 @@ export default function DailyBoard() {
                 </div>
               )}
 
-              {/* Internal (non-project) activities — drag onto a technician to
-                  fill dead time: shop work, sign recovery, maintenance… */}
-              <div>
-                <div
-                  className="flex items-center gap-2 mb-2 pb-1 border-b-2"
-                  style={{ borderColor: "#64748b" }}
-                >
-                  <span
-                    className="size-3 rounded-full"
-                    style={{ background: "#64748b" }}
-                  />
-                  <span className="text-sm font-extrabold">Internal tasks</span>
-                  <span className="text-xs text-muted-foreground">
-                    (shop · no project)
-                  </span>
-                </div>
-                <div className="space-y-1.5 ml-1">
-                  {INTERNAL_ACTIVITIES.map((act) => {
-                    const n = assignedCount.get(act.id) ?? 0;
-                    return (
-                      <div
-                        key={act.id}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData(
-                            "application/json",
-                            JSON.stringify({
-                              id: act.id,
-                              phase: "internal",
-                              company: act.label,
-                            }),
-                          );
-                          e.dataTransfer.effectAllowed = "copy";
-                        }}
-                        className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/60 px-2.5 py-2 cursor-grab active:cursor-grabbing hover:border-primary/50 hover:shadow-sm transition-all select-none"
-                        title="Drag onto a technician"
-                      >
-                        <GripVertical className="size-4 text-muted-foreground/50 shrink-0" />
-                        <span className="text-base shrink-0">{act.emoji}</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium truncate">
-                            {act.label}
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            Internal — not tied to a project
-                          </div>
-                        </div>
-                        {n > 0 && (
-                          <span
-                            className="text-[10px] font-bold text-slate-600 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5 shrink-0"
-                            title={`Assigned to ${n} technician(s) today`}
-                          >
-                            ×{n} assigned
-                          </span>
-                        )}
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 bg-slate-200 text-slate-700">
-                          Internal
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* Internal (non-project) tasks are assigned from the WORKERS
+                  page ("+ task" on any day cell) — Sofia's call, Aug 2026. */}
             </div>
           </div>
 
