@@ -172,6 +172,18 @@ export default function QuoteTool() {
   const gstCents = Math.round((subtotal * (Number(gst) || 0)) / 100);
   const total = subtotal + gstCents;
 
+  // Known clients — type-ahead datalist on the Client field.
+  const jobsQ = trpc.coordinator.mapJobs.useQuery(undefined, {
+    staleTime: 5 * 60 * 1000,
+  });
+  const clientNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const j of (jobsQ.data ?? []) as any[]) {
+      if (j.company) s.add(j.company);
+    }
+    return Array.from(s).sort((a, b) => a.localeCompare(b));
+  }, [jobsQ.data]);
+
   // ---- save as draft invoice (shows up in the Invoices tab) ----
   const utils = trpc.useUtils();
   const createInvoice = trpc.accounting.createInvoice.useMutation({
@@ -289,7 +301,18 @@ export default function QuoteTool() {
           <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Client</label>
-              <Input value={client} onChange={(e) => setClient(e.target.value)} placeholder="Client name" className="h-9" />
+              <Input
+                value={client}
+                onChange={(e) => setClient(e.target.value)}
+                placeholder="Type to search clients…"
+                className="h-9"
+                list="quote-client-list"
+              />
+              <datalist id="quote-client-list">
+                {clientNames.map((n) => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="text-[11px] font-medium text-muted-foreground block mb-0.5">Address (optional)</label>

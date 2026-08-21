@@ -106,6 +106,8 @@ export default function JobDetail() {
     { jobId },
     { refetchInterval: 30000 },
   );
+  // Coordinator day notes for this job (yesterday → +14 days).
+  const dayNotesQ = trpc.technician.jobDayNotes.useQuery({ jobId });
 
   if (jobsQuery.isLoading) {
     return (
@@ -165,6 +167,40 @@ export default function JobDetail() {
       <Link href="/app" className="flex items-center gap-1 text-sm text-primary">
         <ArrowLeft className="size-4" /> My Jobs
       </Link>
+
+      {/* Coordinator notes the crew must see: the permanent project note plus
+          any day-specific notes for the coming days. */}
+      {(job as any).standingNote && (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="text-[11px] font-bold uppercase tracking-wide mb-0.5">
+            📌 Project note
+          </div>
+          <div className="whitespace-pre-wrap">{(job as any).standingNote}</div>
+        </div>
+      )}
+      {(dayNotesQ.data?.length ?? 0) > 0 && (
+        <div className="space-y-1.5">
+          {dayNotesQ.data!.map((n: any) => (
+            <div
+              key={n.date}
+              className={cn(
+                "rounded-xl border p-3 text-sm",
+                n.cancelled
+                  ? "border-rose-300 bg-rose-50 text-rose-900"
+                  : "border-blue-200 bg-blue-50 text-blue-900",
+              )}
+            >
+              <div className="text-[11px] font-bold uppercase tracking-wide mb-0.5">
+                🗓 {fmtDate(n.date)}
+                {n.cancelled ? " · CANCELLED" : ""}
+                {n.postponed ? " · Postponed" : ""}
+                {n.missingSigns ? " · Missing signs" : ""}
+              </div>
+              {n.note && <div className="whitespace-pre-wrap">{n.note}</div>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-card border rounded-xl p-4">

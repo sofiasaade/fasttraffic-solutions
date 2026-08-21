@@ -1145,6 +1145,26 @@ export async function listSchedulerDayNotesInRange(
     .orderBy(desc(schedulerDayNotes.updatedAt));
 }
 
+/** All day notes for ONE job in a date range (technician job view). */
+export async function listDayNotesForJob(
+  airtableJobId: string,
+  startDate: string,
+  endDate: string,
+) {
+  const d = await db();
+  return d
+    .select()
+    .from(schedulerDayNotes)
+    .where(
+      and(
+        eq(schedulerDayNotes.airtableJobId, airtableJobId),
+        gte(schedulerDayNotes.noteDate, startDate),
+        lte(schedulerDayNotes.noteDate, endDate),
+      ),
+    )
+    .orderBy(schedulerDayNotes.noteDate);
+}
+
 /** The note for a single (job, date), or null. */
 export async function getSchedulerDayNote(
   airtableJobId: string,
@@ -1365,7 +1385,7 @@ export async function deleteBillingNote(id: number, authorUserId?: number) {
 
 export async function upsertJobOverride(
   airtableJobId: string,
-  patch: { endDate?: string | null; subStatus?: string | null },
+  patch: { endDate?: string | null; subStatus?: string | null; standingNote?: string | null },
   actor: { userId?: number; name?: string },
 ) {
   const d = await db();
@@ -1375,6 +1395,7 @@ export async function upsertJobOverride(
   };
   if (patch.endDate !== undefined) set.endDate = patch.endDate;
   if (patch.subStatus !== undefined) set.subStatus = patch.subStatus;
+  if (patch.standingNote !== undefined) set.standingNote = patch.standingNote;
 
   await d
     .insert(jobOverrides)
@@ -1382,6 +1403,7 @@ export async function upsertJobOverride(
       airtableJobId,
       endDate: patch.endDate ?? null,
       subStatus: patch.subStatus ?? null,
+      standingNote: patch.standingNote ?? null,
       updatedByUserId: actor.userId ?? null,
       updatedByName: actor.name ?? null,
     })

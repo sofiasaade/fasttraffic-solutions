@@ -406,6 +406,8 @@ export const jobOverrides = mysqlTable("job_overrides", {
   airtableJobId: varchar("airtableJobId", { length: 32 }).notNull().unique(),
   endDate: varchar("endDate", { length: 32 }),
   subStatus: varchar("subStatus", { length: 128 }),
+  /** Permanent coordinator note — always shown to every technician on the job. */
+  standingNote: text("standingNote"),
   updatedByUserId: int("updatedByUserId"),
   updatedByName: varchar("updatedByName", { length: 128 }),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

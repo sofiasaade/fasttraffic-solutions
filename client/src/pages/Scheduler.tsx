@@ -590,6 +590,7 @@ export default function Scheduler() {
   const updateEquipment = trpc.coordinator.updateEquipment.useMutation();
   const updateTruck = trpc.coordinator.updateTruck.useMutation();
   const setDayNote = trpc.coordinator.setDayNote.useMutation();
+  const setStandingNote = trpc.coordinator.setStandingNote.useMutation();
   const changeBadgesQuery = trpc.coordinator.changeBadges.useQuery(undefined, {
     refetchInterval: 60_000,
   });
@@ -809,6 +810,9 @@ export default function Scheduler() {
     dayKey: string;
   } | null>(null);
   const [noteText, setNoteText] = useState("");
+  // Permanent project note — every technician on the job always sees it.
+  const [standingText, setStandingText] = useState("");
+  const [standingOrig, setStandingOrig] = useState("");
   // Quick-status flags attached to a day note (cancelled / postponed / missing
   // signs). These let a coordinator tag a day without typing a full note.
   const [noteCancelled, setNoteCancelled] = useState(false);
@@ -1436,6 +1440,15 @@ export default function Scheduler() {
     setNoteCancelled(!!existing?.cancelled);
     setNotePostponed(!!existing?.postponed);
     setNoteMissingSigns(!!existing?.missingSigns);
+    setStandingText("");
+    setStandingOrig("");
+    utils.coordinator.standingNote
+      .fetch({ jobId: job.id })
+      .then((r) => {
+        setStandingText(r.note ?? "");
+        setStandingOrig(r.note ?? "");
+      })
+      .catch(() => {});
   };
 
   const doSaveDayNote = async () => {
@@ -1449,6 +1462,12 @@ export default function Scheduler() {
       postponed: notePostponed,
       missingSigns: noteMissingSigns,
     });
+    if (standingText.trim() !== standingOrig.trim()) {
+      await setStandingNote.mutateAsync({
+        jobId: noteDialog.job.id,
+        note: standingText,
+      });
+    }
     toast.success(
       noteText.trim() || anyFlag ? "Note saved." : "Note cleared.",
     );
@@ -3553,6 +3572,22 @@ export default function Scheduler() {
             placeholder="e.g. Job cancelled by client — rain. Reschedule next week."
             rows={4}
           />
+
+          {/* Permanent project note — not tied to a day; assigned techs always see it */}
+          <div className="border-t pt-3">
+            <div className="text-xs font-semibold mb-1 flex items-center gap-1.5">
+              📌 Permanent project note
+              <span className="font-normal text-muted-foreground">
+                — the assigned crew ALWAYS sees this, every day
+              </span>
+            </div>
+            <Textarea
+              value={standingText}
+              onChange={(e) => setStandingText(e.target.value)}
+              placeholder="e.g. Gate code 4471 · park behind the fence · call site super before removing signs"
+              rows={3}
+            />
+          </div>
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setNoteDialog(null)}>

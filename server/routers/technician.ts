@@ -103,7 +103,13 @@ async function buildMyJob(job: JobRecord, _technicianName: string, phases: strin
     fieldComments,
   };
 
-  return { ...merged, zone: deriveZone(merged as any), myPhases: phases };
+  return {
+    ...merged,
+    zone: deriveZone(merged as any),
+    myPhases: phases,
+    // Permanent coordinator note — always visible to the assigned crew.
+    standingNote: (override as any)?.standingNote ?? null,
+  };
 }
 
 export const technicianRouter = router({
@@ -596,6 +602,29 @@ export const technicianRouter = router({
 
       const url = await storageGetSignedUrl(stored.key).catch(() => stored.url);
       return { ok: true as const, url };
+    }),
+
+  // Coordinator notes the crew must see on a job: the permanent note is part
+  // of myJobs; this returns the DAY-specific notes (yesterday → +14 days).
+  jobDayNotes: protectedProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const tech = await resolveTechnician(ctx.user.id);
+      if (!tech) return [];
+      const { listDayNotesForJob } = await import("../opsDb");
+      const today = new Date();
+      const iso = (d: Date) =>
+        d.toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+      const start = new Date(today.getTime() - 1 * 86400000);
+      const end = new Date(today.getTime() + 14 * 86400000);
+      const rows = await listDayNotesForJob(input.jobId, iso(start), iso(end));
+      return rows.map((r: any) => ({
+        date: r.noteDate,
+        note: r.note,
+        cancelled: !!r.cancelled,
+        postponed: !!r.postponed,
+        missingSigns: !!r.missingSigns,
+      }));
     }),
 
   // The job's notes thread — coordinator↔technician chat, everything on record.

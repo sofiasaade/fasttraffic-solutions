@@ -1600,6 +1600,36 @@ export const coordinatorRouter = router({
   /* --------------------- Scheduler per-day job notes --------------------- */
 
   // All per-day notes for a visible date range (Scheduler grid).
+  // Permanent project note — always visible to every technician on the job.
+  standingNote: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const o = await getJobOverride(input.jobId);
+      return { note: (o as any)?.standingNote ?? null };
+    }),
+
+  setStandingNote: adminProcedure
+    .input(z.object({ jobId: z.string(), note: z.string().max(2000) }))
+    .mutation(async ({ ctx, input }) => {
+      const trimmed = input.note.trim();
+      await upsertJobOverride(
+        input.jobId,
+        { standingNote: trimmed || null },
+        { userId: ctx.user.id, name: ctx.user.name ?? "Coordinator" },
+      );
+      await appendChangeHistory({
+        airtableJobId: input.jobId,
+        actorUserId: ctx.user.id,
+        actorName: ctx.user.name ?? "Coordinator",
+        action: "standing_note",
+        fieldName: "Permanent note",
+        oldValue: null,
+        newValue: trimmed || "(cleared)",
+        details: null,
+      });
+      return { ok: true as const };
+    }),
+
   dayNotes: adminProcedure
     .input(z.object({ startDate: z.string(), endDate: z.string() }))
     .query(async ({ input }) => {
