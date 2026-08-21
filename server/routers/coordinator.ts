@@ -868,7 +868,10 @@ export const coordinatorRouter = router({
           status: r.status,
           note: r.note ?? null,
           company:
-            jobRec?.company ?? (internal ? internalLabel(r.airtableJobId) : null),
+            jobRec?.company ??
+            (internal
+              ? (r.note?.trim() ? r.note.trim() : internalLabel(r.airtableJobId))
+              : null),
           // Airtable "Sub-Status Field Operations" — drives the chip color.
           subStatus: jobRec?.subStatus ?? null,
         });
@@ -1258,6 +1261,7 @@ export const coordinatorRouter = router({
           .string()
           .regex(/^\d{2}:\d{2}$/)
           .optional(),
+        note: z.string().max(500).optional(),
         force: z.boolean().optional(),
       }),
     )
@@ -1301,6 +1305,7 @@ export const coordinatorRouter = router({
         scheduledDate: input.scheduledDate,
         startTime: input.startTime ?? null,
         endTime: input.endTime ?? null,
+        note: input.note?.trim() ? input.note.trim() : undefined,
         actor: {
           userId: ctx.user.id,
           name: ctx.user.name ?? ctx.user.email ?? "Coordinator",
@@ -2124,7 +2129,12 @@ export const coordinatorRouter = router({
             | "tentative"
             | "confirmed",
           company:
-            j?.company ?? (internal ? internalLabel(a.airtableJobId) : null),
+            j?.company ??
+            (internal
+              ? ((a as any).note?.trim()
+                  ? (a as any).note.trim()
+                  : internalLabel(a.airtableJobId))
+              : null),
           jobAddress: j?.jobAddress ?? (internal ? "Internal task" : null),
           municipality: j?.municipality ?? null,
         };

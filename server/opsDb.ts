@@ -991,6 +991,8 @@ export async function setScheduledAssignment(input: {
   scheduledDate: string; // YYYY-MM-DD
   startTime?: string | null; // HH:MM
   endTime?: string | null; // HH:MM
+  /** Free-text note — for internal tasks it doubles as a custom task label. */
+  note?: string | null;
   actor?: { userId?: number; name?: string };
 }): Promise<number> {
   const d = await db();
@@ -1011,6 +1013,7 @@ export async function setScheduledAssignment(input: {
       .set({
         startTime: input.startTime ?? null,
         endTime: input.endTime ?? null,
+        ...(input.note !== undefined ? { note: input.note } : {}),
       })
       .where(eq(jobAssignments.id, existing[0].id));
     return existing[0].id;
@@ -1022,6 +1025,7 @@ export async function setScheduledAssignment(input: {
     scheduledDate: input.scheduledDate,
     startTime: input.startTime ?? null,
     endTime: input.endTime ?? null,
+    note: input.note ?? null,
     createdByUserId: input.actor?.userId ?? null,
     createdByName: input.actor?.name ?? null,
   });

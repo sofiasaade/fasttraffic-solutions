@@ -198,6 +198,8 @@ export default function WorkersCalendar() {
     activityId: string;
     start: string;
     end: string;
+    /** Free text — a task that isn't on the list; becomes the task label. */
+    customText: string;
   } | null>(null);
   const setScheduled = trpc.coordinator.setScheduled.useMutation({
     onSuccess: (res: any) => {
@@ -215,13 +217,17 @@ export default function WorkersCalendar() {
   });
   const saveInternal = () => {
     if (!assigning) return;
+    const custom = assigning.customText.trim();
     setScheduled.mutate({
-      jobId: assigning.activityId,
+      // Custom text files under the generic "Errand / other" id — the note
+      // becomes the visible task label everywhere.
+      jobId: custom ? "internal:errand" : assigning.activityId,
       phase: "Internal" as any,
       technicianName: assigning.techName,
       scheduledDate: assigning.date,
       startTime: assigning.start || undefined,
       endTime: assigning.end || undefined,
+      note: custom || undefined,
       // Internal tasks FILL dead time around project work — never blocked by
       // the same-day booking check.
       force: true,
@@ -634,6 +640,7 @@ export default function WorkersCalendar() {
                               activityId: INTERNAL_ACTIVITIES[0].id,
                               start: "07:00",
                               end: "15:00",
+                              customText: "",
                             })
                           }
                           title="Assign an internal task (shop work, sign recovery, maintenance…)"
@@ -682,6 +689,27 @@ export default function WorkersCalendar() {
                     <span className="text-base">{act.emoji}</span> {act.label}
                   </button>
                 ))}
+              </div>
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">
+                  Something else? Type it here (optional)
+                </div>
+                <Input
+                  value={assigning.customText}
+                  onChange={(e) =>
+                    setAssigning((a) =>
+                      a ? { ...a, customText: e.target.value } : a,
+                    )
+                  }
+                  placeholder="e.g. Wash truck #3, pick up supplies…"
+                  className="h-9"
+                />
+                {assigning.customText.trim() && (
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    The custom text will be the task's name — the list selection
+                    is ignored.
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>

@@ -213,11 +213,13 @@ export const technicianRouter = router({
           mine.find((r) => r.startTime) ??
           null;
         const noted = mine.find((r) => r.note) ?? null;
+        // A custom note doubles as the task label ("algo distinto a la lista").
+        const label = noted?.note?.trim() || internalLabel(jobId);
         const synthetic: JobRecord = {
           id: jobId,
           company: "Fast Traffic — Internal",
-          jobAddress: internalLabel(jobId),
-          projectTitle: internalLabel(jobId),
+          jobAddress: label,
+          projectTitle: label,
           startDate: days[0] ?? today,
           endDate: days[days.length - 1] ?? days[0] ?? today,
           setupDuration: null,
