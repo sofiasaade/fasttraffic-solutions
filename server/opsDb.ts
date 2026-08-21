@@ -1269,6 +1269,40 @@ export async function createJobNote(data: InsertJobNote) {
   await d.insert(jobNotes).values(data);
 }
 
+/** Recent technician notes across ALL jobs — the coordinator's message inbox. */
+export async function listRecentTechNotes(limit = 100) {
+  const d = await db();
+  return d
+    .select()
+    .from(jobNotes)
+    .where(eq(jobNotes.authorRole, "technician"))
+    .orderBy(desc(jobNotes.createdAt))
+    .limit(limit);
+}
+
+/**
+ * Technician notes with id AFTER the last one the coordinator saw (unread
+ * badge). Ids are compared instead of timestamps — the DB stores local wall
+ * time, so time comparisons against real UTC drift by the timezone offset.
+ */
+export async function countTechNotesAfterId(lastSeenId: number) {
+  const d = await db();
+  const rows = await d
+    .select({ n: sql<number>`count(*)` })
+    .from(jobNotes)
+    .where(
+      and(eq(jobNotes.authorRole, "technician"), sql`${jobNotes.id} > ${lastSeenId}`),
+    );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Highest job_notes id (any author) — the "seen" watermark. */
+export async function maxJobNoteId(): Promise<number> {
+  const d = await db();
+  const rows = await d.select({ m: sql<number>`max(id)` }).from(jobNotes);
+  return Number(rows[0]?.m ?? 0);
+}
+
 export async function listJobNotes(airtableJobId: string) {
   const d = await db();
   return d

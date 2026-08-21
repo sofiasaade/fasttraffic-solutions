@@ -18,6 +18,7 @@ import TeamPins from "./pages/TeamPins";
 import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
+import Messages from "./pages/Messages";
 import Scheduler from "./pages/Scheduler";
 import DailyBoard from "./pages/DailyBoard";
 import WorkersCalendar from "./pages/WorkersCalendar";
@@ -122,6 +123,11 @@ function Router() {
           <Route path="/team-pins">
             <CoordinatorShell>
               <TeamPins />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/messages">
+            <CoordinatorShell>
+              <Messages />
             </CoordinatorShell>
           </Route>
           <Route path="/alerts">

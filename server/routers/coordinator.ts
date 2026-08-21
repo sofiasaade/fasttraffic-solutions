@@ -598,6 +598,53 @@ export const coordinatorRouter = router({
         }));
     }),
 
+  // Coordinator message inbox: recent technician notes across all jobs,
+  // labeled with the job's client/address. "Unread" = newer than the last
+  // time the coordinator opened the Messages page.
+  messagesInbox: adminProcedure.query(async () => {
+    const { listRecentTechNotes } = await import("../opsDb");
+    const [notes, seenRaw, jobs] = await Promise.all([
+      listRecentTechNotes(100),
+      getSetting("coord_msgs_last_seen_id"),
+      fetchMapJobs().catch(() => [] as any[]),
+    ]);
+    // Unread = note id AFTER the watermark (ids, not timestamps — the DB
+    // stores local wall time, which drifts against UTC comparisons).
+    const lastSeenId = Number(seenRaw ?? 0) || 0;
+    const jobById = new Map((jobs as any[]).map((j) => [j.id, j]));
+    return {
+      lastSeenId,
+      items: notes.map((n) => {
+        const j = jobById.get(n.airtableJobId);
+        return {
+          id: n.id,
+          jobId: n.airtableJobId,
+          company: j?.company ?? null,
+          jobAddress: j?.jobAddress ?? null,
+          authorName: n.authorName,
+          category: n.category,
+          note: n.note,
+          createdAt: n.createdAt,
+          unread: n.id > lastSeenId,
+        };
+      }),
+    };
+  }),
+
+  // Sidebar badge: how many technician messages arrived since last seen.
+  messagesBadge: adminProcedure.query(async () => {
+    const { countTechNotesAfterId } = await import("../opsDb");
+    const seenRaw = await getSetting("coord_msgs_last_seen_id");
+    const unread = await countTechNotesAfterId(Number(seenRaw ?? 0) || 0);
+    return { unread };
+  }),
+
+  markMessagesSeen: adminProcedure.mutation(async () => {
+    const { maxJobNoteId } = await import("../opsDb");
+    await setSetting("coord_msgs_last_seen_id", String(await maxJobNoteId()));
+    return { ok: true as const };
+  }),
+
   // Coordinator reply into a job's notes thread. Notifies every technician
   // assigned to the job so the message reaches their app.
   sendJobNote: adminProcedure

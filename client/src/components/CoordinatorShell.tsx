@@ -10,6 +10,7 @@ import {
   CalendarRange,
   CalendarClock,
   BellRing,
+  MessageSquare,
   Gauge,
   Users,
   AlertTriangle,
@@ -46,6 +47,7 @@ const NAV_GROUPS: {
       { href: "/pending", label: "Pending Jobs", icon: AlertTriangle },
       { href: "/clients", label: "Clients", icon: Briefcase },
       { href: "/map", label: "Permit Map", icon: MapIcon },
+      { href: "/messages", label: "Messages", icon: MessageSquare },
       { href: "/alerts", label: "Change Alerts", icon: BellRing },
     ],
   },
@@ -88,6 +90,10 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
     refetchInterval: 60_000,
   });
   const pendingCount = pending.data?.count ?? 0;
+  const msgs = trpc.coordinator.messagesBadge.useQuery(undefined, {
+    refetchInterval: 60_000,
+  });
+  const msgCount = msgs.data?.unread ?? 0;
 
   const current = NAV.find(
     (i) => location === i.href || location.startsWith(i.href + "/"),
@@ -104,6 +110,8 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
       return { n: alertCount, cls: "bg-red-500" };
     if (href === "/pending" && pendingCount > 0)
       return { n: pendingCount, cls: "bg-rose-500" };
+    if (href === "/messages" && msgCount > 0)
+      return { n: msgCount, cls: "bg-blue-500" };
     return null;
   };
 
