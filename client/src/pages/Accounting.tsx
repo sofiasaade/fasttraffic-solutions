@@ -31,9 +31,11 @@ import {
   Lock,
   Sparkles,
   HardHat,
+  Calculator,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import QuoteTool from "./QuoteTool";
 import { fmtDate, fmtTime12 } from "@/lib/format";
 import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
 import {
@@ -95,7 +97,7 @@ type NewItem = {
 
 export default function Accounting() {
   const [, navigate] = useLocation();
-  const [tab, setTab] = useState<"airtable" | "billed" | "invoices">("airtable");
+  const [tab, setTab] = useState<"airtable" | "billed" | "invoices" | "quotes">("airtable");
   const [q, setQ] = useState("");
 
   // Accounting has its own PIN on top of the coordinator session.
@@ -646,6 +648,13 @@ export default function Accounting() {
               </span>
             )}
           </Button>
+          <Button
+            variant={tab === "quotes" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTab("quotes")}
+          >
+            <Calculator className="size-4 mr-1" /> Quotes
+          </Button>
           <Button size="sm" onClick={() => openNewInvoice()}>
             <Plus className="size-4 mr-1" /> New invoice
           </Button>
@@ -852,6 +861,12 @@ export default function Accounting() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "quotes" && (
+        <div className="mt-4">
+          <QuoteTool />
         </div>
       )}
 

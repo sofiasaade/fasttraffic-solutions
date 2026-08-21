@@ -43,6 +43,9 @@ export default function Messages() {
   });
   const [toTech, setToTech] = useState<string>(""); // "" = all crew
   const [aboutJob, setAboutJob] = useState<string>(""); // "" = general
+  const [aboutLabel, setAboutLabel] = useState<string>("");
+  const [jobSearch, setJobSearch] = useState("");
+  const [jobOpen, setJobOpen] = useState(false);
   const [text, setText] = useState("");
   const sendMessage = trpc.coordinator.sendMessage.useMutation({
     onSuccess: (r) => {
@@ -52,15 +55,25 @@ export default function Messages() {
     },
     onError: (e) => toast.error(e.message || "Could not send"),
   });
-  const jobOptions = useMemo(() => {
+  // Type-ahead over client name, address, or municipality — same source and
+  // matching as the global project search in the top bar.
+  const jobHits = useMemo(() => {
+    const q = jobSearch.trim().toLowerCase();
+    if (!q) return [];
     const jobs = (jobsQ.data ?? []) as any[];
     return jobs
+      .filter(
+        (j) =>
+          (j.company ?? "").toLowerCase().includes(q) ||
+          (j.jobAddress ?? "").toLowerCase().includes(q) ||
+          (j.municipality ?? "").toLowerCase().includes(q),
+      )
+      .slice(0, 8)
       .map((j) => ({
         id: j.id,
         label: `${j.company ?? "Job"} — ${j.jobAddress ?? j.municipality ?? ""}`,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [jobsQ.data]);
+      }));
+  }, [jobsQ.data, jobSearch]);
 
   // Mark as seen once the inbox has loaded — the sidebar badge clears.
   useEffect(() => {
@@ -133,22 +146,63 @@ export default function Messages() {
                 ))}
             </select>
           </div>
-          <div>
+          <div className="relative">
             <label className="text-[11px] font-medium text-muted-foreground">
               About
             </label>
-            <select
-              value={aboutJob}
-              onChange={(e) => setAboutJob(e.target.value)}
-              className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              <option value="">📢 General — no project</option>
-              {jobOptions.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.label}
-                </option>
-              ))}
-            </select>
+            {aboutJob ? (
+              <div className="flex items-center gap-1.5 h-9 rounded-md border border-primary/40 bg-primary/5 px-2 text-sm">
+                <span className="truncate flex-1" title={aboutLabel}>
+                  📌 {aboutLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAboutJob("");
+                    setAboutLabel("");
+                    setJobSearch("");
+                  }}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  title="Back to general (no project)"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  value={jobSearch}
+                  onChange={(e) => {
+                    setJobSearch(e.target.value);
+                    setJobOpen(true);
+                  }}
+                  onFocus={() => setJobOpen(true)}
+                  onBlur={() => setTimeout(() => setJobOpen(false), 150)}
+                  placeholder="📢 General — type client or address to pick a project"
+                  className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
+                />
+                {jobOpen && jobHits.length > 0 && (
+                  <div className="absolute z-30 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-64 overflow-y-auto">
+                    {jobHits.map((j) => (
+                      <button
+                        key={j.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setAboutJob(j.id);
+                          setAboutLabel(j.label);
+                          setJobOpen(false);
+                        }}
+                        className="block w-full text-left px-2.5 py-2 text-sm hover:bg-accent truncate"
+                        title={j.label}
+                      >
+                        {j.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
         <Textarea
