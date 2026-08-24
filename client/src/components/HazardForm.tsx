@@ -58,7 +58,7 @@ export default function HazardForm({
             Hazard Assessment
           </DialogTitle>
           <DialogDescription>
-            Required before check-in — {phase} phase
+            Required before START WORK — {phase} phase
           </DialogDescription>
         </DialogHeader>
 

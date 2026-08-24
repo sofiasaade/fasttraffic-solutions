@@ -251,3 +251,10 @@
     }
   }
 }
+/* Leaflet's internal panes use z-index 400-700, which would paint the map
+   ABOVE fixed dialogs/popovers (z-50). Isolate every map into its own
+   stacking context so overlays always win. */
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
+}
