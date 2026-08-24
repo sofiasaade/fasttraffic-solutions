@@ -41,21 +41,32 @@ describe("pricing rules — classification", () => {
 });
 
 describe("pricing rules — quotes", () => {
-  it("basic jobs (<25 signs) bill setup as 4h × $140/h = $560", () => {
+  it("basic jobs (<25 signs) bill setup as 5h × $90/h = $450", () => {
     const q = buildQuote({ ...base, signs: 10, company: "Kobi Construction Ltd" });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(56000); // beats the client card for basics
+    expect(setup?.unitCents).toBe(45000); // beats the client card for basics
   });
 
-  it("low impact jobs: 4h under 25 signs, 4.5h at 25+ — both × $140/h", () => {
+  it("low impact bills 6h × $90 = $540 at any sign count", () => {
     const small = buildQuote({ ...base, signs: 12, impact: "2️⃣ Low" });
     expect(
       small.lines.find((l) => l.description.startsWith("Setup fee"))?.unitCents,
-    ).toBe(56000); // 4h × $140
+    ).toBe(54000); // 6h × $90
     const large = buildQuote({ ...base, signs: 30, impact: "2️⃣ Low" });
     expect(
       large.lines.find((l) => l.description.startsWith("Setup fee"))?.unitCents,
-    ).toBe(63000); // 4.5h × $140
+    ).toBe(54000); // same tier — count no longer changes the hours
+  });
+
+  it("intermediate tiers: low-medium 7h ($630) and medium-high 9h ($810)", () => {
+    const lm = buildQuote({ ...base, signs: 20, impact: "Low-Medium" });
+    expect(
+      lm.lines.find((l) => l.description.startsWith("Setup fee"))?.unitCents,
+    ).toBe(63000);
+    const mh = buildQuote({ ...base, signs: 20, impact: "Medium-High" });
+    expect(
+      mh.lines.find((l) => l.description.startsWith("Setup fee"))?.unitCents,
+    ).toBe(81000);
   });
 
   it("residential standard daily setup bills each day", () => {
@@ -96,7 +107,7 @@ describe("pricing rules — quotes", () => {
   it("adds weekend surcharge only to the setup fee", () => {
     const q = buildQuote({ ...base, weekendStart: true, signs: 10 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(Math.round(56000 * 1.25)); // basic $560 +25%
+    expect(setup?.unitCents).toBe(Math.round(45000 * 1.25)); // basic $450 +25%
   });
 
   it("charges stamp when a stamped plan is attached, TMP otherwise", () => {
@@ -109,15 +120,24 @@ describe("pricing rules — quotes", () => {
     ).toBe(40000);
   });
 
-  it("stockpile: $450 under 80 signs, $950 at 80+", () => {
+  it("stockpile is ALWAYS $450 — sign count never changes it", () => {
     const small = buildQuote({ ...base, stockpile: true, signs: 40 });
     expect(
       small.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
     ).toBe(45000);
-    const large = buildQuote({ ...base, stockpile: true, signs: 80 });
+    const large = buildQuote({ ...base, stockpile: true, signs: 120 });
     expect(
       large.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
-    ).toBe(95000);
+    ).toBe(45000);
+  });
+
+  it("2+ message boards add the $250 delivery charge; 1 does not", () => {
+    const one = buildQuote({ ...base, messageBoards: 1, days: 3 });
+    expect(one.lines.some((l) => /Message board delivery/.test(l.description))).toBe(false);
+    const two = buildQuote({ ...base, messageBoards: 2, days: 3 });
+    const del = two.lines.find((l) => /Message board delivery/.test(l.description));
+    expect(del?.unitCents).toBe(25000);
+    expect(del?.quantity).toBe(1);
   });
 
   it("passes the city permit cost through exactly", () => {
@@ -216,15 +236,15 @@ describe("low-impact threshold counts only sign panels", () => {
       permitCostCents: null,
     });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(56000); // …but the rule sees 20 panels → 4h
+    expect(setup?.unitCents).toBe(54000); // …low tier: 6h × $90
   });
 });
 
 describe("high impact setup", () => {
-  it("high impact bills 8h × $140 = $1,120", () => {
+  it("high impact bills 10h × $90 = $900", () => {
     const q = buildQuote({ ...baseInput(), impact: "🔴 High", signs: 60 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(112000);
+    expect(setup?.unitCents).toBe(90000);
   });
 });
 
@@ -246,10 +266,10 @@ function baseInput(): QuoteInput {
 }
 
 describe("medium impact setup", () => {
-  it("medium impact bills 6h × $140 = $840", () => {
+  it("medium impact bills 8h × $90 = $720", () => {
     const q = buildQuote({ ...baseInput(), impact: "3️⃣ Medium", signs: 30 });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
-    expect(setup?.unitCents).toBe(84000);
+    expect(setup?.unitCents).toBe(72000);
   });
 });
 

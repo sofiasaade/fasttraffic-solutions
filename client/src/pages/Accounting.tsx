@@ -264,6 +264,8 @@ export default function Accounting() {
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
   // Rental discount percentage (open — any %, default 25).
   const [discountPct, setDiscountPct] = useState("25");
+  // Out-of-city-limits fee — editable percentage of everything billed so far.
+  const [ootPct, setOotPct] = useState("");
   const updateInvoice = trpc.accounting.updateInvoice.useMutation({
     onSuccess: (r) => {
       toast.success(`Invoice ${r.invoiceNumber} updated`);
@@ -1533,20 +1535,55 @@ export default function Accounting() {
                         })()}
                       {group === "service" && (
                         <div className="flex flex-wrap items-center gap-1.5 border-t border-purple-200 pt-1.5">
+                          <span className="flex items-center gap-1">
+                            <Input
+                              value={ootPct}
+                              onChange={(e) => setOotPct(e.target.value)}
+                              placeholder="%"
+                              title="Out-of-city-limits percentage (of everything billed)"
+                              className="h-6 w-12 px-1 text-right text-[11px] bg-background"
+                            />
+                            <span className="text-muted-foreground text-[11px]">%</span>
+                          </span>
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
+                              const isOotLine = (d: string) =>
+                                /out of (city|town)/i.test(d);
+                              const pct = Number(ootPct) || 0;
+                              // % of every line already on the invoice (rental +
+                              // flaggers + services), excluding the fee itself.
+                              const base = creating.items.reduce(
+                                (n, it) =>
+                                  isOotLine(it.description) ? n : n + lineTotal(it),
+                                0,
+                              );
                               setCreating({
                                 ...creating,
                                 items: [
-                                  ...creating.items,
-                                  { description: "Out of town fee", quantity: "1", unit: "", group: "service" },
+                                  ...creating.items.filter(
+                                    (it) => !isOotLine(it.description),
+                                  ),
+                                  pct > 0
+                                    ? {
+                                        description: `Out of city limits fee (${pct}%)`,
+                                        quantity: "1",
+                                        unit: ((base * (pct / 100)) / 100).toFixed(2),
+                                        group: "service" as const,
+                                      }
+                                    : {
+                                        description: "Out of city limits fee",
+                                        quantity: "1",
+                                        unit: "",
+                                        group: "service" as const,
+                                      },
                                 ],
-                              })
-                            }
+                              });
+                            }}
                             className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-[10px] font-bold text-purple-700 hover:bg-purple-100 transition-colors"
+                            title="Adds the fee — with a % it computes from everything billed; empty % leaves the amount free to type"
                           >
-                            + Out of town fee
+                            + Out of city limits fee
                           </button>
                         </div>
                       )}

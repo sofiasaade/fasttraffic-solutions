@@ -86,19 +86,39 @@ const CLIENT_SETUP_OVERRIDES: [RegExp, { day?: number; night?: number }][] = [
 const NIGHT_PREMIUM = 20000;
 
 /**
- * Sofia's rule (Aug 2026): LOW-IMPACT jobs bill the setup by the hour at
- * $140/h — 4 hours when under 25 signs ($560), 4.5 hours at 25+ signs ($630).
- * Beats every client card. Jobs with unknown impact and <25 signs also get
- * the 4-hour rate (her earlier "basic job" rule).
+ * Sofia's rule (Aug 24 2026, supersedes the $140/h matrix): the setup fee
+ * bills by the hour at $90/h with SIX impact tiers —
+ *   basic 5h ($450) · low 6h ($540) · low-medium 7h ($630) ·
+ *   medium 8h ($720) · medium-high 9h ($810) · high 10h ($900).
+ * A known impact tier beats every client card. Unknown impact + <25 sign
+ * panels falls back to the basic 5-hour job.
  */
 const BASIC_SIGNS_LIMIT = 25;
-const BASIC_HOURLY_CENTS = 14000;
-const LOW_IMPACT_HOURS_SMALL = 4;
-const LOW_IMPACT_HOURS_LARGE = 4.5;
-/** MEDIUM impact (26–39 signs): 6h × $140 = $840. */
-const MEDIUM_IMPACT_HOURS = 6;
-/** HIGH impact (multiple lane closures, >40 signs): 8h × $140 = $1,120. */
-const HIGH_IMPACT_HOURS = 8;
+const BASIC_HOURLY_CENTS = 9000;
+const IMPACT_HOURS = {
+  basic: 5,
+  low: 6,
+  low_medium: 7,
+  medium: 8,
+  medium_high: 9,
+  high: 10,
+} as const;
+type ImpactTier = keyof typeof IMPACT_HOURS;
+
+/** Parse Airtable "Impact Category" text into the billing tier. */
+export function impactTier(raw: string | null | undefined): ImpactTier | null {
+  const s = (raw ?? "").toLowerCase();
+  if (!s.trim()) return null;
+  const hasLow = /low/.test(s);
+  const hasMed = /med/.test(s);
+  const hasHigh = /high/.test(s);
+  if (hasLow && hasMed) return "low_medium";
+  if (hasMed && hasHigh) return "medium_high";
+  if (hasHigh) return "high";
+  if (hasMed) return "medium";
+  if (hasLow) return "low";
+  return null;
+}
 
 // Sección 2 — equipment rental per day, cents.
 export const RENTAL_RATES = {
@@ -223,8 +243,8 @@ export const FIXED = {
   tmpStandard: 40000,
   parkingBan: 35000,
   /** Stockpile: Sofia's rule (Aug 2026) — <80 signs $450, ≥80 signs $950. */
+  /** Stockpile signage — ALWAYS $450 (Sofia, Aug 24 2026: no size tiers). */
   stockpile: 45000,
-  stockpileLarge: 95000,
   flaggerHour: 4000,
   flaggerOtHour: 6000,
 } as const;
@@ -449,35 +469,21 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   let setup: number | null = null;
   let setupWhy = "";
 
-  // Low-impact jobs bill setup hourly ($140/h) — beats every card.
-  // The <25/25+ threshold counts ONLY the sign panels (not NP/pedestrian/etc).
-  const lowImpact = /low/i.test(input.impact ?? "");
-  const mediumImpact = /medium/i.test(input.impact ?? "");
-  const highImpact = /high/i.test(input.impact ?? "");
+  // Setup bills hourly at $90/h across SIX impact tiers — beats every card.
+  // Unknown impact + <25 sign panels = the basic 5-hour job.
+  const tier = impactTier(input.impact);
   const thresholdSigns = input.panelSigns ?? input.signs;
-  // Zero panels still counts as "<25" for explicitly LOW-impact jobs; the
-  // unknown-impact fallback keeps requiring a real count (> 0).
   const smallJob = thresholdSigns < BASIC_SIGNS_LIMIT;
-  if (highImpact) {
-    // High impact = multiple lane closures / >40 signs → 8h × $140 = $1,120.
-    setup = HIGH_IMPACT_HOURS * BASIC_HOURLY_CENTS;
-    setupWhy = `high impact: ${HIGH_IMPACT_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
-    if (night) {
-      setup += NIGHT_PREMIUM;
-      setupWhy += " · night premium";
-    }
-  } else if (mediumImpact) {
-    // Medium impact (26–39 signs) → 6h × $140 = $840.
-    setup = MEDIUM_IMPACT_HOURS * BASIC_HOURLY_CENTS;
-    setupWhy = `medium impact: ${MEDIUM_IMPACT_HOURS}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
-    if (night) {
-      setup += NIGHT_PREMIUM;
-      setupWhy += " · night premium";
-    }
-  } else if (lowImpact || (smallJob && thresholdSigns > 0 && !input.impact)) {
-    const hours = smallJob ? LOW_IMPACT_HOURS_SMALL : LOW_IMPACT_HOURS_LARGE;
-    setup = Math.round(hours * BASIC_HOURLY_CENTS); // 4h=$560 · 4.5h=$630
-    setupWhy = `${lowImpact ? "low impact" : "basic job"} · ${smallJob ? `<${BASIC_SIGNS_LIMIT}` : `${BASIC_SIGNS_LIMIT}+`} signs: ${hours}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
+  const effectiveTier: ImpactTier | null =
+    tier ?? (smallJob && thresholdSigns > 0 ? "basic" : null);
+  if (effectiveTier) {
+    const hours = IMPACT_HOURS[effectiveTier];
+    setup = hours * BASIC_HOURLY_CENTS;
+    const label =
+      effectiveTier === "basic"
+        ? "basic job"
+        : `${effectiveTier.replace("_", "-")} impact`;
+    setupWhy = `${label}: ${hours}h × $${(BASIC_HOURLY_CENTS / 100).toFixed(0)}/h`;
     if (night) {
       setup += NIGHT_PREMIUM;
       setupWhy += " · night premium";
@@ -606,6 +612,18 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       unitCents: input.messageBoards * RENTAL_RATES.messageBoard,
       section: "rental",
     });
+    // Sofia (Aug 24 2026): MORE than one message board adds a $250 delivery.
+    if (input.messageBoards > 1) {
+      lines.push({
+        description: "Message board delivery",
+        quantity: 1,
+        unitCents: 25000,
+        section: "service",
+      });
+      reasons.push(
+        `${input.messageBoards} message boards → $250.00 delivery charge`,
+      );
+    }
   }
 
   // ---- Plan / stamp ----
@@ -660,17 +678,13 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     reasons.push("Parking Ban set in Airtable → $350");
   }
   if (input.stockpile) {
-    const large = input.signs >= 80;
-    const cents = large ? FIXED.stockpileLarge : FIXED.stockpile;
     lines.push({
-      description: `Stockpile signage${large ? " (80+ signs)" : ""}`,
+      description: "Stockpile signage",
       quantity: 1,
-      unitCents: cents,
+      unitCents: FIXED.stockpile,
       section: "service",
     });
-    reasons.push(
-      `Stockpile → ${money(cents)} (${large ? "80+ signs" : "<80 signs"})`,
-    );
+    reasons.push(`Stockpile → ${money(FIXED.stockpile)} (flat — never changes)`);
   }
 
   return { industry, complexity, lines, reasons };

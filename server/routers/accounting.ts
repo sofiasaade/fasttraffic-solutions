@@ -191,9 +191,15 @@ export const accountingRouter = router({
         return Number.isFinite(n) ? n : 0;
       };
       const arrowBoards = Math.max(equipment.arrowBoards, num(rawGet("Arrow Boards")));
+      // 📺 in the project name/calendar = message boards installed there
+      // (Sofia's marker). If nothing else counted one, bill at least 1.
+      const hasTvMarker = /📺/.test(
+        `${job.projectTitle ?? ""} ${job.calendarInfo ?? ""} ${job.jobAddress ?? ""}`,
+      );
       const messageBoards = Math.max(
         equipment.messageBoards,
         num(rawGet("Message Boards")),
+        hasTvMarker ? 1 : 0,
       );
 
       // Street Use Permit costs: the field lists one or more amounts, e.g.
@@ -318,6 +324,12 @@ export const accountingRouter = router({
         permitCostCents,
         permitLines: permitLines.length > 0 ? permitLines : undefined,
       });
+
+      if (hasTvMarker && equipment.messageBoards === 0) {
+        quote.reasons.push(
+          "📺 marker in the project name → message boards on site (billed 1 — verify the count)",
+        );
+      }
 
       // Billable flagging logged by the coordinator (per person-hour) — one
       // line per rate so mixed regular/overtime hours stay separate.

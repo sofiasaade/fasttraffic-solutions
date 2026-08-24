@@ -51,7 +51,9 @@ export default function QuoteTool() {
   const [client, setClient] = useState("");
   const [address, setAddress] = useState("");
   const [submission, setSubmission] = useState<SubmissionType>("full_pack");
-  const [impact, setImpact] = useState<"" | "low" | "medium" | "high">("");
+  const [impact, setImpact] = useState<
+    "" | "low" | "low-medium" | "medium" | "medium-high" | "high"
+  >("");
   const [days, setDays] = useState("1");
   const [night, setNight] = useState(false);
   const [weekend, setWeekend] = useState(false);
@@ -370,10 +372,12 @@ export default function QuoteTool() {
                 onChange={(e) => setImpact(e.target.value as any)}
                 className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
               >
-                <option value="">Unknown</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High (multiple lane closures)</option>
+                <option value="">Unknown (basic 5h if &lt;25 signs)</option>
+                <option value="low">Low — 6h × $90</option>
+                <option value="low-medium">Low-Medium — 7h × $90</option>
+                <option value="medium">Medium — 8h × $90</option>
+                <option value="medium-high">Medium-High — 9h × $90</option>
+                <option value="high">High — 10h × $90</option>
               </select>
             </div>
           </div>
