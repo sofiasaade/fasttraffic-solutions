@@ -90,10 +90,11 @@ const NIGHT_PREMIUM = 20000;
  * bills by the hour at $90/h with SIX impact tiers —
  *   basic 5h ($450) · low 6h ($540) · low-medium 7h ($630) ·
  *   medium 8h ($720) · medium-high 9h ($810) · high 10h ($900).
- * A known impact tier beats every client card. Unknown impact + <25 sign
- * panels falls back to the basic 5-hour job.
+ * A known impact tier beats every client card. Unknown impact + at most 10
+ * sign panels falls back to the basic 5-hour job (Sofia: "el basic job tiene
+ * max 10 señales"); more than 10 with unknown impact uses the client card.
  */
-const BASIC_SIGNS_LIMIT = 25;
+const BASIC_MAX_SIGNS = 10;
 const BASIC_HOURLY_CENTS = 9000;
 const IMPACT_HOURS = {
   basic: 5,
@@ -473,7 +474,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // Unknown impact + <25 sign panels = the basic 5-hour job.
   const tier = impactTier(input.impact);
   const thresholdSigns = input.panelSigns ?? input.signs;
-  const smallJob = thresholdSigns < BASIC_SIGNS_LIMIT;
+  const smallJob = thresholdSigns <= BASIC_MAX_SIGNS;
   const effectiveTier: ImpactTier | null =
     tier ?? (smallJob && thresholdSigns > 0 ? "basic" : null);
   if (effectiveTier) {

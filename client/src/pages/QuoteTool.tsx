@@ -372,7 +372,7 @@ export default function QuoteTool() {
                 onChange={(e) => setImpact(e.target.value as any)}
                 className="w-full h-9 rounded-md border border-border bg-background px-2 text-sm"
               >
-                <option value="">Unknown (basic 5h if &lt;25 signs)</option>
+                <option value="">Unknown (basic 5h if ≤10 signs)</option>
                 <option value="low">Low — 6h × $90</option>
                 <option value="low-medium">Low-Medium — 7h × $90</option>
                 <option value="medium">Medium — 8h × $90</option>

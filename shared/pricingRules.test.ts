@@ -41,10 +41,17 @@ describe("pricing rules — classification", () => {
 });
 
 describe("pricing rules — quotes", () => {
-  it("basic jobs (<25 signs) bill setup as 5h × $90/h = $450", () => {
+  it("basic jobs (max 10 signs) bill setup as 5h × $90/h = $450", () => {
     const q = buildQuote({ ...base, signs: 10, company: "Kobi Construction Ltd" });
     const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
     expect(setup?.unitCents).toBe(45000); // beats the client card for basics
+  });
+
+  it("11+ signs with unknown impact is NOT basic — falls to the client card", () => {
+    const q = buildQuote({ ...base, signs: 12, company: "Kobi Construction Ltd" });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).not.toBe(45000);
+    expect(setup?.unitCents).toBe(65000); // Kobi QB median card
   });
 
   it("low impact bills 6h × $90 = $540 at any sign count", () => {
