@@ -244,7 +244,7 @@ export const FIXED = {
   tmpStandard: 40000,
   parkingBan: 35000,
   /** Stockpile: Sofia's rule (Aug 2026) — <80 signs $450, ≥80 signs $950. */
-  /** Stockpile signage — ALWAYS $450 (Sofia, Aug 24 2026: no size tiers). */
+  /** Stockpile signage — $450; MORE than 60 signs bills double ($900). */
   stockpile: 45000,
   flaggerHour: 4000,
   flaggerOtHour: 6000,
@@ -679,13 +679,18 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     reasons.push("Parking Ban set in Airtable → $350");
   }
   if (input.stockpile) {
+    // Sofia (Aug 24 2026): more than 60 signs bills the stockpile DOUBLE.
+    const doubleStock = input.signs > 60;
+    const stockCents = doubleStock ? FIXED.stockpile * 2 : FIXED.stockpile;
     lines.push({
-      description: "Stockpile signage",
+      description: `Stockpile signage${doubleStock ? " (60+ signs — double)" : ""}`,
       quantity: 1,
-      unitCents: FIXED.stockpile,
+      unitCents: stockCents,
       section: "service",
     });
-    reasons.push(`Stockpile → ${money(FIXED.stockpile)} (flat — never changes)`);
+    reasons.push(
+      `Stockpile → ${money(stockCents)}${doubleStock ? ` (${input.signs} signs > 60 → double)` : ""}`,
+    );
   }
 
   return { industry, complexity, lines, reasons };

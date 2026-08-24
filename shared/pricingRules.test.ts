@@ -127,15 +127,19 @@ describe("pricing rules — quotes", () => {
     ).toBe(40000);
   });
 
-  it("stockpile is ALWAYS $450 — sign count never changes it", () => {
+  it("stockpile: $450 up to 60 signs, DOUBLE ($900) above 60", () => {
     const small = buildQuote({ ...base, stockpile: true, signs: 40 });
     expect(
       small.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
     ).toBe(45000);
-    const large = buildQuote({ ...base, stockpile: true, signs: 120 });
+    const atSixty = buildQuote({ ...base, stockpile: true, signs: 60 });
+    expect(
+      atSixty.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
+    ).toBe(45000);
+    const large = buildQuote({ ...base, stockpile: true, signs: 61 });
     expect(
       large.lines.find((l) => l.description.startsWith("Stockpile"))?.unitCents,
-    ).toBe(45000);
+    ).toBe(90000);
   });
 
   it("2+ message boards add the $250 delivery charge; 1 does not", () => {
