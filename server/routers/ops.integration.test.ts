@@ -745,15 +745,16 @@ beforeEach(() => {
   state.airtableWriteCalls = [];
 });
 
-describe("Hazard Assessment hard gate", () => {
-  it("blocks check-in when no hazard assessment exists", async () => {
+describe("Check-in vs safety clearance (COR rule: paid time is never blocked)", () => {
+  it("allows check-in WITHOUT a hazard assessment — paid time starts ungated", async () => {
     const caller = appRouter.createCaller(techCtx());
-    await expect(
-      caller.technician.checkIn({ jobId: "recJOB1", phase: "Setup" }),
-    ).rejects.toThrowError(/Hazard Assessment required/i);
+    const res = await caller.technician.checkIn({ jobId: "recJOB1", phase: "Setup" });
+    expect(res.ok).toBe(true);
+    // The hazard assessment still exists as a requirement — it gates the
+    // separate "START WORK — SAFE TO PROCEED" authorization, not check-in.
   });
 
-  it("allows check-in after a hazard assessment is submitted", async () => {
+  it("hazard assessment still records normally after check-in", async () => {
     const caller = appRouter.createCaller(techCtx());
     await caller.technician.submitHazard({
       jobId: "recJOB1",
@@ -762,8 +763,8 @@ describe("Hazard Assessment hard gate", () => {
       ppeConfirmed: true,
       signature: "Hector",
     });
-    const res = await caller.technician.checkIn({ jobId: "recJOB1", phase: "Setup" });
-    expect(res.ok).toBe(true);
+    const st = await caller.technician.jobStatus({ jobId: "recJOB1", phase: "Setup" });
+    expect(st.hazardSubmitted).toBe(true);
   });
 });
 
