@@ -365,6 +365,10 @@ export const techDaySessions = mysqlTable("tech_day_sessions", {
   truckCode: varchar("truckCode", { length: 32 }),
   checkInAt: timestamp("checkInAt").defaultNow().notNull(),
   checkOutAt: timestamp("checkOutAt"),
+  /** Daily workflow stages (COR "My Day"): recorded when each step happens. */
+  departWarehouseAt: timestamp("departWarehouseAt"),
+  arriveSiteAt: timestamp("arriveSiteAt"),
+  returnWarehouseAt: timestamp("returnWarehouseAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -698,3 +702,93 @@ export const invoiceItems = mysqlTable("invoice_items", {
 
 export type InvoiceItem = typeof invoiceItems.$inferSelect;
 export type InsertInvoiceItem = typeof invoiceItems.$inferInsert;
+
+/* ===================== COR safety workflow (Phase 1) ===================== */
+
+/**
+ * Immutable controlled-form submissions. One row per submitted form; the
+ * answersJson is a full historical copy stamped with the form number, version
+ * and effective date it was completed against. Technicians can NEVER update or
+ * delete a submitted row — corrections insert a NEW row with revisionOf +
+ * revisionReason, preserving the original.
+ */
+export const formSubmissions = mysqlTable("form_submissions", {
+  id: int("id").autoincrement().primaryKey(),
+  formNumber: varchar("formNumber", { length: 32 }).notNull(),
+  formVersion: varchar("formVersion", { length: 8 }).notNull(),
+  effectiveDate: varchar("effectiveDate", { length: 10 }).notNull(),
+  airtableJobId: varchar("airtableJobId", { length: 32 }),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  /** Shift date the submission belongs to (YYYY-MM-DD, Calgary time). */
+  shiftDate: varchar("shiftDate", { length: 10 }).notNull(),
+  /** Unit (truck/trailer/equipment) the form is about, when applicable. */
+  unitName: varchar("unitName", { length: 128 }),
+  status: varchar("status", { length: 16 }).notNull().default("submitted"),
+  /** Correction chain: points at the ORIGINAL submission being revised. */
+  revisionOf: int("revisionOf"),
+  revisionReason: varchar("revisionReason", { length: 500 }),
+  /** Full historical copy of the answers at submission time. */
+  answersJson: text("answersJson").notNull(),
+  /** Client-generated UUID — offline sync duplicate-submission protection. */
+  clientUuid: varchar("clientUuid", { length: 64 }).notNull().unique(),
+  submittedAt: timestamp("submittedAt").defaultNow().notNull(),
+  reviewedBy: varchar("reviewedBy", { length: 128 }),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewComment: varchar("reviewComment", { length: 500 }),
+});
+
+export type FormSubmission = typeof formSubmissions.$inferSelect;
+export type InsertFormSubmission = typeof formSubmissions.$inferInsert;
+
+/**
+ * Safety defects (vehicle / trailer / equipment). Created from pre-use
+ * inspections or ad-hoc reports. Critical defects mark the unit DO NOT OPERATE
+ * until an authorized release; every defect keeps a corrective-action trail.
+ */
+export const safetyDefects = mysqlTable("safety_defects", {
+  id: int("id").autoincrement().primaryKey(),
+  /** Auto number, e.g. CA-0007 (corrective-action reference). */
+  refNumber: varchar("refNumber", { length: 16 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  date: varchar("date", { length: 10 }).notNull(),
+  unitType: varchar("unitType", { length: 16 }).notNull().default("vehicle"),
+  unitName: varchar("unitName", { length: 128 }).notNull(),
+  category: varchar("category", { length: 64 }).notNull(),
+  itemKey: varchar("itemKey", { length: 64 }),
+  severity: varchar("severity", { length: 16 }).notNull(),
+  description: text("description").notNull(),
+  immediateAction: text("immediateAction"),
+  taggedOut: boolean("taggedOut").default(false).notNull(),
+  supervisorNotified: boolean("supervisorNotified").default(false).notNull(),
+  photoKey: varchar("photoKey", { length: 512 }),
+  submissionId: int("submissionId"),
+  status: varchar("status", { length: 16 }).notNull().default("open"),
+  responsible: varchar("responsible", { length: 128 }),
+  dueDate: varchar("dueDate", { length: 10 }),
+  actionTaken: text("actionTaken"),
+  releasedBy: varchar("releasedBy", { length: 128 }),
+  releasedAt: timestamp("releasedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SafetyDefect = typeof safetyDefects.$inferSelect;
+export type InsertSafetyDefect = typeof safetyDefects.$inferInsert;
+
+/**
+ * "START WORK — SAFE TO PROCEED" authorizations: one per technician per job
+ * per shift date, recorded ONLY when every safety requirement passed. The
+ * snapshot stores exactly what was verified at authorization time.
+ */
+export const startWorkAuthorizations = mysqlTable("start_work_authorizations", {
+  id: int("id").autoincrement().primaryKey(),
+  airtableJobId: varchar("airtableJobId", { length: 64 }).notNull(),
+  technicianName: varchar("technicianName", { length: 128 }).notNull(),
+  date: varchar("date", { length: 10 }).notNull(),
+  authorizedAt: timestamp("authorizedAt").defaultNow().notNull(),
+  snapshotJson: text("snapshotJson").notNull(),
+});
+
+export type StartWorkAuthorization =
+  typeof startWorkAuthorizations.$inferSelect;
+export type InsertStartWorkAuthorization =
+  typeof startWorkAuthorizations.$inferInsert;

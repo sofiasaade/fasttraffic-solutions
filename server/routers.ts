@@ -5,6 +5,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { coordinatorRouter } from "./routers/coordinator";
 import { technicianRouter } from "./routers/technician";
 import { accountingRouter } from "./routers/accounting";
+import { safetyRouter } from "./routers/safety";
 import { getTechnicianByUserId } from "./opsDb";
 
 export const appRouter = router({
@@ -37,6 +38,7 @@ export const appRouter = router({
   coordinator: coordinatorRouter,
   accounting: accountingRouter,
   technician: technicianRouter,
+  safety: safetyRouter,
 });
 
 export type AppRouter = typeof appRouter;

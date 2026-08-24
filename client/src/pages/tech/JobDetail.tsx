@@ -333,7 +333,7 @@ export default function JobDetail() {
               <Button
                 className="w-full"
                 size="lg"
-                disabled={!hazardDone || checkIn.isPending}
+                disabled={checkIn.isPending}
                 onClick={doCheckIn}
               >
                 {checkIn.isPending ? (
@@ -365,6 +365,9 @@ export default function JobDetail() {
                 </Button>
               </div>
             )}
+
+            {/* START WORK — SAFE TO PROCEED (separate from paid check-in) */}
+            <StartWorkGate jobId={jobId} phase={activePhase} />
           </>
         )}
       </div>
@@ -508,6 +511,71 @@ export default function JobDetail() {
         onOpenChange={setHazardOpen}
         onSubmitted={() => statusQuery.refetch()}
       />
+    </div>
+  );
+}
+
+/**
+ * "START WORK — SAFE TO PROCEED" — the safety clearance, kept SEPARATE from
+ * the paid check-in. Activates only when every requirement passes; records an
+ * immutable authorization with a snapshot of what was verified.
+ */
+function StartWorkGate({ jobId, phase }: { jobId: string; phase: string }) {
+  const utils = trpc.useUtils();
+  const q = trpc.safety.startWorkStatus.useQuery(
+    { jobId, phase },
+    { refetchInterval: 30000 },
+  );
+  const authorize = trpc.safety.authorizeStartWork.useMutation({
+    onSuccess: () => {
+      toast.success("SAFE TO PROCEED — work authorized.");
+      utils.safety.startWorkStatus.invalidate({ jobId, phase });
+    },
+    onError: (e) => toast.error(e.message, { duration: 9000 }),
+  });
+  const s = q.data;
+  if (!s) return null;
+
+  if (s.authorized) {
+    return (
+      <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50 px-3 py-2.5 text-emerald-900">
+        <div className="font-extrabold text-sm">✅ SAFE TO PROCEED</div>
+        <div className="text-[12px]">
+          Work authorized {fmtDateTime(s.authorizedAt as any)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+      <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+        Start-work requirements
+      </div>
+      <div className="space-y-1">
+        {s.requirements.map((r: any) => (
+          <div key={r.key} className="flex items-center gap-2 text-[13px]">
+            {r.ok ? (
+              <Check className="size-4 text-emerald-600 shrink-0" />
+            ) : (
+              <span className="size-4 rounded-full border-2 border-amber-400 shrink-0" />
+            )}
+            <span className={r.ok ? "" : "text-amber-800"}>{r.label}</span>
+          </div>
+        ))}
+      </div>
+      <Button
+        className="w-full h-12 text-base font-bold"
+        disabled={!s.canStart || authorize.isPending}
+        onClick={() => authorize.mutate({ jobId, phase })}
+      >
+        {authorize.isPending ? (
+          <Loader2 className="size-4 animate-spin mr-1" />
+        ) : (
+          <ShieldCheck className="size-5 mr-1.5" />
+        )}
+        START WORK — SAFE TO PROCEED
+      </Button>
     </div>
   );
 }

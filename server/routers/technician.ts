@@ -358,19 +358,9 @@ export const technicianRouter = router({
       if (!tech)
         throw new TRPCError({ code: "FORBIDDEN", message: "Not a technician" });
 
-      const hazard = await getHazardAssessment(
-        input.jobId,
-        tech.airtableName,
-        input.phase,
-      );
-      if (!hazard) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message:
-            "Hazard Assessment required before check-in. Please complete it first.",
-        });
-      }
-
+      // COR rule: CHECK IN starts PAID TIME and is never blocked by safety
+      // paperwork. Safety is enforced by the separate
+      // "START WORK — SAFE TO PROCEED" authorization (safety router).
       const existing = await getOpenTimeLog(input.jobId, tech.airtableName);
       if (existing) {
         throw new TRPCError({
