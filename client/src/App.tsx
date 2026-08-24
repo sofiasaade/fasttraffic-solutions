@@ -19,6 +19,7 @@ import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Messages from "./pages/Messages";
+import SafetyReports from "./pages/SafetyReports";
 import Scheduler from "./pages/Scheduler";
 import WorkersCalendar from "./pages/WorkersCalendar";
 import PendingJobs from "./pages/PendingJobs";
@@ -122,6 +123,11 @@ function Router() {
           <Route path="/messages">
             <CoordinatorShell>
               <Messages />
+            </CoordinatorShell>
+          </Route>
+          <Route path="/safety">
+            <CoordinatorShell>
+              <SafetyReports />
             </CoordinatorShell>
           </Route>
           <Route path="/alerts">

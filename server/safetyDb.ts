@@ -188,6 +188,35 @@ export async function insertStartWorkAuth(data: {
   await d.insert(startWorkAuthorizations).values(data);
 }
 
+/** All submissions on a shift date (coordinator daily compliance report). */
+export async function listSubmissionsForDate(shiftDate: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(formSubmissions)
+    .where(eq(formSubmissions.shiftDate, shiftDate))
+    .orderBy(desc(formSubmissions.id));
+}
+
+/** All start-work authorizations on a date. */
+export async function listAuthsForDate(date: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(startWorkAuthorizations)
+    .where(eq(startWorkAuthorizations.date, date));
+}
+
+/** Start-work authorizations for one job (project safety package). */
+export async function listAuthsForJob(airtableJobId: string) {
+  const d = await db();
+  return d
+    .select()
+    .from(startWorkAuthorizations)
+    .where(eq(startWorkAuthorizations.airtableJobId, airtableJobId))
+    .orderBy(desc(startWorkAuthorizations.id));
+}
+
 /** All submissions for a set of jobs (coordinator safety package view). */
 export async function listSubmissionsForJobs(jobIds: string[]) {
   if (jobIds.length === 0) return [];

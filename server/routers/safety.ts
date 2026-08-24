@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
   activeForm,
   CONTROLLED_FORMS,
@@ -8,6 +8,7 @@ import {
 } from "../../shared/safetyForms";
 import {
   getStartWorkAuth,
+  getSubmission,
   insertDefect,
   insertFormSubmission,
   insertStartWorkAuth,
@@ -15,6 +16,10 @@ import {
   listDefects,
   listOpenDefectsForUnit,
   listSubmissionsForTech,
+  listSubmissionsForDate,
+  listSubmissionsForJobs,
+  listAuthsForDate,
+  listAuthsForJob,
   releaseDefect,
   setDayStage,
 } from "../safetyDb";
@@ -24,6 +29,7 @@ import {
   getDaySession,
   getHazardAssessment,
   getTechnicianByUserId,
+  listDaySessions,
   listTechnicians,
 } from "../opsDb";
 
@@ -423,5 +429,102 @@ export const safetyRouter = router({
         details: `Phase ${input.phase} · truck ${session!.truckName ?? "—"}`,
       });
       return { ok: true as const, already: false };
+    }),
+
+  /* ------------------- Coordinator safety reports (admin) ------------------- */
+
+  /**
+   * Daily compliance report: one row per technician who worked the date —
+   * check-in/out, truck, daily forms, stages, start-work authorizations and
+   * defects raised. Exceptions (missing forms) are computed per row.
+   */
+  dayReport: adminProcedure
+    .input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
+    .query(async ({ input }) => {
+      const [sessions, subs, auths, defects] = await Promise.all([
+        listDaySessions(input.date),
+        listSubmissionsForDate(input.date),
+        listAuthsForDate(input.date),
+        listDefects(),
+      ]);
+      const dayDefects = defects.filter((d) => d.date === input.date);
+      const rows = sessions.map((s) => {
+        const mine = subs.filter((x) => x.technicianName === s.technicianName);
+        const sod = mine.find((x) => x.formNumber === "FTS-APP-SOD");
+        const veh = mine.find((x) => x.formNumber === "FTS-APP-VEH");
+        const myAuths = auths.filter((a) => a.technicianName === s.technicianName);
+        const myDefects = dayDefects.filter(
+          (d) => d.technicianName === s.technicianName,
+        );
+        const exceptions: string[] = [];
+        if (!sod) exceptions.push("Start-of-day missing");
+        if (!veh) exceptions.push("Vehicle inspection missing");
+        if (myDefects.some((d) => d.severity === "critical" && d.status === "open"))
+          exceptions.push("CRITICAL defect open");
+        return {
+          technicianName: s.technicianName,
+          truck: s.truckName,
+          checkInAt: s.checkInAt,
+          checkOutAt: s.checkOutAt,
+          departWarehouseAt: (s as any).departWarehouseAt ?? null,
+          arriveSiteAt: (s as any).arriveSiteAt ?? null,
+          returnWarehouseAt: (s as any).returnWarehouseAt ?? null,
+          startOfDay: sod ? { id: sod.id, at: sod.submittedAt } : null,
+          vehicleInspection: veh
+            ? { id: veh.id, at: veh.submittedAt, unit: veh.unitName }
+            : null,
+          startWorkJobs: myAuths.map((a) => ({
+            jobId: a.airtableJobId,
+            at: a.authorizedAt,
+          })),
+          defects: myDefects.map((d) => ({
+            id: d.id,
+            refNumber: d.refNumber,
+            severity: d.severity,
+            unitName: d.unitName,
+            status: d.status,
+            description: d.description,
+          })),
+          exceptions,
+        };
+      });
+      return { date: input.date, rows };
+    }),
+
+  /** Project safety package: every safety record tied to one job. */
+  jobPackage: adminProcedure
+    .input(z.object({ jobId: z.string() }))
+    .query(async ({ input }) => {
+      const [subs, auths] = await Promise.all([
+        listSubmissionsForJobs([input.jobId]),
+        listAuthsForJob(input.jobId),
+      ]);
+      return {
+        submissions: subs.map((s) => ({
+          id: s.id,
+          formNumber: s.formNumber,
+          formVersion: s.formVersion,
+          technicianName: s.technicianName,
+          shiftDate: s.shiftDate,
+          unitName: s.unitName,
+          status: s.status,
+          revisionOf: s.revisionOf,
+          submittedAt: s.submittedAt,
+        })),
+        startWork: auths.map((a) => ({
+          technicianName: a.technicianName,
+          date: a.date,
+          at: a.authorizedAt,
+        })),
+      };
+    }),
+
+  /** Full historical copy of one submission (coordinator viewer). */
+  submissionDetail: adminProcedure
+    .input(z.object({ id: z.number().int() }))
+    .query(async ({ input }) => {
+      const s = await getSubmission(input.id);
+      if (!s) throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+      return { ...s, answers: JSON.parse(s.answersJson) };
     }),
 });
