@@ -88,7 +88,7 @@ type NewItem = {
   quantity: string;
   /** Service lines: unit price $. Rental lines: computed (itemQty × rate). */
   unit: string;
-  group?: "rental" | "flaggers" | "service";
+  group?: "rental" | "boards" | "flaggers" | "service";
   /** Rental lines: number of devices (e.g. 16 signs). */
   itemQty?: string;
   /** Rental lines: per-device per-day rate in $ (e.g. 3.00). */
@@ -292,11 +292,12 @@ export default function Accounting() {
       }
       const m = it.description.match(/^(.+) × (\d+(?:\.\d+)?) — \$([\d.]+)\/day$/);
       if (m) {
+        const isBoard = /(arrow|message) board/i.test(m[1]);
         return {
           description: m[1],
           quantity: String(it.quantity), // days
           unit: (it.unitCents / 100).toFixed(2),
-          group: "rental" as const,
+          group: (isBoard ? "boards" : "rental") as "boards" | "rental",
           itemQty: m[2],
           rate: m[3],
         };
@@ -399,11 +400,16 @@ export default function Accounting() {
                     rate: rate.toFixed(2),
                   };
                 }
+                const isBoard =
+                  /(arrow|message) board/i.test(l.description) &&
+                  !/delivery/i.test(l.description);
                 return {
                 description: l.description,
                 quantity: String(l.quantity),
                 unit: (l.unitCents / 100).toFixed(2),
-                group: ((l as any).section ?? "service") as "rental" | "service",
+                group: isBoard
+                  ? ("boards" as const)
+                  : (((l as any).section ?? "service") as "rental" | "service"),
                 itemQty:
                   (l as any).itemQty != null ? String((l as any).itemQty) : undefined,
                 rate:
@@ -487,7 +493,7 @@ export default function Accounting() {
   const creatingTotals = useMemo(() => {
     if (!creating) return { sub: 0, gst: 0, total: 0 };
     const sub = creating.items.reduce((n, it) => {
-      if ((it.group === "rental" || it.group === "flaggers") && it.itemQty != null) {
+      if ((it.group === "rental" || it.group === "boards" || it.group === "flaggers") && it.itemQty != null) {
         return (
           n +
           Math.round(
@@ -510,7 +516,7 @@ export default function Accounting() {
     if (!creating) return;
     const items = creating.items
       .map((it) => {
-        if ((it.group === "rental" || it.group === "flaggers") && it.itemQty != null) {
+        if ((it.group === "rental" || it.group === "boards" || it.group === "flaggers") && it.itemQty != null) {
           const n = Number(it.itemQty) || 0;
           const rate = Number(it.rate) || 0;
           const days = Number(it.quantity) || 0;
@@ -1172,9 +1178,9 @@ export default function Accounting() {
                 </div>
               </div>
 
-              {(["rental", "flaggers", "service"] as const).map((group) => {
+              {(["rental", "service", "boards", "flaggers"] as const).map((group) => {
                 const lineTotal = (it: NewItem) =>
-                  (it.group === "rental" || it.group === "flaggers") && it.itemQty != null
+                  (it.group === "rental" || it.group === "boards" || it.group === "flaggers") && it.itemQty != null
                     ? Math.round(
                         (Number(it.itemQty) || 0) *
                           (Number(it.rate) || 0) *
@@ -1196,16 +1202,20 @@ export default function Accounting() {
                           "text-xs font-bold uppercase tracking-wide",
                           group === "rental"
                             ? "text-blue-700"
-                            : group === "flaggers"
-                              ? "text-orange-700"
-                              : "text-purple-700",
+                            : group === "boards"
+                              ? "text-teal-700"
+                              : group === "flaggers"
+                                ? "text-orange-700"
+                                : "text-purple-700",
                         )}
                       >
                         {group === "rental"
                           ? "Sign & equipment rental"
-                          : group === "flaggers"
-                            ? "Flaggers"
-                            : "Charges & services"}
+                          : group === "boards"
+                            ? "Arrow & message boards"
+                            : group === "flaggers"
+                              ? "Flaggers"
+                              : "Charges & services"}
                         <span className="ml-2 font-semibold normal-case tabular-nums text-muted-foreground">
                           {money(groupTotal)}
                         </span>
@@ -1259,7 +1269,7 @@ export default function Accounting() {
                             ...creating,
                             items: [
                               ...creating.items,
-                              group === "rental"
+                              group === "rental" || group === "boards"
                                 ? { description: "", quantity: "1", unit: "", group, itemQty: "1", rate: "" }
                                 : { description: "", quantity: "1", unit: "", group },
                             ],
@@ -1275,17 +1285,19 @@ export default function Accounting() {
                         "space-y-1.5 rounded-lg border p-2 mb-2",
                         group === "rental"
                           ? "border-blue-200 bg-blue-50/40"
-                          : group === "flaggers"
-                            ? "border-orange-200 bg-orange-50/40"
-                            : "border-purple-200 bg-purple-50/40",
+                          : group === "boards"
+                            ? "border-teal-200 bg-teal-50/40"
+                            : group === "flaggers"
+                              ? "border-orange-200 bg-orange-50/40"
+                              : "border-purple-200 bg-purple-50/40",
                       )}
                     >
                       {/* Column headers */}
                       <div className="flex items-center gap-1.5 px-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
                         <span className="flex-1 min-w-[140px]">Description</span>
-                        {group === "rental" ? (
+                        {group === "rental" || group === "boards" ? (
                           <>
-                            <span className="w-14 text-right"># Signs</span>
+                            <span className="w-14 text-right">{group === "boards" ? "# Boards" : "# Signs"}</span>
                             <span className="w-20 text-right">$/day</span>
                             <span className="w-14 text-right">Days</span>
                           </>
@@ -1319,7 +1331,7 @@ export default function Accounting() {
                           items[i] = { ...it, ...patch };
                           setCreating({ ...creating, items });
                         };
-                        const isRental = (group === "rental" || group === "flaggers") && it.itemQty != null;
+                        const isRental = (group === "rental" || group === "boards" || group === "flaggers") && it.itemQty != null;
                         return (
                           <div key={i} className="space-y-1">
                             <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5">
@@ -1461,44 +1473,9 @@ export default function Accounting() {
                               ],
                             });
                           };
-                          const addEquipment = (label: string, rate: string) => {
-                            const days =
-                              creating.items.find(
-                                (x) => x.group === "rental" && Number(x.quantity) > 0,
-                              )?.quantity ?? "1";
-                            setCreating({
-                              ...creating,
-                              items: [
-                                ...creating.items,
-                                {
-                                  description: `${label} rental`,
-                                  quantity: days,
-                                  unit: "",
-                                  group: "rental",
-                                  itemQty: "1",
-                                  rate,
-                                },
-                              ],
-                            });
-                          };
                           return (
                             <>
-                            <div className="flex flex-wrap items-center gap-1.5 border-t border-blue-200 pt-1.5">
-                              {([
-                                { label: "Arrow board", rate: "45.00", show: "$45/day" },
-                                { label: "Message board", rate: "95.00", show: "$95/day" },
-                              ] as const).map((eq) => (
-                                <button
-                                  key={eq.label}
-                                  type="button"
-                                  onClick={() => addEquipment(eq.label, eq.rate)}
-                                  className="rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 hover:bg-blue-100 transition-colors"
-                                >
-                                  + {eq.label} · {eq.show}
-                                </button>
-                              ))}
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between gap-3 pt-1.5 text-[11px] tabular-nums">
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-blue-200 pt-1.5 text-[11px] tabular-nums">
                               <div className="flex items-center gap-1.5">
                                 {!existing && (
                                   <span className="flex items-center gap-1">
@@ -1533,6 +1510,60 @@ export default function Accounting() {
                             </>
                           );
                         })()}
+                      {group === "boards" && (
+                        <div className="flex flex-wrap items-center gap-1.5 border-t border-teal-200 pt-1.5">
+                          {([
+                            { label: "Arrow board", rate: "45.00", show: "$45/day" },
+                            { label: "Message board", rate: "95.00", show: "$95/day" },
+                          ] as const).map((b) => (
+                            <button
+                              key={b.label}
+                              type="button"
+                              onClick={() => {
+                                const days =
+                                  creating.items.find(
+                                    (x) =>
+                                      (x.group === "boards" || x.group === "rental") &&
+                                      Number(x.quantity) > 0,
+                                  )?.quantity ?? "1";
+                                setCreating({
+                                  ...creating,
+                                  items: [
+                                    ...creating.items,
+                                    {
+                                      description: `${b.label} rental`,
+                                      quantity: days,
+                                      unit: "",
+                                      group: "boards" as const,
+                                      itemQty: "1",
+                                      rate: b.rate,
+                                    },
+                                  ],
+                                });
+                              }}
+                              className="rounded-full border border-teal-300 bg-teal-50 px-2.5 py-1 text-[10px] font-bold text-teal-700 hover:bg-teal-100 transition-colors"
+                            >
+                              + {b.label} · {b.show}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCreating({
+                                ...creating,
+                                items: [
+                                  ...creating.items,
+                                  { description: "Message board delivery", quantity: "1", unit: "250.00", group: "service" as const },
+                                ],
+                              })
+                            }
+                            className="rounded-full border border-teal-300 bg-teal-50 px-2.5 py-1 text-[10px] font-bold text-teal-700 hover:bg-teal-100 transition-colors"
+                            title="2+ message boards bill a one-time $250 delivery"
+                          >
+                            + Delivery $250
+                          </button>
+                        </div>
+                      )}
                       {group === "service" && (
                         <div className="flex flex-wrap items-center gap-1.5 border-t border-purple-200 pt-1.5">
                           <span className="flex items-center gap-1">
