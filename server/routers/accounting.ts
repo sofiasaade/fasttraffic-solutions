@@ -366,10 +366,41 @@ export const accountingRouter = router({
         );
       }
 
+      // Cross-check (Sofia, Aug 24 2026): the Type of Submission must agree
+      // with who the Street Use permits are actually named to ("On Behalf
+      // Of"). Client-pulls types with an FTS-named permit — or Full pack with
+      // ONLY client-named permits — usually means the classification is wrong.
+      let submissionWarning: string | null = null;
+      const namedPermits = suPermits.filter((su: any) => su.onBehalfOf);
+      const ftsNamed = namedPermits.filter((su: any) =>
+        isPermitPulledByFts(su.onBehalfOf),
+      );
+      const clientPullTypes = [
+        "plan_and_setup",
+        "setup_only",
+        "plan_and_sign_rental",
+      ];
+      if (clientPullTypes.includes(submissionType) && ftsNamed.length > 0) {
+        const codes = ftsNamed
+          .map((su: any) => su.code ?? "SU permit")
+          .join(", ");
+        submissionWarning = `Type of Submission says the CLIENT pulls the permit, but ${ftsNamed.length} permit(s) are named to Fast Traffic Solutions (${codes}). The classification looks wrong — review it before billing.`;
+      } else if (
+        submissionType === "full_pack" &&
+        namedPermits.length > 0 &&
+        ftsNamed.length === 0
+      ) {
+        submissionWarning = `Type of Submission says Full pack (FTS pulls permits), but every permit's "On Behalf Of" names someone else. The classification looks wrong — review it before billing.`;
+      }
+      if (submissionWarning) {
+        quote.reasons.unshift(`⚠️ ${submissionWarning}`);
+      }
+
       return {
         ...quote,
         submissionType,
         submissionRaw,
+        submissionWarning,
         inputs: { signs, days, setupDuration: job.setupDuration, weekendStart, hasStamp, parkingBan, stockpile, arrowBoards, messageBoards },
       };
     }),

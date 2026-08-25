@@ -310,6 +310,7 @@ export default function Accounting() {
       };
     });
     setQuoteReasons([]);
+    setSubmissionWarning(null);
     setLastQuote(null);
     setDocIdx(0);
     setSignCheckOn(false);
@@ -356,6 +357,7 @@ export default function Accounting() {
       items.push({ description: "Traffic control services", quantity: "1", unit: "", group: "service" });
     }
     setQuoteReasons([]);
+    setSubmissionWarning(null);
     setLastQuote(null);
     setDocIdx(0);
     setSignCheckOn(false);
@@ -375,6 +377,8 @@ export default function Accounting() {
   // ---- Auto-quote from the FTS pricing rules ----
   const [quoting, setQuoting] = useState(false);
   const [quoteReasons, setQuoteReasons] = useState<string[]>([]);
+  // ⚠️ Type-of-Submission vs permit-ownership mismatch (from suggestQuote).
+  const [submissionWarning, setSubmissionWarning] = useState<string | null>(null);
   // Last auto-quote lines, stored with the invoice so Claude can learn from
   // whatever the biller changed before creating it.
   const [lastQuote, setLastQuote] = useState<
@@ -422,6 +426,10 @@ export default function Accounting() {
           : prev,
       );
       setQuoteReasons(q.reasons);
+      setSubmissionWarning((q as any).submissionWarning ?? null);
+      if ((q as any).submissionWarning) {
+        toast.warning("⚠️ Revisa el Type of Submission — no coincide con los permisos", { duration: 9000 });
+      }
       setLastQuote(
         q.lines.map((l) => ({
           description: l.description,
@@ -1125,6 +1133,12 @@ export default function Accounting() {
                       {submissionTypeBillingNote(submissionType)}
                     </span>
                   )}
+                </div>
+              )}
+              {submissionWarning && (
+                <div className="rounded-lg border-2 border-red-400 bg-red-50 px-3 py-2 text-[12px] text-red-800 font-medium">
+                  ⚠️ <span className="font-bold uppercase text-[10px] tracking-wide mr-1">Possible classification error</span>
+                  {submissionWarning}
                 </div>
               )}
               {quoteReasons.length > 0 && (
