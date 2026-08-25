@@ -1309,9 +1309,15 @@ export default function Accounting() {
                       {/* Column headers */}
                       <div className="flex items-center gap-1.5 px-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
                         <span className="flex-1 min-w-[140px]">Description</span>
-                        {group === "rental" || group === "boards" ? (
+                        {group === "boards" ? (
                           <>
-                            <span className="w-14 text-right">{group === "boards" ? "# Boards" : "# Signs"}</span>
+                            <span className="w-14 text-right">Units</span>
+                            <span className="w-14 text-right">Days</span>
+                            <span className="w-20 text-right">Rate</span>
+                          </>
+                        ) : group === "rental" ? (
+                          <>
+                            <span className="w-14 text-right"># Signs</span>
                             <span className="w-20 text-right">$/day</span>
                             <span className="w-14 text-right">Days</span>
                           </>
@@ -1355,7 +1361,31 @@ export default function Accounting() {
                               value={it.description}
                               onChange={(e) => upd({ description: e.target.value })}
                             />
-                            {isRental ? (
+                            {group === "boards" && isRental ? (
+                              <>
+                                <Input
+                                  placeholder="#"
+                                  title="Number of boards"
+                                  className="h-8 w-14 text-right bg-background"
+                                  value={it.itemQty}
+                                  onChange={(e) => upd({ itemQty: e.target.value })}
+                                />
+                                <Input
+                                  placeholder="Days"
+                                  title="Days billed"
+                                  className="h-8 w-14 text-right bg-background"
+                                  value={it.quantity}
+                                  onChange={(e) => upd({ quantity: e.target.value })}
+                                />
+                                <Input
+                                  placeholder="Rate"
+                                  title="Rate per board per day"
+                                  className="h-8 w-20 text-right bg-background"
+                                  value={it.rate}
+                                  onChange={(e) => upd({ rate: e.target.value })}
+                                />
+                              </>
+                            ) : isRental ? (
                               <>
                                 <Input
                                   placeholder="#"
