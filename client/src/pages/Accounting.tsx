@@ -89,6 +89,8 @@ type NewItem = {
   /** Service lines: unit price $. Rental lines: computed (itemQty × rate). */
   unit: string;
   group?: "rental" | "boards" | "flaggers" | "service";
+  /** Multi-phase invoices: which project phase the line belongs to (default 1). */
+  phase?: number;
   /** Rental lines: number of devices (e.g. 16 signs). */
   itemQty?: string;
   /** Rental lines: per-device per-day rate in $ (e.g. 3.00). */
@@ -266,6 +268,11 @@ export default function Accounting() {
   const [discountPct, setDiscountPct] = useState("25");
   // Out-of-city-limits fee — editable percentage of everything billed so far.
   const [ootPct, setOotPct] = useState("");
+  // Multi-phase invoices: the editor shows ONE phase at a time; the saved
+  // invoice prefixes lines with "Phase N — " when there is more than one.
+  const [phaseCount, setPhaseCount] = useState(1);
+  const [activePhase, setActivePhase] = useState(1);
+  const itPhase = (it: NewItem) => it.phase ?? 1;
   const updateInvoice = trpc.accounting.updateInvoice.useMutation({
     onSuccess: (r) => {
       toast.success(`Invoice ${r.invoiceNumber} updated`);
@@ -278,37 +285,45 @@ export default function Accounting() {
 
   /** Open an existing invoice in the editor (rental lines re-expand into columns). */
   const openEditInvoice = (inv: NonNullable<typeof invoicesQ.data>[number]) => {
-    const items: NewItem[] = inv.items.map((it) => {
+    const items: NewItem[] = inv.items.map((raw) => {
+      // Multi-phase invoices flatten as "Phase N — <line>" — parse it back.
+      const pm = raw.description.match(/^Phase (\d+) — (.*)$/);
+      const linePhase = pm ? Number(pm[1]) : 1;
+      const it = pm ? { ...raw, description: pm[2] } : raw;
+      const withPhase = (x: NewItem): NewItem => ({ ...x, phase: linePhase });
       const fh = it.description.match(/^(.+) × (\d+(?:\.\d+)?) — \$([\d.]+)\/h$/);
       if (fh) {
-        return {
+        return withPhase({
           description: fh[1],
           quantity: String(it.quantity), // hours
           unit: "",
           group: "flaggers" as const,
           itemQty: fh[2],
           rate: fh[3],
-        };
+        });
       }
       const m = it.description.match(/^(.+) × (\d+(?:\.\d+)?) — \$([\d.]+)\/day$/);
       if (m) {
         const isBoard = /(arrow|message) board/i.test(m[1]);
-        return {
+        return withPhase({
           description: m[1],
           quantity: String(it.quantity), // days
           unit: (it.unitCents / 100).toFixed(2),
           group: (isBoard ? "boards" : "rental") as "boards" | "rental",
           itemQty: m[2],
           rate: m[3],
-        };
+        });
       }
-      return {
+      return withPhase({
         description: it.description,
         quantity: String(it.quantity),
         unit: (it.unitCents / 100).toFixed(2),
         group: "service" as const,
-      };
+      });
     });
+    const maxPhase = items.reduce((n, it) => Math.max(n, it.phase ?? 1), 1);
+    setPhaseCount(maxPhase);
+    setActivePhase(1);
     setQuoteReasons([]);
     setSubmissionWarning(null);
     setLastQuote(null);
@@ -362,6 +377,8 @@ export default function Accounting() {
     setDocIdx(0);
     setSignCheckOn(false);
     setEditingInvoiceId(null);
+    setPhaseCount(1);
+    setActivePhase(1);
     setCreating({
       jobId: job?.id ?? null,
       clientName: job?.company ?? "",
@@ -392,7 +409,9 @@ export default function Accounting() {
         prev
           ? {
               ...prev,
-              items: q.lines.map((l) => {
+              items: [
+                ...prev.items.filter((it) => itPhase(it) !== activePhase),
+                ...q.lines.map((l) => {
                 if (/^Flaggers/.test(l.description)) {
                   const rate = l.unitCents / 100;
                   return {
@@ -402,6 +421,7 @@ export default function Accounting() {
                     group: "flaggers" as const,
                     itemQty: "1",
                     rate: rate.toFixed(2),
+                    phase: activePhase,
                   };
                 }
                 const isBoard =
@@ -420,8 +440,10 @@ export default function Accounting() {
                   (l as any).rateCents != null
                     ? ((l as any).rateCents / 100).toFixed(2)
                     : undefined,
+                phase: activePhase,
                 };
               }),
+              ],
             }
           : prev,
       );
@@ -522,7 +544,11 @@ export default function Accounting() {
 
   const submitInvoice = () => {
     if (!creating) return;
+    const multiPhase = phaseCount > 1;
+    const pfx = (it: NewItem) => (multiPhase ? `Phase ${itPhase(it)} — ` : "");
     const items = creating.items
+      .slice()
+      .sort((a, b) => itPhase(a) - itPhase(b))
       .map((it) => {
         if ((it.group === "rental" || it.group === "boards" || it.group === "flaggers") && it.itemQty != null) {
           const n = Number(it.itemQty) || 0;
@@ -531,7 +557,7 @@ export default function Accounting() {
           if (!it.description.trim() || n <= 0 || rate <= 0 || days <= 0) return null;
           const per = it.group === "flaggers" ? "h" : "day";
           return {
-            description: `${it.description.trim()} × ${n} — $${rate.toFixed(2)}/${per}`,
+            description: `${pfx(it)}${it.description.trim()} × ${n} — $${rate.toFixed(2)}/${per}`,
             quantity: days,
             unitCents: Math.round(n * rate * 100),
           };
@@ -539,7 +565,7 @@ export default function Accounting() {
         if (!it.description.trim() || !(Number(it.quantity) > 0) || Number(it.unit) === 0 || !Number.isFinite(Number(it.unit)))
           return null;
         return {
-          description: it.description.trim(),
+          description: `${pfx(it)}${it.description.trim()}`,
           quantity: Number(it.quantity),
           unitCents: Math.round(Number(it.unit) * 100),
         };
@@ -1192,6 +1218,78 @@ export default function Accounting() {
                 </div>
               </div>
 
+              {/* Multi-phase: one set of sections per phase; tabs switch phases.
+                  Saved lines get a "Phase N — " prefix when 2+ phases exist. */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {Array.from({ length: phaseCount }, (_, i) => i + 1).map((ph) => {
+                  const phTotal = creating.items.reduce((n, it) => {
+                    if ((it.phase ?? 1) !== ph) return n;
+                    const isR =
+                      (it.group === "rental" || it.group === "boards" || it.group === "flaggers") &&
+                      it.itemQty != null;
+                    return (
+                      n +
+                      (isR
+                        ? Math.round(
+                            (Number(it.itemQty) || 0) * (Number(it.rate) || 0) * (Number(it.quantity) || 0) * 100,
+                          )
+                        : Math.round((Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100))
+                    );
+                  }, 0);
+                  return (
+                    <button
+                      key={ph}
+                      type="button"
+                      onClick={() => setActivePhase(ph)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-bold transition-colors",
+                        activePhase === ph
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      Phase {ph}
+                      {phaseCount > 1 && (
+                        <span className="ml-1.5 font-semibold opacity-80 tabular-nums">
+                          {money(phTotal)}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhaseCount(phaseCount + 1);
+                    setActivePhase(phaseCount + 1);
+                  }}
+                  className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-accent transition-colors"
+                  title="Add another project phase — each phase gets its own rental, services, boards and flaggers"
+                >
+                  + Add phase
+                </button>
+                {phaseCount > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const last = phaseCount;
+                      const hasItems = creating.items.some((it) => (it.phase ?? 1) === last);
+                      if (hasItems && !window.confirm(`Phase ${last} has lines — delete them?`)) return;
+                      setCreating({
+                        ...creating,
+                        items: creating.items.filter((it) => (it.phase ?? 1) !== last),
+                      });
+                      setPhaseCount(last - 1);
+                      setActivePhase(Math.min(activePhase, last - 1));
+                    }}
+                    className="rounded-full border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:text-red-600 transition-colors"
+                    title="Remove the last phase"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
               {(["rental", "service", "boards", "flaggers"] as const).map((group) => {
                 const lineTotal = (it: NewItem) =>
                   (it.group === "rental" || it.group === "boards" || it.group === "flaggers") && it.itemQty != null
@@ -1205,7 +1303,10 @@ export default function Accounting() {
                         (Number(it.quantity) || 0) * (Number(it.unit) || 0) * 100,
                       );
                 const groupTotal = creating.items.reduce(
-                  (n, it) => ((it.group ?? "service") === group ? n + lineTotal(it) : n),
+                  (n, it) =>
+                    (it.group ?? "service") === group && itPhase(it) === activePhase
+                      ? n + lineTotal(it)
+                      : n,
                   0,
                 );
                 return (
@@ -1245,7 +1346,7 @@ export default function Accounting() {
                                 ...creating,
                                 items: [
                                   ...creating.items,
-                                  { description: "Flaggers — Regular time", quantity: "8", unit: "", group, itemQty: "1", rate: "40.00" },
+                                  { description: "Flaggers — Regular time", quantity: "8", unit: "", group, itemQty: "1", rate: "40.00", phase: activePhase },
                                 ],
                               })
                             }
@@ -1265,7 +1366,7 @@ export default function Accounting() {
                                 ...creating,
                                 items: [
                                   ...creating.items,
-                                  { description: "Flaggers — Overtime (1.5×)", quantity: "1", unit: "", group, itemQty: "1", rate: otRate },
+                                  { description: "Flaggers — Overtime (1.5×)", quantity: "1", unit: "", group, itemQty: "1", rate: otRate, phase: activePhase },
                                 ],
                               });
                             }}
@@ -1284,8 +1385,8 @@ export default function Accounting() {
                             items: [
                               ...creating.items,
                               group === "rental" || group === "boards"
-                                ? { description: "", quantity: "1", unit: "", group, itemQty: "1", rate: "" }
-                                : { description: "", quantity: "1", unit: "", group },
+                                ? { description: "", quantity: "1", unit: "", group, itemQty: "1", rate: "", phase: activePhase }
+                                : { description: "", quantity: "1", unit: "", group, phase: activePhase },
                             ],
                           })
                         }
@@ -1336,8 +1437,11 @@ export default function Accounting() {
                         <span className="w-20 text-right">Total</span>
                         <span className="w-7" />
                       </div>
-                      {creating.items.filter((it) => (it.group ?? "service") === group)
-                        .length === 0 && (
+                      {creating.items.filter(
+                        (it) =>
+                          (it.group ?? "service") === group &&
+                          itPhase(it) === activePhase,
+                      ).length === 0 && (
                         <div className="text-[11px] text-muted-foreground px-1 py-0.5">
                           {group === "flaggers"
                             ? "No flaggers — 8 regular hours per day; past 8h is overtime at 1.5×."
@@ -1346,6 +1450,7 @@ export default function Accounting() {
                       )}
                       {creating.items.map((it, i) => {
                         if ((it.group ?? "service") !== group) return null;
+                        if (itPhase(it) !== activePhase) return null;
                         const upd = (patch: Partial<NewItem>) => {
                           const items = [...creating.items];
                           items[i] = { ...it, ...patch };
@@ -1481,15 +1586,21 @@ export default function Accounting() {
                         (() => {
                           const isDiscountLine = (d: string) =>
                             /rental discount \([\d.]+%\)/i.test(d);
-                          const existing = creating.items.find((it) =>
-                            isDiscountLine(it.description),
+                          const existing = creating.items.find(
+                            (it) =>
+                              isDiscountLine(it.description) &&
+                              itPhase(it) === activePhase,
                           );
                           const toggleDiscount = () => {
                             if (existing) {
                               setCreating({
                                 ...creating,
                                 items: creating.items.filter(
-                                  (it) => !isDiscountLine(it.description),
+                                  (it) =>
+                                    !(
+                                      isDiscountLine(it.description) &&
+                                      itPhase(it) === activePhase
+                                    ),
                                 ),
                               });
                               return;
@@ -1499,6 +1610,7 @@ export default function Accounting() {
                             const base = creating.items.reduce(
                               (n, it) =>
                                 (it.group ?? "service") === "rental" &&
+                                itPhase(it) === activePhase &&
                                 !isDiscountLine(it.description)
                                   ? n + lineTotal(it)
                                   : n,
@@ -1513,6 +1625,7 @@ export default function Accounting() {
                                   quantity: "1",
                                   unit: (-(base * (pct / 100)) / 100).toFixed(2),
                                   group: "rental",
+                                  phase: activePhase,
                                 },
                               ],
                             });
@@ -1579,6 +1692,7 @@ export default function Accounting() {
                                       quantity: days,
                                       unit: "",
                                       group: "boards" as const,
+                                      phase: activePhase,
                                       itemQty: "1",
                                       rate: b.rate,
                                     },
@@ -1630,14 +1744,21 @@ export default function Accounting() {
                               // flaggers + services), excluding the fee itself.
                               const base = creating.items.reduce(
                                 (n, it) =>
-                                  isOotLine(it.description) ? n : n + lineTotal(it),
+                                  isOotLine(it.description) ||
+                                  itPhase(it) !== activePhase
+                                    ? n
+                                    : n + lineTotal(it),
                                 0,
                               );
                               setCreating({
                                 ...creating,
                                 items: [
                                   ...creating.items.filter(
-                                    (it) => !isOotLine(it.description),
+                                    (it) =>
+                                      !(
+                                        isOotLine(it.description) &&
+                                        itPhase(it) === activePhase
+                                      ),
                                   ),
                                   pct > 0
                                     ? {
@@ -1645,12 +1766,14 @@ export default function Accounting() {
                                         quantity: "1",
                                         unit: ((base * (pct / 100)) / 100).toFixed(2),
                                         group: "service" as const,
+                                        phase: activePhase,
                                       }
                                     : {
                                         description: "Out of city limits fee",
                                         quantity: "1",
                                         unit: "",
                                         group: "service" as const,
+                                        phase: activePhase,
                                       },
                                 ],
                               });
