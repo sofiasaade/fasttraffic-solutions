@@ -220,7 +220,7 @@ export default function QuoteTool() {
       airtableJobId: null,
       clientName: client.trim(),
       jobAddress: address.trim() || null,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: new Date().toLocaleDateString("en-CA"),
       dueDate: null,
       gstRate: Number(gst) || 5,
       notes: "Quote — created from the Quotes tool",

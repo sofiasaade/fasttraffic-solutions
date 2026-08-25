@@ -1,6 +1,10 @@
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  // Date-only strings must parse as LOCAL midnight — new Date("2026-08-24")
+  // is midnight UTC, which renders as the PREVIOUS day in Calgary.
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso)
+    ? new Date(`${iso}T00:00:00`)
+    : new Date(iso);
   if (isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-CA", {
     weekday: "short",
