@@ -183,7 +183,29 @@ export const accountingRouter = router({
 
       const affirmative = (v: string | null) =>
         !!v && !/^(no|none|n\/a|-)$/i.test(v.trim());
-      const parkingBan = affirmative(rawGet("Parking Ban"));
+      // Parking ban — Sofia's THREE signals, any one of them bills it:
+      //  1. Airtable "Parking Ban" says Yes.
+      //  2. A Temporary No Parking permit exists (attachment name or any
+      //     Airtable field mentioning it).
+      //  3. The 🅿 marker in the project name/calendar.
+      const attachmentNames = ((job.planFile ?? []) as any[])
+        .map((a: any) => String(a.filename ?? ""))
+        .join(" ");
+      const TNP_RE = /temporary\s*no\s*parking|\bTNP\b|no\s*parking\s*permit/i;
+      // A field NAMED like the permit must also say Yes/have content; a field
+      // VALUE mentioning it (e.g. "TNP-2026-123 approved") counts on its own.
+      const tnpPermit =
+        TNP_RE.test(attachmentNames) ||
+        raw.some((f) =>
+          TNP_RE.test(f.name)
+            ? affirmative(f.value)
+            : TNP_RE.test(String(f.value ?? "")),
+        );
+      const pMarker = /🅿/.test(
+        `${job.projectTitle ?? ""} ${job.calendarInfo ?? ""} ${job.jobAddress ?? ""} ${job.emoji ?? ""}`,
+      );
+      const parkingBanField = affirmative(rawGet("Parking Ban"));
+      const parkingBan = parkingBanField || tnpPermit || pMarker;
       const stockpile = affirmative(rawGet("Stockpile"));
 
       const num = (v: string | null) => {
@@ -328,6 +350,13 @@ export const accountingRouter = router({
       if (hasTvMarker && equipment.messageBoards === 0) {
         quote.reasons.push(
           "📺 marker in the project name → message boards on site (billed 1 — verify the count)",
+        );
+      }
+      if (parkingBan && !parkingBanField) {
+        quote.reasons.push(
+          tnpPermit
+            ? "Temporary No Parking permit found → Parking Ban billed (the Airtable checkbox was NOT set)"
+            : "🅿 marker in the project name → Parking Ban billed (the Airtable checkbox was NOT set)",
         );
       }
 
