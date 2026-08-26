@@ -190,7 +190,10 @@ export default function QuoteTool() {
   const utils = trpc.useUtils();
   const invoicesQ = trpc.accounting.listInvoices.useQuery();
   const savedQuotes = useMemo(
-    () => ((invoicesQ.data ?? []) as any[]).filter((i) => i.status === "quote"),
+    () =>
+      ((invoicesQ.data ?? []) as any[]).filter(
+        (i) => i.status === "quote" && !i.deletedAt,
+      ),
     [invoicesQ.data],
   );
   const createInvoice = trpc.accounting.createInvoice.useMutation({

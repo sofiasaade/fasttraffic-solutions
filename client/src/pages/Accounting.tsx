@@ -153,7 +153,21 @@ export default function Accounting() {
   });
   const deleteInvoice = trpc.accounting.deleteInvoice.useMutation({
     onSuccess: () => {
-      toast.success("Draft deleted");
+      toast.success("Moved to the trash — restore it any time from 🗑 Trash");
+      utils.accounting.listInvoices.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const restoreInvoice = trpc.accounting.restoreInvoice.useMutation({
+    onSuccess: () => {
+      toast.success("Invoice restored");
+      utils.accounting.listInvoices.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const destroyInvoice = trpc.accounting.destroyInvoice.useMutation({
+    onSuccess: () => {
+      toast.success("Deleted forever");
       utils.accounting.listInvoices.invalidate();
     },
     onError: (e) => toast.error(e.message),
@@ -163,6 +177,7 @@ export default function Accounting() {
   const invoicedByJob = useMemo(() => {
     const m = new Map<string, { number: string; status: string }>();
     for (const inv of invoicesQ.data ?? []) {
+      if ((inv as any).deletedAt) continue;
       if (inv.airtableJobId && !m.has(inv.airtableJobId)) {
         m.set(inv.airtableJobId, { number: inv.invoiceNumber, status: inv.status });
       }
@@ -187,7 +202,7 @@ export default function Accounting() {
     "all",
   );
   // Invoices tab: keep QuickBooks-posted invoices separate from the rest.
-  const [invoicesView, setInvoicesView] = useState<"active" | "qb">("active");
+  const [invoicesView, setInvoicesView] = useState<"active" | "qb" | "trash">("active");
   const statusCounts = useMemo(() => {
     const rows = airtableQ.data ?? [];
     return {
@@ -684,9 +699,9 @@ export default function Accounting() {
             onClick={() => setTab("invoices")}
           >
             <Receipt className="size-4 mr-1" /> Invoices
-            {(invoicesQ.data?.filter((i) => i.status !== "quote").length ?? 0) > 0 && (
+            {(invoicesQ.data?.filter((i) => i.status !== "quote" && !(i as any).deletedAt).length ?? 0) > 0 && (
               <span className="ml-1.5 rounded-full bg-primary-foreground/20 px-1.5 text-[10px] tabular-nums">
-                {invoicesQ.data?.filter((i) => i.status !== "quote").length}
+                {invoicesQ.data?.filter((i) => i.status !== "quote" && !(i as any).deletedAt).length}
               </span>
             )}
           </Button>
@@ -916,8 +931,14 @@ export default function Accounting() {
         <div className="space-y-3 print:hidden">
           <div className="flex items-center gap-1.5">
             {(() => {
-              const all = (invoicesQ.data ?? []).filter((i) => i.status !== "quote");
+              const live = (invoicesQ.data ?? []).filter(
+                (i) => i.status !== "quote" && !(i as any).deletedAt,
+              );
+              const all = live;
               const qbN = all.filter((i) => i.status === "in_qb").length;
+              const trashN = (invoicesQ.data ?? []).filter(
+                (i) => (i as any).deletedAt,
+              ).length;
               return (
                 <>
                   <button
@@ -944,6 +965,19 @@ export default function Accounting() {
                   >
                     ✓ In QuickBooks ({qbN})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("trash")}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      invoicesView === "trash"
+                        ? "bg-slate-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                    )}
+                    title="Deleted invoices — restorable any time"
+                  >
+                    🗑 Trash ({trashN})
+                  </button>
                 </>
               );
             })()}
@@ -953,7 +987,8 @@ export default function Accounting() {
             <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Loading invoices…
             </div>
-          ) : (invoicesQ.data?.filter((i) => i.status !== "quote").length ?? 0) === 0 ? (
+          ) : (invoicesQ.data?.filter((i) => i.status !== "quote" && !(i as any).deletedAt).length ?? 0) === 0 &&
+            invoicesView !== "trash" ? (
             <div className="p-12 text-center text-sm text-muted-foreground">
               No invoices yet — create one with “New invoice”.
             </div>
@@ -972,11 +1007,17 @@ export default function Accounting() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(invoicesQ.data ?? [])
-                    .filter((inv) => inv.status !== "quote")
+                    .filter((inv) =>
+                      invoicesView === "trash"
+                        ? !!(inv as any).deletedAt
+                        : inv.status !== "quote" && !(inv as any).deletedAt,
+                    )
                     .filter((inv) =>
                       invoicesView === "qb"
                         ? inv.status === "in_qb"
-                        : inv.status !== "in_qb",
+                        : invoicesView === "trash"
+                          ? true
+                          : inv.status !== "in_qb",
                     )
                     .map((inv) => (
                     <tr key={inv.id} className="hover:bg-accent/40 transition-colors">
@@ -1040,6 +1081,29 @@ export default function Accounting() {
                         {money(inv.totalCents)}
                       </td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {invoicesView === "trash" ? (
+                          <>
+                            <Button
+                              size="sm"
+                              className="h-7 text-xs mr-1"
+                              onClick={() => restoreInvoice.mutate({ id: inv.id })}
+                            >
+                              ↩ Restore
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 text-xs text-rose-600 hover:text-rose-700"
+                              onClick={() => {
+                                if (window.confirm(`Delete ${inv.invoiceNumber} FOREVER? This cannot be undone.`))
+                                  destroyInvoice.mutate({ id: inv.id });
+                              }}
+                            >
+                              <Trash2 className="size-3.5 mr-1" /> Forever
+                            </Button>
+                          </>
+                        ) : (
+                          <>
                         {inv.status !== "paid" && inv.status !== "void" && inv.status !== "in_qb" && (
                           <Button
                             size="sm"
@@ -1067,6 +1131,8 @@ export default function Accounting() {
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
+                        )}
+                          </>
                         )}
                       </td>
                     </tr>

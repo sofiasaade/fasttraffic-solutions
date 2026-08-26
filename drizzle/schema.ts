@@ -683,6 +683,8 @@ export const invoices = mysqlTable("invoices", {
    * the pricing rules to how FTS actually bills.
    */
   suggestedJson: text("suggestedJson"),
+  /** Soft delete — trashed invoices are restorable until destroyed for real. */
+  deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

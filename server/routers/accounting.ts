@@ -650,6 +650,7 @@ export const accountingRouter = router({
       return { ok: true };
     }),
 
+  /** SOFT delete → the trash. Restorable any time with restoreInvoice. */
   deleteInvoice: accountingProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
@@ -660,11 +661,47 @@ export const accountingRouter = router({
         .where(eq(invoices.id, input.id))
         .limit(1);
       if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
-      // Only drafts can be deleted; sent/paid stay for the record (use void).
-      if (inv.status !== "draft") {
+      // Only drafts and quotes can be trashed; sent/paid stay (use void).
+      if (inv.status !== "draft" && inv.status !== "quote") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Only draft invoices can be deleted — mark it void instead.",
+          message: "Only drafts and quotes can be deleted — mark it void instead.",
+        });
+      }
+      await dbx
+        .update(invoices)
+        .set({ deletedAt: new Date() })
+        .where(eq(invoices.id, input.id));
+      return { ok: true, trashed: true };
+    }),
+
+  /** Bring a trashed invoice back exactly as it was. */
+  restoreInvoice: accountingProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const dbx = await db();
+      await dbx
+        .update(invoices)
+        .set({ deletedAt: null })
+        .where(eq(invoices.id, input.id));
+      return { ok: true };
+    }),
+
+  /** PERMANENT delete — only allowed on invoices already in the trash. */
+  destroyInvoice: accountingProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const dbx = await db();
+      const [inv] = await dbx
+        .select()
+        .from(invoices)
+        .where(eq(invoices.id, input.id))
+        .limit(1);
+      if (!inv) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!inv.deletedAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Move it to the trash first.",
         });
       }
       await dbx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
