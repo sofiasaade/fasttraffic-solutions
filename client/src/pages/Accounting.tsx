@@ -2212,55 +2212,79 @@ export default function Accounting() {
       <Dialog open={!!printing} onOpenChange={(o) => !o && setPrinting(null)}>
         <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto print:max-w-none print:max-h-none print:border-0 print:shadow-none">
           {printing && (
-            <div id="invoice-print" className="space-y-5 p-2">
-              <div className="flex items-start justify-between">
+            <div id="invoice-print" className="space-y-6 p-3 bg-white text-slate-900">
+              {/* Brand band */}
+              <div className="flex items-start justify-between border-b-4 border-[#e8542f] pb-4">
                 <div>
-                  <div className="text-2xl font-extrabold tracking-tight">
-                    Fast Traffic Solutions
+                  <div className="text-2xl font-extrabold tracking-tight text-[#1e2b58]">
+                    FAST<span className="text-[#e8542f]">»</span>TRAFFIC
                   </div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-[11px] text-slate-500 leading-snug mt-0.5">
+                    Fast Traffic Solutions Inc.
+                    <br />
                     Calgary, Alberta · ftstraffic.ca
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-lg font-bold">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                    Invoice
+                  </div>
+                  <div className="text-xl font-extrabold text-[#1e2b58]">
                     {printing.invoiceNumber}
-                    {(printing as any).qbNumber && (
-                      <span className="ml-2 text-sm font-semibold text-teal-700">
-                        QB #{(printing as any).qbNumber}
-                      </span>
-                    )}
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Issued {fmtDate(printing.issueDate)}
-                    {printing.dueDate && <> · Due {fmtDate(printing.dueDate)}</>}
-                  </div>
+                  {(printing as any).qbNumber && (
+                    <div className="text-xs font-semibold text-teal-700">
+                      QuickBooks #{(printing as any).qbNumber}
+                    </div>
+                  )}
                   <Badge
                     variant="secondary"
-                    className={cn("mt-1 uppercase", STATUS_BADGE[printing.status])}
+                    className={cn("mt-1 uppercase print:hidden", STATUS_BADGE[printing.status])}
                   >
                     {printing.status}
                   </Badge>
                 </div>
               </div>
 
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Bill to
+              {/* Meta grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">
+                    Bill to
+                  </div>
+                  <div className="font-semibold">{printing.clientName}</div>
                 </div>
-                <div className="font-semibold">{printing.clientName}</div>
                 {printing.jobAddress && (
-                  <div className="text-sm text-muted-foreground">{printing.jobAddress}</div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">
+                      Project location
+                    </div>
+                    <div>{printing.jobAddress}</div>
+                  </div>
                 )}
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">
+                    Dates
+                  </div>
+                  <div>
+                    Issued {fmtDate(printing.issueDate)}
+                    {printing.dueDate && (
+                      <>
+                        <br />
+                        Due {fmtDate(printing.dueDate)}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <table className="w-full text-sm">
+              <table className="w-full text-sm border border-slate-200 rounded overflow-hidden">
                 <thead>
-                  <tr className="border-b border-border text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <th className="text-left py-2">Description</th>
+                  <tr className="bg-[#1e2b58] text-white text-[10px] uppercase tracking-wider">
+                    <th className="text-left py-2 px-2">Description</th>
                     <th className="text-right py-2 w-16">Qty</th>
                     <th className="text-right py-2 w-24">Unit</th>
-                    <th className="text-right py-2 w-24">Amount</th>
+                    <th className="text-right py-2 px-2 w-24">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
@@ -2282,10 +2306,10 @@ export default function Accounting() {
                     if (phases.length === 0) {
                       return parsed.map((it) => (
                         <tr key={it.id}>
-                          <td className="py-2">{it.cleanDesc}</td>
+                          <td className="py-2 px-2">{it.cleanDesc}</td>
                           <td className="py-2 text-right tabular-nums">{it.quantity}</td>
                           <td className="py-2 text-right tabular-nums">{money(it.unitCents)}</td>
-                          <td className="py-2 text-right tabular-nums">{money(it.amountCents)}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{money(it.amountCents)}</td>
                         </tr>
                       ));
                     }
@@ -2293,24 +2317,24 @@ export default function Accounting() {
                       const rows = parsed.filter((x) => x.phase === ph);
                       const phTotal = rows.reduce((n, x) => n + x.amountCents, 0);
                       return [
-                        <tr key={`h-${ph}`} className="bg-primary/10">
-                          <td colSpan={4} className="py-1.5 px-2 font-extrabold text-[12px] uppercase tracking-wide text-primary">
+                        <tr key={`h-${ph}`} className="bg-[#fdece5]">
+                          <td colSpan={4} className="py-1.5 px-2 font-extrabold text-[12px] uppercase tracking-widest text-[#e8542f]">
                             Phase {ph}
                           </td>
                         </tr>,
                         ...rows.map((it) => (
                           <tr key={it.id}>
-                            <td className="py-2 pl-2">{it.cleanDesc}</td>
+                            <td className="py-2 pl-4 pr-2">{it.cleanDesc}</td>
                             <td className="py-2 text-right tabular-nums">{it.quantity}</td>
                             <td className="py-2 text-right tabular-nums">{money(it.unitCents)}</td>
-                            <td className="py-2 text-right tabular-nums">{money(it.amountCents)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums">{money(it.amountCents)}</td>
                           </tr>
                         )),
-                        <tr key={`t-${ph}`} className="bg-muted/40">
-                          <td colSpan={3} className="py-1.5 px-2 text-right text-[12px] font-bold">
+                        <tr key={`t-${ph}`} className="bg-slate-50 border-b-2 border-slate-200">
+                          <td colSpan={3} className="py-1.5 px-2 text-right text-[12px] font-bold text-slate-600">
                             Phase {ph} subtotal
                           </td>
-                          <td className="py-1.5 text-right tabular-nums font-bold">
+                          <td className="py-1.5 px-2 text-right tabular-nums font-bold text-slate-700">
                             {money(phTotal)}
                           </td>
                         </tr>,
@@ -2321,27 +2345,31 @@ export default function Accounting() {
               </table>
 
               <div className="flex justify-end">
-                <div className="w-56 space-y-1 text-sm">
-                  <div className="flex justify-between text-muted-foreground">
+                <div className="w-64 text-sm rounded border border-slate-200 overflow-hidden">
+                  <div className="flex justify-between px-3 py-1.5 text-slate-600">
                     <span>Subtotal</span>
                     <span className="tabular-nums">{money(printing.subtotalCents)}</span>
                   </div>
-                  <div className="flex justify-between text-muted-foreground">
+                  <div className="flex justify-between px-3 py-1.5 text-slate-600 border-t border-slate-100">
                     <span>GST ({printing.gstRate}%)</span>
                     <span className="tabular-nums">{money(printing.gstCents)}</span>
                   </div>
-                  <div className="flex justify-between font-bold text-base border-t border-border pt-1">
-                    <span>Total</span>
+                  <div className="flex justify-between px-3 py-2 font-extrabold text-base bg-[#1e2b58] text-white">
+                    <span>TOTAL</span>
                     <span className="tabular-nums">{money(printing.totalCents)}</span>
                   </div>
                 </div>
               </div>
 
               {printing.notes && (
-                <div className="text-xs text-muted-foreground border-t border-border pt-2">
+                <div className="text-xs text-slate-500 border-t border-slate-200 pt-2">
+                  <span className="font-bold uppercase text-[10px] tracking-wide mr-1">Notes</span>
                   {printing.notes}
                 </div>
               )}
+              <div className="text-[10px] text-slate-400 text-center border-t border-slate-100 pt-2">
+                Fast Traffic Solutions Inc. · Calgary, Alberta · Thank you for your business
+              </div>
 
               <div className="flex justify-end gap-2 print:hidden">
                 <Button variant="outline" onClick={() => setPrinting(null)}>
