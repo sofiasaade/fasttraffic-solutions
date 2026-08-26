@@ -2264,14 +2264,59 @@ export default function Accounting() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {printing.items.map((it) => (
-                    <tr key={it.id}>
-                      <td className="py-2">{it.description}</td>
-                      <td className="py-2 text-right tabular-nums">{it.quantity}</td>
-                      <td className="py-2 text-right tabular-nums">{money(it.unitCents)}</td>
-                      <td className="py-2 text-right tabular-nums">{money(it.amountCents)}</td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    // Multi-phase invoices store lines as "Phase N — …".
+                    // Render them as SECTIONS: a PHASE header, its clean lines
+                    // (no prefix), and a per-phase subtotal.
+                    const parsed = printing.items.map((it) => {
+                      const m = it.description.match(/^Phase (\d+) — (.*)$/);
+                      return {
+                        ...it,
+                        phase: m ? Number(m[1]) : 0,
+                        cleanDesc: m ? m[2] : it.description,
+                      };
+                    });
+                    const phases = Array.from(
+                      new Set(parsed.map((x) => x.phase).filter((ph) => ph > 0)),
+                    ).sort((a, b) => a - b);
+                    if (phases.length === 0) {
+                      return parsed.map((it) => (
+                        <tr key={it.id}>
+                          <td className="py-2">{it.cleanDesc}</td>
+                          <td className="py-2 text-right tabular-nums">{it.quantity}</td>
+                          <td className="py-2 text-right tabular-nums">{money(it.unitCents)}</td>
+                          <td className="py-2 text-right tabular-nums">{money(it.amountCents)}</td>
+                        </tr>
+                      ));
+                    }
+                    return phases.flatMap((ph) => {
+                      const rows = parsed.filter((x) => x.phase === ph);
+                      const phTotal = rows.reduce((n, x) => n + x.amountCents, 0);
+                      return [
+                        <tr key={`h-${ph}`} className="bg-primary/10">
+                          <td colSpan={4} className="py-1.5 px-2 font-extrabold text-[12px] uppercase tracking-wide text-primary">
+                            Phase {ph}
+                          </td>
+                        </tr>,
+                        ...rows.map((it) => (
+                          <tr key={it.id}>
+                            <td className="py-2 pl-2">{it.cleanDesc}</td>
+                            <td className="py-2 text-right tabular-nums">{it.quantity}</td>
+                            <td className="py-2 text-right tabular-nums">{money(it.unitCents)}</td>
+                            <td className="py-2 text-right tabular-nums">{money(it.amountCents)}</td>
+                          </tr>
+                        )),
+                        <tr key={`t-${ph}`} className="bg-muted/40">
+                          <td colSpan={3} className="py-1.5 px-2 text-right text-[12px] font-bold">
+                            Phase {ph} subtotal
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums font-bold">
+                            {money(phTotal)}
+                          </td>
+                        </tr>,
+                      ];
+                    });
+                  })()}
                 </tbody>
               </table>
 
