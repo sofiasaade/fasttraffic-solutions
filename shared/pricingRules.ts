@@ -243,9 +243,10 @@ export const FIXED = {
   stamp: 55000,
   tmpStandard: 40000,
   parkingBan: 35000,
-  /** Stockpile: Sofia's rule (Aug 2026) — <80 signs $450, ≥80 signs $950. */
   /** Stockpile signage — $450; MORE than 60 signs bills double ($900). */
   stockpile: 45000,
+  /** TAS — Traffic Accommodation Strategy (Sofia, Aug 25 2026). */
+  tas: 95000,
   flaggerHour: 4000,
   flaggerOtHour: 6000,
 } as const;
@@ -344,6 +345,8 @@ export interface QuoteInput {
   hasStamp: boolean;
   /** Has a plan attached at all (charges TMP when not stamped). */
   hasPlan: boolean;
+  /** TAS (Traffic Accommodation Strategy) present — bills $950 instead of TMP. */
+  hasTas?: boolean;
   /** Airtable "Parking Ban" is set to something affirmative. */
   parkingBan: boolean;
   /** Airtable "Stockpile" is set to something affirmative. */
@@ -382,8 +385,14 @@ export interface QuoteResult {
 function isNight(setupDuration: string | null): boolean {
   return /night/i.test(setupDuration ?? "");
 }
-function isDailySeveral(setupDuration: string | null): boolean {
-  return /several/i.test(setupDuration ?? "");
+/**
+ * Sofia (Aug 25 2026): ANY daily setup bills the setup fee PER DAY —
+ * "si dice set up daily, es por día que se cobra". 24-hour setups bill once.
+ */
+function isDailyPerDay(setupDuration: string | null): boolean {
+  const s = setupDuration ?? "";
+  if (/24\s*hour/i.test(s)) return false;
+  return /daily|several/i.test(s);
 }
 
 
@@ -510,7 +519,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
 
   // Daily "several days" setups bill the setup each day; 24-hour and single
   // setups bill it once (rental covers the standing days).
-  const setupQty = isDailySeveral(input.setupDuration) ? Math.max(1, input.days) : 1;
+  const setupQty = isDailyPerDay(input.setupDuration) ? Math.max(1, input.days) : 1;
   lines.push({
     description: `Setup fee — ${setupWhy}`,
     quantity: setupQty,
@@ -637,6 +646,14 @@ export function buildQuote(input: QuoteInput): QuoteResult {
         ? `${n} distinct stamped plans → ${n} × Engineering Stamp $550`
         : "Stamped plan attached → Engineering Stamp $550",
     );
+  } else if (input.hasTas) {
+    lines.push({
+      description: "TAS — Traffic Accommodation Strategy",
+      quantity: 1,
+      unitCents: FIXED.tas,
+      section: "service",
+    });
+    reasons.push("TAS document → $950 (replaces the standard TMP)");
   } else if (input.hasPlan) {
     lines.push({ description: "Traffic Management Plan", quantity: 1, unitCents: FIXED.tmpStandard, section: "service" });
     reasons.push("Plan without stamp → TMP $400 (standard)");

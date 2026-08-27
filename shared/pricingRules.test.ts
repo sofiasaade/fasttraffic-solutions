@@ -375,3 +375,41 @@ describe("permit ownership (On Behalf Of)", () => {
     expect(isPermitPulledByFts("Kobi Construction Ltd")).toBe(false);
   });
 });
+
+describe("Sofia's Aug 25 rules", () => {
+  it("ANY daily setup bills per day (not only 'several days')", () => {
+    const q = buildQuote({
+      ...baseInput(),
+      impact: "2️⃣ Low",
+      setupDuration: "Daily Set Up (9:00 AM - 3:00 PM)",
+      days: 4,
+    });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.quantity).toBe(4);
+    expect(setup?.unitCents).toBe(54000);
+  });
+
+  it("24-hour setup still bills once", () => {
+    const q = buildQuote({
+      ...baseInput(),
+      impact: "2️⃣ Low",
+      setupDuration: "24 Hours Set Up",
+      days: 6,
+    });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.quantity).toBe(1);
+  });
+
+  it("TAS bills $950 and replaces the standard TMP", () => {
+    const q = buildQuote({ ...baseInput(), hasTas: true, hasPlan: true });
+    const tas = q.lines.find((l) => /TAS/.test(l.description));
+    expect(tas?.unitCents).toBe(95000);
+    expect(q.lines.some((l) => l.description === "Traffic Management Plan")).toBe(false);
+  });
+
+  it("a stamped plan still wins over TAS", () => {
+    const q = buildQuote({ ...baseInput(), hasTas: true, hasStamp: true });
+    expect(q.lines.some((l) => /Engineering Stamp/.test(l.description))).toBe(true);
+    expect(q.lines.some((l) => /TAS/.test(l.description))).toBe(false);
+  });
+});

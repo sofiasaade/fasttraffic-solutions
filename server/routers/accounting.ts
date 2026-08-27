@@ -206,7 +206,16 @@ export const accountingRouter = router({
       );
       const parkingBanField = affirmative(rawGet("Parking Ban"));
       const parkingBan = parkingBanField || tnpPermit || pMarker;
-      const stockpile = affirmative(rawGet("Stockpile"));
+      // Stockpile: the Airtable checkbox OR the word in the project itself
+      // (title/calendar/address/setup text) — the checkbox is often unset.
+      const stockpileText = /stock\s*pile/i.test(
+        `${job.projectTitle ?? ""} ${job.calendarInfo ?? ""} ${job.jobAddress ?? ""} ${job.setupDuration ?? ""} ${attachmentNames}`,
+      );
+      const stockpile = affirmative(rawGet("Stockpile")) || stockpileText;
+      // TAS (Traffic Accommodation Strategy) — $950, replaces the standard TMP.
+      const hasTas = /\bTAS\b|traffic\s*accommodation/i.test(
+        `${attachmentNames} ${job.projectTitle ?? ""} ${job.calendarInfo ?? ""} ${rawGet("Type of Submission") ?? ""}`,
+      );
 
       const num = (v: string | null) => {
         const n = Number(String(v ?? "").replace(/[^\d.]/g, ""));
@@ -338,6 +347,7 @@ export const accountingRouter = router({
         weekendStart,
         hasStamp,
         hasPlan,
+        hasTas,
         stampedPlans: stampCodes.length > 0 ? stampCodes : undefined,
         parkingBan,
         stockpile,
