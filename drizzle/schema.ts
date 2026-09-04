@@ -828,3 +828,59 @@ export const execAuditLog = mysqlTable("exec_audit_log", {
 });
 
 export type ExecAuditLog = typeof execAuditLog.$inferSelect;
+
+/** ATLAS: Sofia's private priorities — never visible to any other role. */
+export const execPriorities = mysqlTable("exec_priorities", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 300 }).notNull(),
+  notes: text("notes"),
+  category: varchar("category", { length: 24 }).default("CEO").notNull(),
+  priority: varchar("priority", { length: 8 }).default("med").notNull(),
+  dueDate: varchar("dueDate", { length: 10 }),
+  status: varchar("status", { length: 24 }).default("not_started").notNull(),
+  delegatedTo: varchar("delegatedTo", { length: 128 }),
+  waitingOn: varchar("waitingOn", { length: 128 }),
+  relatedLabel: varchar("relatedLabel", { length: 256 }),
+  nextAction: varchar("nextAction", { length: 500 }),
+  recurrence: varchar("recurrence", { length: 16 }).default("none").notNull(),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ExecPriority = typeof execPriorities.$inferSelect;
+
+/** ATLAS: decisions that require the owner's judgement — nothing auto-executes. */
+export const execDecisions = mysqlTable("exec_decisions", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 300 }).notNull(),
+  context: text("context"),
+  optionsJson: text("optionsJson"),
+  recommendation: text("recommendation"),
+  missingInfo: text("missingInfo"),
+  dueDate: varchar("dueDate", { length: 10 }),
+  ownerAfter: varchar("ownerAfter", { length: 128 }),
+  status: varchar("status", { length: 16 }).default("open").notNull(),
+  decisionNote: text("decisionNote"),
+  decidedAt: timestamp("decidedAt"),
+  source: varchar("source", { length: 32 }).default("manual").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type ExecDecision = typeof execDecisions.$inferSelect;
+
+/** ATLAS: collections follow-up per invoice (promises, disputes, next steps). */
+export const execCollections = mysqlTable("exec_collections", {
+  id: int("id").autoincrement().primaryKey(),
+  invoiceId: int("invoiceId").notNull().unique(),
+  lastContact: varchar("lastContact", { length: 10 }),
+  contactOutcome: varchar("contactOutcome", { length: 300 }),
+  nextFollowUp: varchar("nextFollowUp", { length: 10 }),
+  responsible: varchar("responsible", { length: 64 }),
+  promiseToPay: boolean("promiseToPay").default(false).notNull(),
+  promiseDate: varchar("promiseDate", { length: 10 }),
+  dispute: boolean("dispute").default(false).notNull(),
+  disputeNote: varchar("disputeNote", { length: 500 }),
+  riskLevel: varchar("riskLevel", { length: 8 }).default("low").notNull(),
+  notes: text("notes"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ExecCollection = typeof execCollections.$inferSelect;

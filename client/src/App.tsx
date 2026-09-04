@@ -43,6 +43,8 @@ function Router() {
   if (!isAuthenticated) {
     return (
       <Switch>
+        {/* ATLAS has its own login — never funnel it through the PIN gate. */}
+        <Route path="/atlas" component={Atlas} />
         <Route path="/404" component={NotFound} />
         <Route component={Login} />
       </Switch>
