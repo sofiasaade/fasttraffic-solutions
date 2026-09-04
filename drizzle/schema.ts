@@ -25,7 +25,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "executive"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -794,3 +794,37 @@ export type StartWorkAuthorization =
   typeof startWorkAuthorizations.$inferSelect;
 export type InsertStartWorkAuthorization =
   typeof startWorkAuthorizations.$inferInsert;
+
+/* ===================== ATLAS — Executive Command Center ===================== */
+
+/**
+ * Executive credentials — individual login for the Executive Owner ONLY.
+ * Password is scrypt-hashed (salt:hash), TOTP secret enables MFA. Never more
+ * than a handful of rows; every ATLAS procedure re-checks the role serverside.
+ */
+export const executiveAuth = mysqlTable("executive_auth", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 512 }).notNull(),
+  totpSecret: varchar("totpSecret", { length: 64 }),
+  totpEnabled: boolean("totpEnabled").default(false).notNull(),
+  mustChangePassword: boolean("mustChangePassword").default(true).notNull(),
+  failedAttempts: int("failedAttempts").default(0).notNull(),
+  lockedUntil: timestamp("lockedUntil"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ExecutiveAuth = typeof executiveAuth.$inferSelect;
+
+/** Append-only audit trail for the executive module: logins, views, exports. */
+export const execAuditLog = mysqlTable("exec_audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull(),
+  action: varchar("action", { length: 32 }).notNull(),
+  detail: varchar("detail", { length: 500 }),
+  ip: varchar("ip", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ExecAuditLog = typeof execAuditLog.$inferSelect;

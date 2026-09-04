@@ -6,6 +6,7 @@ import { coordinatorRouter } from "./routers/coordinator";
 import { technicianRouter } from "./routers/technician";
 import { accountingRouter } from "./routers/accounting";
 import { safetyRouter } from "./routers/safety";
+import { atlasRouter } from "./routers/atlas";
 import { getTechnicianByUserId } from "./opsDb";
 
 export const appRouter = router({
@@ -39,6 +40,7 @@ export const appRouter = router({
   accounting: accountingRouter,
   technician: technicianRouter,
   safety: safetyRouter,
+  atlas: atlasRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -19,6 +19,7 @@ import ChangeHistoryPage from "./pages/ChangeHistoryPage";
 import AlertsPage from "./pages/AlertsPage";
 import PermitMap from "./pages/PermitMap";
 import Messages from "./pages/Messages";
+import Atlas from "./pages/Atlas";
 import SafetyReports from "./pages/SafetyReports";
 import Scheduler from "./pages/Scheduler";
 import WorkersCalendar from "./pages/WorkersCalendar";
@@ -50,6 +51,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/atlas" component={Atlas} />
       <Route path="/app" component={TechnicianApp} />
       {/* Match ALL sub-paths (multi-segment, e.g. /app/job/:id). The previous
           `:rest*` param only matched a single segment. */}

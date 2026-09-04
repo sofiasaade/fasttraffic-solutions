@@ -43,3 +43,21 @@ export const adminProcedure = t.procedure.use(
     });
   }),
 );
+
+/** ATLAS: only the Executive Owner role passes — enforced on EVERY call. */
+export const executiveProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    if (!ctx.user || ctx.user.role !== 'executive') {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Executive access only." });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+      },
+    });
+  }),
+);
