@@ -164,7 +164,13 @@ export async function qbGet<T = any>(path: string): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`QB API ${res.status} on ${path.split("?")[0]}: ${body.slice(0, 300)}`);
+    // intuit_tid identifies the request for Intuit's support team; keep it in
+    // our server logs and audit trail so failures are traceable end to end.
+    const tid = res.headers.get("intuit_tid") ?? "n/a";
+    const msg = `QB API ${res.status} on ${path.split("?")[0]} (intuit_tid ${tid}): ${body.slice(0, 300)}`;
+    console.error("[qb]", msg);
+    await execAudit("system", "qb_api_error", msg).catch(() => {});
+    throw new Error(msg);
   }
   return (await res.json()) as T;
 }
