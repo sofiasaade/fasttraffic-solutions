@@ -79,6 +79,9 @@ function initials(name: string | null | undefined): string {
 export default function CoordinatorShell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user } = useSession();
+  // ATLAS renders ONLY for the executive session — the server rejects other
+  // roles anyway if they guess the URL.
+  const isExecutive = user?.role === "executive";
   const { logout } = useAuth();
   const badges = trpc.coordinator.changeBadges.useQuery(undefined, {
     refetchInterval: 60_000,
@@ -184,6 +187,17 @@ export default function CoordinatorShell({ children }: { children: ReactNode }) 
             </div>
           ))}
 
+          {isExecutive && (
+            <div className="pt-1 mt-1 border-t border-sidebar-border/60">
+              <Link
+                href="/atlas"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-bold text-white bg-[#e8542f]/70 hover:bg-[#e8542f] transition-colors mt-2"
+              >
+                <ShieldCheck className="size-4.5" />
+                ATLAS
+              </Link>
+            </div>
+          )}
           <div className="pt-1 mt-1 border-t border-sidebar-border/60">
             <Link
               href="/app"

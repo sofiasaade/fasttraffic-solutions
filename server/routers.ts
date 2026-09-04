@@ -24,7 +24,8 @@ export const appRouter = router({
       }
       return {
         user: ctx.user,
-        isCoordinator: ctx.user.role === "admin",
+        isCoordinator: ctx.user.role === "admin" || ctx.user.role === "executive",
+        isExecutive: ctx.user.role === "executive",
         technician,
       };
     }),

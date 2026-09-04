@@ -97,7 +97,7 @@ export function registerPinLogin(app: Express) {
   app.post("/api/preview-tech", async (req, res) => {
     try {
       const admin = await sdk.authenticateRequest(req).catch(() => null);
-      if (!admin || admin.role !== "admin") {
+      if (!admin || (admin.role !== "admin" && admin.role !== "executive")) {
         res.status(403).json({ ok: false, error: "Coordinator session required." });
         return;
       }
