@@ -884,3 +884,22 @@ export const execCollections = mysqlTable("exec_collections", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type ExecCollection = typeof execCollections.$inferSelect;
+
+/**
+ * ATLAS F1d: QuickBooks OAuth connection (single row — one company file).
+ * Tokens come from Intuit's official OAuth 2.0 flow; we NEVER see QB passwords.
+ * The app only ever issues GET requests against the QB API (read-only by code).
+ */
+export const qbConnection = mysqlTable("qb_connection", {
+  id: int("id").autoincrement().primaryKey(),
+  realmId: varchar("realmId", { length: 32 }).notNull(),
+  accessToken: text("accessToken").notNull(),
+  refreshToken: varchar("refreshToken", { length: 512 }).notNull(),
+  accessTokenExpiresAt: timestamp("accessTokenExpiresAt").notNull(),
+  refreshTokenExpiresAt: timestamp("refreshTokenExpiresAt").notNull(),
+  companyName: varchar("companyName", { length: 256 }),
+  connectedByEmail: varchar("connectedByEmail", { length: 320 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type QbConnection = typeof qbConnection.$inferSelect;

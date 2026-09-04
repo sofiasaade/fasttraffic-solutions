@@ -10,4 +10,10 @@ export const ENV = {
   airtableApiKey: process.env.AIRTABLE_API_KEY ?? "",
   airtableBaseId: process.env.AIRTABLE_BASE_ID ?? "",
   airtableJobsTableId: process.env.AIRTABLE_JOBS_TABLE_ID ?? "",
+  /** QuickBooks OAuth app (ATLAS F1d). Secrets live ONLY in env vars. */
+  qbClientId: process.env.QB_CLIENT_ID ?? "",
+  qbClientSecret: process.env.QB_CLIENT_SECRET ?? "",
+  qbRedirectUri: process.env.QB_REDIRECT_URI ?? "",
+  /** "sandbox" while testing with an Intuit sandbox company; anything else = production. */
+  qbEnvironment: process.env.QB_ENVIRONMENT ?? "production",
 };

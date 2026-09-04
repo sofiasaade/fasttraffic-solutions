@@ -296,12 +296,11 @@ function AtlasShell({ email, onLogout }: { email: string; onLogout: () => void }
             <div className="py-20 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>
           )
         )}
-        {(tab === "CEO" || tab === "CFO" || tab === "CMO") && (
+        {tab === "CFO" && <CfoTab />}
+        {(tab === "CEO" || tab === "CMO") && (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
             <p className="font-semibold text-slate-600 mb-1">{tab}</p>
-            {tab === "CFO"
-              ? "Se completa al conectar QuickBooks (F1d) — nada se muestra sin datos reales."
-              : "En construcción — próxima fase del plan aprobado."}
+            En construcción — próxima fase del plan aprobado.
           </div>
         )}
       </main>
@@ -333,7 +332,7 @@ function UnbilledTable({ jobs, over48h }: { jobs: any[]; over48h: number }) {
               <tr key={j.id} className="hover:bg-slate-50">
                 <td className="px-4 py-2 font-medium">{j.company ?? j.id}</td>
                 <td className="px-2 text-slate-500">{j.status}</td>
-                <td className="px-2 text-right tabular-nums text-slate-500">{j.endDate ?? "—"}</td>
+                <td className="px-2 text-right tabular-nums text-slate-500">{j.endDate ? String(j.endDate).slice(0, 10) : "—"}</td>
                 <td className={cn("px-4 text-right tabular-nums font-bold",
                   (j.ageDays ?? 0) >= 2 ? "text-red-600" : "text-slate-700")}>
                   {j.ageDays ?? "?"}
@@ -348,6 +347,167 @@ function UnbilledTable({ jobs, over48h }: { jobs: any[]; over48h: number }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/* ==================== F1d — CFO (QuickBooks read-only) ==================== */
+
+function CfoTab() {
+  const statusQ = trpc.atlas.qbStatus.useQuery();
+  const cfoQ = trpc.atlas.cfo.useQuery(undefined, {
+    enabled: !!statusQ.data?.connected,
+    refetchInterval: 10 * 60_000,
+  });
+  const utils = trpc.useUtils();
+
+  // Surface the OAuth redirect result once.
+  useEffect(() => {
+    const qb = new URLSearchParams(window.location.search).get("qb");
+    if (!qb) return;
+    if (qb === "connected") toast.success("QuickBooks conectado ✔ (solo lectura)");
+    else if (qb === "denied") toast.info("Conexión cancelada en Intuit.");
+    else toast.error("No se pudo conectar QuickBooks — intenta de nuevo.");
+    window.history.replaceState(null, "", "/atlas");
+  }, []);
+
+  const disconnect = async () => {
+    if (!confirm("¿Desconectar QuickBooks? Se revoca el acceso en Intuit.")) return;
+    const r = await fetch("/api/qb/disconnect", { method: "POST" }).then((r) => r.json());
+    if (r.ok) {
+      toast.success("QuickBooks desconectado");
+      utils.atlas.qbStatus.invalidate();
+      utils.atlas.snapshot.invalidate();
+    }
+  };
+
+  if (statusQ.isLoading)
+    return <div className="py-20 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>;
+  const st = statusQ.data;
+  if (!st) return null;
+
+  if (!st.connected) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-8 max-w-xl mx-auto text-center space-y-4">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-[#2CA01C]/10">
+          <Landmark className="size-7 text-[#2CA01C]" />
+        </div>
+        <div>
+          <p className="font-bold text-[#1e2b58] text-lg">Conectar QuickBooks</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Acceso <b>solo lectura</b> por OAuth oficial de Intuit — inicias sesión en la página de
+            Intuit, nunca escribes tu contraseña de QuickBooks aquí. ATLAS jamás crea ni edita nada
+            en QuickBooks.
+          </p>
+        </div>
+        {st.configured ? (
+          <Button
+            className="bg-[#2CA01C] hover:bg-[#238015] text-white"
+            onClick={() => { window.location.href = "/api/qb/connect"; }}
+          >
+            Conectar con Intuit
+          </Button>
+        ) : (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[13px] text-amber-800 text-left">
+            Falta configurar las llaves de la app de Intuit (QB_CLIENT_ID y QB_CLIENT_SECRET en
+            Railway). Sigue la guía que te dio Claude para crearlas en developer.intuit.com.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const c: any = cfoQ.data;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+        <span className="text-emerald-800">
+          <b>QuickBooks conectado</b>{st.companyName ? <> — {st.companyName}</> : null} · solo lectura
+        </span>
+        <button onClick={disconnect} className="text-xs text-emerald-700 underline hover:text-emerald-900">
+          Desconectar
+        </button>
+      </div>
+
+      {cfoQ.isLoading && (
+        <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>
+      )}
+
+      {c?.connected && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Efectivo en bancos</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums text-[#1e2b58]">
+                {c.cash ? money(c.cash.totalCents) : "—"}
+              </div>
+              {c.cash?.accounts?.map((a: any) => (
+                <div key={a.name} className="text-[11px] text-slate-500 flex justify-between">
+                  <span>{a.name}</span><span className="tabular-nums">{money(a.balanceCents)}</span>
+                </div>
+              ))}
+              <div className="mt-1 text-[10px] text-slate-400">Fuente: QuickBooks (en vivo)</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Por cobrar (QB, contable)</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums text-[#1e2b58]">
+                {c.ar ? money(c.ar.totalCents) : "—"}
+              </div>
+              {c.ar && (
+                <div className="text-[11px] text-slate-500">
+                  {c.ar.openInvoices} facturas abiertas ·
+                  {" "}vencido +60: <b className="text-red-600">{money((c.ar.buckets["61-90"] ?? 0) + (c.ar.buckets["90+"] ?? 0))}</b>
+                </div>
+              )}
+              <div className="mt-1 text-[10px] text-slate-400">Fuente: QuickBooks (en vivo)</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">P&L del mes ({c.pnl?.from ?? ""})</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums text-[#1e2b58]">
+                {c.pnl?.netCents != null ? money(c.pnl.netCents) : "—"}
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Ingresos {c.pnl?.incomeCents != null ? money(c.pnl.incomeCents) : "—"} ·
+                Gastos {c.pnl?.expensesCents != null ? money(c.pnl.expensesCents) : "—"}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-400">Fuente: reporte P&L de QuickBooks</div>
+            </div>
+          </div>
+
+          {c.ar && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Antigüedad AR (QB)</div>
+                {["current", "1-30", "31-60", "61-90", "90+"].map((b) => (
+                  <div key={b} className="flex justify-between text-sm py-0.5">
+                    <span className="text-slate-600">{BUCKET_LABEL[b]}</span>
+                    <span className={cn("tabular-nums font-semibold",
+                      (b === "61-90" || b === "90+") && (c.ar.buckets[b] ?? 0) > 0 ? "text-red-600" : "text-slate-800")}>
+                      {money(c.ar.buckets[b] ?? 0)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Quién nos debe más (QB)</div>
+                {c.ar.topCustomers.map((tc: any) => (
+                  <div key={tc.name} className="flex justify-between text-sm py-0.5">
+                    <span className="text-slate-600 truncate mr-2">{tc.name}</span>
+                    <span className="tabular-nums font-semibold">{money(tc.cents)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {c.errors?.length > 0 && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">
+              Datos no disponibles ahora mismo (se muestran solo cifras reales):
+              <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -462,7 +622,14 @@ function CollectionsTab() {
                       {r.qbNumber && <span className="text-slate-400"> · QB {r.qbNumber}</span>}
                     </td>
                     <td className="px-2 font-medium">{r.clientName}</td>
-                    <td className="px-2 text-right tabular-nums font-semibold">{money(r.totalCents)}</td>
+                    <td className="px-2 text-right tabular-nums font-semibold">
+                      {money(r.totalCents)}
+                      {r.qbBalanceCents != null && (
+                        <span className="block text-[10px] font-normal text-emerald-700">
+                          QB debe: {money(r.qbBalanceCents)}
+                        </span>
+                      )}
+                    </td>
                     <td className={cn("px-2 text-right tabular-nums font-bold",
                       r.ageDays > 60 ? "text-red-600" : r.ageDays > 30 ? "text-amber-600" : "text-slate-600")}>
                       {r.ageDays}

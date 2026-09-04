@@ -12,6 +12,7 @@ import {
   invoices,
 } from "../../drizzle/schema";
 import { execAudit } from "../execAuth";
+import { getConnection as getQbConnection, qbConfigured, qbGet, qbQuery } from "../qb";
 
 async function db() {
   const d = await getDb();
@@ -118,7 +119,12 @@ export const atlasRouter = router({
       sources: {
         appInvoices: { ok: true, label: "FTS OS invoices (TiDB)" },
         airtable: { ok: airtableOk, label: "Airtable operations" },
-        quickbooks: { ok: false, label: "QuickBooks — not connected yet (F1d)" },
+        quickbooks: await (async () => {
+          const conn = await getQbConnection().catch(() => null);
+          return conn
+            ? { ok: true, label: `QuickBooks — ${conn.companyName ?? "conectado"}` }
+            : { ok: false, label: "QuickBooks — not connected yet (F1d)" };
+        })(),
       },
       billing: {
         invoicedThisMonthCents: sum(thisMonth),
@@ -199,13 +205,156 @@ export const atlasRouter = router({
       t.cents += r.totalCents;
       t.count++;
     }
+    // When QuickBooks is connected, join the REAL open balance per invoice by
+    // matching our qbNumber against the QB DocNumber. Read-only; failure-safe.
+    let qbJoined = false;
+    let qbError: string | null = null;
+    const qbConn = await getQbConnection().catch(() => null);
+    if (qbConn) {
+      try {
+        const res = await qbQuery<any>(
+          "SELECT DocNumber, Balance, TotalAmt FROM Invoice WHERE Balance > '0' MAXRESULTS 1000",
+        );
+        const byDoc = new Map<string, { balance: number; total: number }>();
+        for (const qi of res?.QueryResponse?.Invoice ?? []) {
+          if (qi.DocNumber) byDoc.set(String(qi.DocNumber), { balance: qi.Balance, total: qi.TotalAmt });
+        }
+        for (const r of rows as any[]) {
+          const m = r.qbNumber ? byDoc.get(String(r.qbNumber)) : undefined;
+          r.qbBalanceCents = m ? Math.round(m.balance * 100) : null;
+        }
+        qbJoined = true;
+      } catch (err) {
+        qbError = String(err).slice(0, 200);
+      }
+    }
+
     await execAudit(ctx.user.email ?? "executive", "view", "collections");
     return {
       rows,
       totals,
       outstandingCents: rows.reduce((n, r) => n + r.totalCents, 0),
-      note: "Basado en facturas de FTS OS (sent / in QB). El saldo contable exacto llega con QuickBooks (F1d).",
+      qb: { connected: Boolean(qbConn), joined: qbJoined, error: qbError },
+      note: qbJoined
+        ? "Facturas de FTS OS; el saldo QB por factura viene en vivo de QuickBooks (solo lectura)."
+        : "Basado en facturas de FTS OS (sent / in QB). El saldo contable exacto llega con QuickBooks (F1d).",
     };
+  }),
+
+  /* ==================== F1d — QUICKBOOKS (READ-ONLY) ==================== */
+
+  /** Connection state — never exposes tokens, only metadata. */
+  qbStatus: executiveProcedure.query(async () => {
+    const conn = await getQbConnection().catch(() => null);
+    return {
+      configured: qbConfigured(),
+      connected: Boolean(conn),
+      companyName: conn?.companyName ?? null,
+      connectedBy: conn?.connectedByEmail ?? null,
+      refreshTokenExpiresAt: conn?.refreshTokenExpiresAt ?? null,
+    };
+  }),
+
+  /**
+   * CFO view — 100% real QuickBooks data, read-only. Anything the API doesn't
+   * give us is reported as unavailable, never estimated.
+   */
+  cfo: executiveProcedure.query(async ({ ctx }) => {
+    const conn = await getQbConnection().catch(() => null);
+    if (!conn) return { connected: false as const };
+
+    const today = calgaryToday();
+    const monthStart = today.slice(0, 7) + "-01";
+    const out: any = { connected: true as const, companyName: conn.companyName, errors: [] as string[] };
+
+    // Cash: sum of Bank account balances.
+    try {
+      const res = await qbQuery<any>("SELECT Name, CurrentBalance FROM Account WHERE AccountType = 'Bank'");
+      const accounts = (res?.QueryResponse?.Account ?? []).map((a: any) => ({
+        name: a.Name,
+        balanceCents: Math.round((a.CurrentBalance ?? 0) * 100),
+      }));
+      out.cash = {
+        totalCents: accounts.reduce((n: number, a: any) => n + a.balanceCents, 0),
+        accounts,
+      };
+    } catch (err) {
+      out.errors.push("Bancos: " + String(err).slice(0, 150));
+    }
+
+    // AR: open invoices with aging by DueDate (QB is the accounting truth here).
+    try {
+      const res = await qbQuery<any>(
+        "SELECT DocNumber, Balance, TotalAmt, DueDate, TxnDate, CustomerRef FROM Invoice WHERE Balance > '0' ORDERBY DueDate MAXRESULTS 1000",
+      );
+      const invs = res?.QueryResponse?.Invoice ?? [];
+      const t0 = new Date(today + "T00:00:00").getTime();
+      const buckets: Record<string, number> = { current: 0, "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+      const byCustomer = new Map<string, number>();
+      let totalCents = 0;
+      for (const i of invs) {
+        const cents = Math.round((i.Balance ?? 0) * 100);
+        totalCents += cents;
+        const ref = i.DueDate ?? i.TxnDate;
+        const age = ref ? Math.floor((t0 - new Date(ref + "T00:00:00").getTime()) / 86400000) : 0;
+        const b = age <= 0 ? "current" : age <= 30 ? "1-30" : age <= 60 ? "31-60" : age <= 90 ? "61-90" : "90+";
+        buckets[b] += cents;
+        const cust = i.CustomerRef?.name ?? "(sin cliente)";
+        byCustomer.set(cust, (byCustomer.get(cust) ?? 0) + cents);
+      }
+      out.ar = {
+        totalCents,
+        openInvoices: invs.length,
+        buckets,
+        topCustomers: Array.from(byCustomer.entries())
+          .map(([name, cents]) => ({ name, cents }))
+          .sort((a, b) => b.cents - a.cents)
+          .slice(0, 10),
+      };
+    } catch (err) {
+      out.errors.push("Cuentas por cobrar: " + String(err).slice(0, 150));
+    }
+
+    // P&L month-to-date, straight from the QB report.
+    try {
+      const rep = await qbGet<any>(
+        `reports/ProfitAndLoss?start_date=${monthStart}&end_date=${today}`,
+      );
+      const find = (label: string): number | null => {
+        let val: number | null = null;
+        const walk = (rows: any[]) => {
+          for (const r of rows ?? []) {
+            const cols = r.Summary?.ColData ?? [];
+            if (cols[0]?.value === label && cols[1]?.value != null) {
+              const n = Number(cols[1].value);
+              if (!Number.isNaN(n)) val = n;
+            }
+            if (r.Rows?.Row) walk(r.Rows.Row);
+          }
+        };
+        walk(rep?.Rows?.Row ?? []);
+        return val;
+      };
+      const income = find("Total Income");
+      const expenses = find("Total Expenses");
+      let net: number | null = null;
+      for (const r of rep?.Rows?.Row ?? []) {
+        const cols = r.Summary?.ColData ?? [];
+        if (cols[0]?.value === "Net Income" && cols[1]?.value != null) net = Number(cols[1].value);
+      }
+      out.pnl = {
+        from: monthStart,
+        to: today,
+        incomeCents: income != null ? Math.round(income * 100) : null,
+        expensesCents: expenses != null ? Math.round(expenses * 100) : null,
+        netCents: net != null ? Math.round(net * 100) : null,
+      };
+    } catch (err) {
+      out.errors.push("P&L: " + String(err).slice(0, 150));
+    }
+
+    await execAudit(ctx.user.email ?? "executive", "view", "cfo (QuickBooks)");
+    return out;
   }),
 
   /** Upsert the follow-up record for one invoice (promise, dispute, next step). */
