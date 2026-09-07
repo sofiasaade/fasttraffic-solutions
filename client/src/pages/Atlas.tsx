@@ -297,12 +297,8 @@ function AtlasShell({ email, onLogout }: { email: string; onLogout: () => void }
           )
         )}
         {tab === "CFO" && <CfoTab />}
-        {(tab === "CEO" || tab === "CMO") && (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-sm text-slate-500">
-            <p className="font-semibold text-slate-600 mb-1">{tab}</p>
-            En construcción — próxima fase del plan aprobado.
-          </div>
-        )}
+        {tab === "CEO" && <CeoTab />}
+        {tab === "CMO" && <CmoTab />}
       </main>
     </div>
   );
@@ -347,6 +343,235 @@ function UnbilledTable({ jobs, over48h }: { jobs: any[]; over48h: number }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/* =========================== F2 — CEO =========================== */
+
+function CeoTab() {
+  const q = trpc.atlas.ceo.useQuery(undefined, { refetchInterval: 10 * 60_000 });
+  if (q.isLoading)
+    return <div className="py-20 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>;
+  const c: any = q.data;
+  if (!c) return null;
+  const months = (c.months ?? []).filter((m: any) => m.incomeCents != null);
+  const maxIncome = Math.max(1, ...months.map((m: any) => m.incomeCents));
+
+  return (
+    <div className="space-y-4">
+      {/* Written summary */}
+      {c.summary?.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Resumen ejecutivo</div>
+          <ul className="space-y-1.5">
+            {c.summary.map((s: string, i: number) => (
+              <li key={i} className="text-sm text-slate-700 flex gap-2">
+                <span className="text-[#e8542f] font-bold">›</span>{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Monthly trend — real QB P&L */}
+      {months.length > 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-3">
+            Ingresos vs gastos por mes — P&L de QuickBooks
+          </div>
+          <div className="flex items-end gap-3 h-44">
+            {months.map((m: any) => (
+              <div key={m.title} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                <div className="text-[10px] tabular-nums font-bold text-[#1e2b58]">
+                  {money(m.incomeCents).replace(".00", "")}
+                </div>
+                <div className="w-full flex items-end gap-0.5 flex-1">
+                  <div className="flex-1 bg-[#1e2b58] rounded-t"
+                    style={{ height: `${(m.incomeCents / maxIncome) * 100}%` }} title={`Ingresos ${money(m.incomeCents)}`} />
+                  <div className="flex-1 bg-[#e8542f]/70 rounded-t"
+                    style={{ height: `${(m.expensesCents / maxIncome) * 100}%` }} title={`Gastos ${money(m.expensesCents)}`} />
+                </div>
+                <div className="text-[10px] text-slate-500 truncate w-full text-center">{m.title}</div>
+                <div className={cn("text-[10px] tabular-nums font-semibold",
+                  m.netCents >= 0 ? "text-emerald-600" : "text-red-600")}>
+                  {m.netCents >= 0 ? "+" : ""}{Math.round(m.netCents / 100).toLocaleString("en-CA")}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-4 text-[10px] text-slate-500">
+            <span><span className="inline-block size-2 bg-[#1e2b58] rounded-sm mr-1" />Ingresos</span>
+            <span><span className="inline-block size-2 bg-[#e8542f]/70 rounded-sm mr-1" />Gastos</span>
+            <span>Neto debajo de cada mes</span>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          {c.qbConnected ? "Sin datos del P&L todavía." : "La tendencia mensual llega de QuickBooks — conéctalo en CFO."}
+        </div>
+      )}
+
+      {/* Ops pulse */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi icon={Receipt} label="Facturado este mes (app)" value={money(c.ops.invoicedThisMonthCents)}
+          sub={`${c.ops.invoicedThisMonthCount} facturas`} source="FTS OS" />
+        <Kpi icon={FileWarning} label="Sin facturar" value={c.ops.unbilledJobs != null ? String(c.ops.unbilledJobs) : "—"}
+          sub="trabajos completados sin factura" source="Airtable + FTS OS" warn={(c.ops.unbilledJobs ?? 0) > 0} />
+        <Kpi icon={TrendingUp} label="Pipeline quotes" value={money(c.ops.quotesCents)}
+          sub={`${c.ops.quotesCount} cotizaciones`} source="FTS OS" />
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Rentabilidad por trabajo</div>
+          <div className="mt-1 text-sm font-semibold text-slate-500">No disponible</div>
+          <div className="mt-0.5 text-[11px] text-slate-500 leading-snug">{c.profitability?.reason}</div>
+        </div>
+      </div>
+
+      {c.errors?.length > 0 && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">
+          <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================== F2 — CMO =========================== */
+
+function CmoTab() {
+  const q = trpc.atlas.cmo.useQuery(undefined, { refetchInterval: 10 * 60_000 });
+  if (q.isLoading)
+    return <div className="py-20 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>;
+  const c: any = q.data;
+  if (!c) return null;
+  if (!c.connected)
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+        El análisis de clientes sale del historial de facturas de QuickBooks — conéctalo en la pestaña CFO.
+      </div>
+    );
+  const y = c.year;
+  return (
+    <div className="space-y-4">
+      {y && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Kpi icon={Receipt} label={`Facturado ${y.from.slice(0, 4)}`} value={money(y.totalCents)}
+              sub={`${y.customers} clientes facturados este año`} source="QuickBooks" />
+            <Kpi icon={TrendingUp} label="Concentración top 3" value={`${Math.round(y.top3Share * 100)}%`}
+              sub={y.top3Share > 0.6 ? "Alta dependencia de pocos clientes — riesgo a vigilar" : "Cartera razonablemente diversificada"}
+              source="QuickBooks" warn={y.top3Share > 0.6} />
+            <Kpi icon={Landmark} label="Clientes nuevos (6 meses)"
+              value={String((c.newByMonth ?? []).reduce((n: number, m: any) => n + m.newCustomers, 0))}
+              sub="primera factura en ese periodo" source="QuickBooks" />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+              De dónde viene el ingreso {y.from.slice(0, 4)} — top 10 clientes
+            </div>
+            <div className="divide-y divide-slate-100">
+              {y.top.map((t: any, i: number) => (
+                <div key={t.name} className="px-4 py-2 flex items-center gap-3 text-sm">
+                  <span className="w-5 text-right text-slate-400 tabular-nums">{i + 1}</span>
+                  <span className="flex-1 font-medium truncate">{t.name}</span>
+                  <div className="w-32 h-2 rounded bg-slate-100 overflow-hidden hidden sm:block">
+                    <div className="h-full bg-[#e8542f]" style={{ width: `${Math.max(2, t.share * 100)}%` }} />
+                  </div>
+                  <span className="w-12 text-right text-[11px] text-slate-500 tabular-nums">{Math.round(t.share * 100)}%</span>
+                  <span className="w-24 text-right font-semibold tabular-nums">{money(t.cents)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Clientes nuevos por mes</div>
+            <div className="flex items-end gap-2 h-20">
+              {(c.newByMonth ?? []).map((m: any) => {
+                const max = Math.max(1, ...c.newByMonth.map((x: any) => x.newCustomers));
+                return (
+                  <div key={m.title} className="flex-1 flex flex-col items-center gap-1">
+                    <span className="text-[10px] font-bold text-[#1e2b58] tabular-nums">{m.newCustomers}</span>
+                    <div className="w-full bg-[#1e2b58]/80 rounded-t" style={{ height: `${(m.newCustomers / max) * 56}px` }} />
+                    <span className="text-[9px] text-slate-500">{m.title}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+      {c.window && (
+        <p className="text-[11px] text-slate-400">
+          Fuente: {c.window.count} facturas de QuickBooks ({c.window.from} → {c.window.to}).
+        </p>
+      )}
+      {c.errors?.length > 0 && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">
+          <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ====================== F2 — 13-WEEK CASH VIEW ====================== */
+
+function CashFlow13() {
+  const q = trpc.atlas.cashflow13.useQuery(undefined, { refetchInterval: 10 * 60_000 });
+  const c: any = q.data;
+  if (q.isLoading)
+    return <div className="py-8 flex justify-center"><Loader2 className="size-5 animate-spin text-slate-400" /></div>;
+  if (!c?.connected || !c.weeks) return null;
+
+  let running = c.cashCents ?? 0;
+  const rows = c.weeks.map((w: any, i: number) => {
+    const outflow = c.avgWeeklyExpenseCents ?? 0;
+    running = running + w.inflowCents - outflow;
+    return { ...w, idx: i + 1, outflow, running };
+  });
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        Caja a 13 semanas — entradas por vencimientos reales, gastos = promedio real de las últimas 12 semanas
+      </div>
+      <div className="px-4 py-2 text-[12px] text-slate-600 border-b bg-slate-50 flex flex-wrap gap-x-5 gap-y-1">
+        <span>Caja hoy: <b className="tabular-nums">{money(c.cashCents ?? 0)}</b></span>
+        {c.overdueCents > 0 && (
+          <span className="text-red-700">Ya vencido por cobrar: <b className="tabular-nums">{money(c.overdueCents)}</b> (no se cuenta en ninguna semana — hay que gestionarlo)</span>
+        )}
+        <span>Gasto semanal de referencia: <b className="tabular-nums">{c.avgWeeklyExpenseCents != null ? money(c.avgWeeklyExpenseCents) : "no disponible"}</b></span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-slate-400 border-b">
+              <th className="text-left px-4 py-1.5">Semana</th>
+              <th className="text-right px-2">Cobros por vencer</th>
+              <th className="text-right px-2">Gastos (ref.)</th>
+              <th className="text-right px-4">Caja proyectada</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r: any) => (
+              <tr key={r.idx} className={cn(r.running < 0 && "bg-red-50")}>
+                <td className="px-4 py-1.5 text-slate-600">S{r.idx} · {r.start}</td>
+                <td className="px-2 text-right tabular-nums text-emerald-700">{r.inflowCents ? money(r.inflowCents) : "—"}</td>
+                <td className="px-2 text-right tabular-nums text-slate-500">{r.outflow ? money(r.outflow) : "—"}</td>
+                <td className={cn("px-4 text-right tabular-nums font-semibold", r.running < 0 ? "text-red-600" : "text-slate-800")}>
+                  {money(r.running)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 py-2 text-[11px] text-slate-400">
+        Los cobros usan las fechas de vencimiento reales de QuickBooks (si un cliente paga tarde, se mueve).
+        El gasto es tu promedio real reciente, como referencia — no una predicción.
+      </p>
     </div>
   );
 }
@@ -499,6 +724,8 @@ function CfoTab() {
               </div>
             </div>
           )}
+
+          <CashFlow13 />
 
           {c.errors?.length > 0 && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">

@@ -356,6 +356,259 @@ export const atlasRouter = router({
     return out;
   }),
 
+  /* ========================= F2 — CEO / CASHFLOW / CMO ========================= */
+
+  /**
+   * CEO view: real monthly P&L trend (QB), operations pulse (Airtable + app),
+   * and a written summary composed ONLY from those observed figures.
+   */
+  ceo: executiveProcedure.query(async ({ ctx }) => {
+    const conn = await getQbConnection().catch(() => null);
+    const today = calgaryToday();
+    const out: any = { qbConnected: Boolean(conn), errors: [] as string[], months: [] };
+
+    if (conn) {
+      try {
+        // Last 6 calendar months, one report call summarized by month.
+        const start = (() => {
+          const d0 = new Date(today.slice(0, 7) + "-01T00:00:00");
+          d0.setMonth(d0.getMonth() - 5);
+          return d0.toISOString().slice(0, 10);
+        })();
+        const rep = await qbGet<any>(
+          `reports/ProfitAndLoss?start_date=${start}&end_date=${today}&summarize_column_by=Month`,
+        );
+        const columns: string[] = (rep?.Columns?.Column ?? []).map((c: any) => c.ColTitle ?? "");
+        const rowFor = (labels: string[]): number[] | null => {
+          let found: number[] | null = null;
+          const walk = (rows: any[]) => {
+            for (const r of rows ?? []) {
+              const cols = r.Summary?.ColData ?? [];
+              if (labels.includes(cols[0]?.value)) {
+                found = cols.slice(1).map((c: any) => {
+                  const n = Number(c.value);
+                  return Number.isNaN(n) ? 0 : n;
+                });
+              }
+              if (r.Rows?.Row) walk(r.Rows.Row);
+            }
+          };
+          walk(rep?.Rows?.Row ?? []);
+          return found;
+        };
+        const income = rowFor(["Total Income", "Total Revenue"]);
+        const expenses = rowFor(["Total Expenses"]);
+        // Column layout: [label, month1..monthN, Total] — drop the trailing Total.
+        const monthTitles = columns.slice(1).filter((t) => !/total/i.test(t));
+        out.months = monthTitles.map((title, i) => ({
+          title,
+          incomeCents: income ? Math.round((income[i] ?? 0) * 100) : null,
+          expensesCents: expenses ? Math.round((expenses[i] ?? 0) * 100) : null,
+          netCents:
+            income && expenses
+              ? Math.round(((income[i] ?? 0) - (expenses[i] ?? 0)) * 100)
+              : null,
+        }));
+      } catch (err) {
+        out.errors.push("Tendencia mensual (QB): " + String(err).slice(0, 150));
+      }
+    }
+
+    // Operations pulse — same sources the snapshot uses.
+    const d = await db();
+    const inv = await d.select().from(invoices);
+    const live = inv.filter((r) => !r.deletedAt && r.status !== "quote" && r.status !== "void");
+    const monthStart = today.slice(0, 7) + "-01";
+    const thisMonth = live.filter((r) => r.issueDate >= monthStart);
+    const quotes = inv.filter((r) => !r.deletedAt && r.status === "quote");
+    out.ops = {
+      invoicedThisMonthCents: thisMonth.reduce((n, r) => n + r.totalCents, 0),
+      invoicedThisMonthCount: thisMonth.length,
+      quotesCount: quotes.length,
+      quotesCents: quotes.reduce((n, r) => n + r.totalCents, 0),
+    };
+    try {
+      const { fetchAccountingJobs } = await import("../airtable");
+      const jobs = (await fetchAccountingJobs()) as any[];
+      const invByJob = new Set(live.filter((r) => r.airtableJobId).map((r) => r.airtableJobId));
+      let unbilled = 0;
+      for (const j of jobs) {
+        const st = (j.status ?? "").toLowerCase();
+        if ((/ready to bill/.test(st) || /picked/.test(st)) && !invByJob.has(j.id)) unbilled++;
+      }
+      out.ops.unbilledJobs = unbilled;
+    } catch {
+      out.ops.unbilledJobs = null;
+    }
+
+    // Written summary — every sentence traces to a figure above.
+    const s: string[] = [];
+    const m = out.months.filter((x: any) => x.netCents != null);
+    if (m.length >= 2) {
+      const last = m[m.length - 1];
+      const prev = m[m.length - 2];
+      const fmt = (c: number) => "$" + Math.round(c / 100).toLocaleString("en-CA");
+      s.push(
+        `Ingresos de ${last.title}: ${fmt(last.incomeCents)} (mes anterior ${fmt(prev.incomeCents)}${
+          prev.incomeCents > 0
+            ? `, ${last.incomeCents >= prev.incomeCents ? "+" : ""}${Math.round(((last.incomeCents - prev.incomeCents) / prev.incomeCents) * 100)}%`
+            : ""
+        }).`,
+      );
+      s.push(`Resultado neto de ${last.title}: ${fmt(last.netCents)} — fuente: P&L de QuickBooks.`);
+    }
+    if (out.ops.unbilledJobs != null && out.ops.unbilledJobs > 0) {
+      s.push(`Hay ${out.ops.unbilledJobs} trabajos completados sin factura — dinero en la mesa (ver Unbilled).`);
+    }
+    if (out.ops.quotesCount > 0) {
+      s.push(`Pipeline de cotizaciones: ${out.ops.quotesCount} quotes por ${"$" + Math.round(out.ops.quotesCents / 100).toLocaleString("en-CA")}.`);
+    }
+    out.summary = s;
+    out.profitability = {
+      available: false,
+      reason:
+        "Datos de costos insuficientes: no hay costos por trabajo (salarios/combustible/equipo por proyecto) en ninguna fuente conectada. No se muestran márgenes estimados.",
+    };
+
+    await execAudit(ctx.user.email ?? "executive", "view", "ceo");
+    return out;
+  }),
+
+  /**
+   * 13-week cash view. Inflows = REAL due dates of open QB invoices.
+   * The expense reference is the actual weekly average of the last 12 weeks
+   * from QB's P&L — labeled as a reference, never presented as a forecast fact.
+   */
+  cashflow13: executiveProcedure.query(async ({ ctx }) => {
+    const conn = await getQbConnection().catch(() => null);
+    if (!conn) return { connected: false as const };
+    const today = calgaryToday();
+    const t0 = new Date(today + "T00:00:00").getTime();
+    const out: any = { connected: true as const, errors: [] as string[] };
+
+    try {
+      const res = await qbQuery<any>("SELECT Name, CurrentBalance FROM Account WHERE AccountType = 'Bank'");
+      out.cashCents = Math.round(
+        (res?.QueryResponse?.Account ?? []).reduce((n: number, a: any) => n + (a.CurrentBalance ?? 0), 0) * 100,
+      );
+    } catch (err) {
+      out.errors.push("Bancos: " + String(err).slice(0, 150));
+    }
+
+    try {
+      const res = await qbQuery<any>(
+        "SELECT Balance, DueDate, TxnDate FROM Invoice WHERE Balance > '0' MAXRESULTS 1000",
+      );
+      const weeks: { inflowCents: number }[] = Array.from({ length: 13 }, () => ({ inflowCents: 0 }));
+      let overdueCents = 0;
+      for (const i of res?.QueryResponse?.Invoice ?? []) {
+        const cents = Math.round((i.Balance ?? 0) * 100);
+        const ref = i.DueDate ?? i.TxnDate;
+        const days = ref ? Math.floor((new Date(ref + "T00:00:00").getTime() - t0) / 86400000) : 0;
+        if (days < 0) overdueCents += cents;
+        else {
+          const w = Math.min(Math.floor(days / 7), 12);
+          weeks[w].inflowCents += cents;
+        }
+      }
+      out.overdueCents = overdueCents;
+      out.weeks = weeks.map((w, idx) => {
+        const startD = new Date(t0 + idx * 7 * 86400000);
+        return { start: startD.toISOString().slice(0, 10), inflowCents: w.inflowCents };
+      });
+    } catch (err) {
+      out.errors.push("Vencimientos AR: " + String(err).slice(0, 150));
+    }
+
+    try {
+      const start = new Date(t0 - 84 * 86400000).toISOString().slice(0, 10);
+      const rep = await qbGet<any>(`reports/ProfitAndLoss?start_date=${start}&end_date=${today}`);
+      let expenses: number | null = null;
+      const walk = (rows: any[]) => {
+        for (const r of rows ?? []) {
+          const cols = r.Summary?.ColData ?? [];
+          if (cols[0]?.value === "Total Expenses" && cols[1]?.value != null) expenses = Number(cols[1].value);
+          if (r.Rows?.Row) walk(r.Rows.Row);
+        }
+      };
+      walk(rep?.Rows?.Row ?? []);
+      out.avgWeeklyExpenseCents = expenses != null ? Math.round(((expenses as number) / 12) * 100) : null;
+    } catch (err) {
+      out.errors.push("Promedio de gastos: " + String(err).slice(0, 150));
+    }
+
+    await execAudit(ctx.user.email ?? "executive", "view", "cashflow13");
+    return out;
+  }),
+
+  /**
+   * CMO view: who the revenue actually comes from. All from QB invoice history
+   * (up to the API's 1000-row page — the covered window is reported).
+   */
+  cmo: executiveProcedure.query(async ({ ctx }) => {
+    const conn = await getQbConnection().catch(() => null);
+    if (!conn) return { connected: false as const };
+    const today = calgaryToday();
+    const out: any = { connected: true as const, errors: [] as string[] };
+
+    try {
+      const res = await qbQuery<any>(
+        "SELECT TotalAmt, TxnDate, CustomerRef FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 1000",
+      );
+      const invs = (res?.QueryResponse?.Invoice ?? []) as any[];
+      out.window = invs.length
+        ? { from: invs[invs.length - 1].TxnDate, to: invs[0].TxnDate, count: invs.length, capped: invs.length === 1000 }
+        : null;
+
+      const yearStart = today.slice(0, 4) + "-01-01";
+      const byCustomer = new Map<string, number>();
+      const firstSeen = new Map<string, string>();
+      for (const i of invs) {
+        const name = i.CustomerRef?.name ?? "(sin cliente)";
+        const dte = i.TxnDate ?? "";
+        if (!firstSeen.has(name) || dte < firstSeen.get(name)!) firstSeen.set(name, dte);
+        if (dte >= yearStart) {
+          byCustomer.set(name, (byCustomer.get(name) ?? 0) + Math.round((i.TotalAmt ?? 0) * 100));
+        }
+      }
+      const totalYear = Array.from(byCustomer.values()).reduce((a, b) => a + b, 0);
+      const top = Array.from(byCustomer.entries())
+        .map(([name, cents]) => ({ name, cents, share: totalYear ? cents / totalYear : 0 }))
+        .sort((a, b) => b.cents - a.cents);
+      out.year = {
+        from: yearStart,
+        totalCents: totalYear,
+        customers: byCustomer.size,
+        top: top.slice(0, 10),
+        top3Share: top.slice(0, 3).reduce((n, c) => n + c.share, 0),
+      };
+
+      // New customers per month (first invoice ever inside that month), last 6 months.
+      const months: { title: string; newCustomers: number }[] = [];
+      for (let k = 5; k >= 0; k--) {
+        const d0 = new Date(today.slice(0, 7) + "-01T00:00:00");
+        d0.setMonth(d0.getMonth() - k);
+        const key = d0.toISOString().slice(0, 7);
+        let n = 0;
+        firstSeen.forEach((first) => {
+          if (first.slice(0, 7) === key) n++;
+        });
+        months.push({ title: key, newCustomers: n });
+      }
+      out.newByMonth = months;
+      if (out.window?.capped) {
+        out.errors.push(
+          "El historial cubre las últimas 1000 facturas — clientes más antiguos que esa ventana pueden contarse como 'nuevos'.",
+        );
+      }
+    } catch (err) {
+      out.errors.push("Clientes (QB): " + String(err).slice(0, 150));
+    }
+
+    await execAudit(ctx.user.email ?? "executive", "view", "cmo");
+    return out;
+  }),
+
   /** Upsert the follow-up record for one invoice (promise, dispute, next step). */
   collectionsUpdate: executiveProcedure
     .input(
