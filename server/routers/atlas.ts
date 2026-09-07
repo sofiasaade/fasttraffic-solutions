@@ -448,14 +448,29 @@ export const atlasRouter = router({
       const last = m[m.length - 1];
       const prev = m[m.length - 2];
       const fmt = (c: number) => "$" + Math.round(c / 100).toLocaleString("en-CA");
-      s.push(
-        `Ingresos de ${last.title}: ${fmt(last.incomeCents)} (mes anterior ${fmt(prev.incomeCents)}${
-          prev.incomeCents > 0
-            ? `, ${last.incomeCents >= prev.incomeCents ? "+" : ""}${Math.round(((last.incomeCents - prev.incomeCents) / prev.incomeCents) * 100)}%`
-            : ""
-        }).`,
-      );
+      // A partial month (QB titles it "Sep. 1-6, 2026") must not be compared
+      // in % against a full month — that reads as a collapse that isn't real.
+      const isPartial = /\d+\s*-\s*\d+/.test(last.title);
+      if (isPartial) {
+        s.push(`${last.title} va en ${fmt(last.incomeCents)} de ingresos (mes en curso; ${prev.title} cerró en ${fmt(prev.incomeCents)}).`);
+      } else {
+        s.push(
+          `Ingresos de ${last.title}: ${fmt(last.incomeCents)} (mes anterior ${fmt(prev.incomeCents)}${
+            prev.incomeCents > 0
+              ? `, ${last.incomeCents >= prev.incomeCents ? "+" : ""}${Math.round(((last.incomeCents - prev.incomeCents) / prev.incomeCents) * 100)}%`
+              : ""
+          }).`,
+        );
+      }
       s.push(`Resultado neto de ${last.title}: ${fmt(last.netCents)} — fuente: P&L de QuickBooks.`);
+      const fullPrev = m.filter((x: any) => !/\d+\s*-\s*\d+/.test(x.title));
+      if (fullPrev.length >= 2) {
+        const a = fullPrev[fullPrev.length - 2];
+        const b = fullPrev[fullPrev.length - 1];
+        if (a.incomeCents > 0 && b.incomeCents >= a.incomeCents) {
+          s.push(`Tendencia: ${b.title} creció ${Math.round(((b.incomeCents - a.incomeCents) / a.incomeCents) * 100)}% sobre ${a.title}.`);
+        }
+      }
     }
     if (out.ops.unbilledJobs != null && out.ops.unbilledJobs > 0) {
       s.push(`Hay ${out.ops.unbilledJobs} trabajos completados sin factura — dinero en la mesa (ver Unbilled).`);
