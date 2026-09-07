@@ -56,7 +56,136 @@ export default function Atlas() {
     );
   }
   if (meQ.error) return <AtlasLogin onDone={() => meQ.refetch()} />;
-  return <AtlasShell email={meQ.data!.email ?? ""} onLogout={() => logout.mutate()} />;
+  const me: any = meQ.data!;
+  // The server refuses every data call until setup is complete, so this screen
+  // is not skippable by reloading — it's the only path to the numbers.
+  if (me.needsPasswordChange || me.needsMfa) {
+    return <AtlasSetup needsPassword={me.needsPasswordChange} needsMfa={me.needsMfa} onDone={() => meQ.refetch()} />;
+  }
+  return <AtlasShell email={me.email ?? ""} onLogout={() => logout.mutate()} />;
+}
+
+/* ======================= FORCED ACCOUNT SETUP ======================= */
+
+function AtlasSetup({ needsPassword, needsMfa, onDone }: {
+  needsPassword: boolean; needsMfa: boolean; onDone: () => void;
+}) {
+  const [passDone, setPassDone] = useState(!needsPassword);
+  const [mfaDone, setMfaDone] = useState(!needsMfa);
+  const [current, setCurrent] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [secret, setSecret] = useState<string | null>(null);
+  const [uri, setUri] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!needsMfa) return;
+    fetch("/api/exec-totp-setup", { method: "POST" })
+      .then((r) => r.json())
+      .then((s) => { if (s.ok) { setSecret(s.secret); setUri(s.uri); } });
+  }, [needsMfa]);
+
+  useEffect(() => {
+    if (passDone && mfaDone) onDone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passDone, mfaDone]);
+
+  const changePass = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/exec-change-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ current, next: newPass }),
+      }).then((r) => r.json());
+      if (!r.ok) return void toast.error(r.error ?? "No se pudo cambiar la contraseña");
+      toast.success("Contraseña definitiva guardada ✔");
+      setPassDone(true);
+    } finally { setBusy(false); }
+  };
+
+  const confirmMfa = async () => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/exec-totp-confirm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+      }).then((r) => r.json());
+      if (!r.ok) return void toast.error(r.error ?? "El código no coincidió — usa el más reciente de la app");
+      toast.success("MFA activado ✔");
+      setMfaDone(true);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#10162e] p-4 flex items-center justify-center">
+      <div className="w-full max-w-md space-y-4">
+        <div className="text-center text-white">
+          <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-xl bg-white/10">
+            <ShieldCheck className="size-6 text-[#e8542f]" />
+          </div>
+          <div className="text-xl font-extrabold">Asegura tu cuenta</div>
+          <p className="text-xs text-white/60 mt-1">
+            ATLAS muestra tus bancos y tu cartera — el servidor no entrega ningún dato
+            hasta completar estos {needsPassword && needsMfa ? "2 pasos" : "pasos"} (una sola vez).
+          </p>
+        </div>
+
+        {needsPassword && (
+          <div className={cn("rounded-2xl bg-white p-5 space-y-2.5", passDone && "opacity-60")}>
+            <div className="font-bold text-[#1e2b58] text-sm">
+              {passDone ? "✔ Contraseña definitiva creada" : "1 · Crea tu contraseña definitiva"}
+            </div>
+            {!passDone && (
+              <>
+                <Input placeholder="Contraseña actual (la temporal)" type="password" value={current}
+                  onChange={(e) => setCurrent(e.target.value)} />
+                <Input placeholder="Nueva contraseña (mín. 10 caracteres)" type="password" value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)} />
+                <Button className="w-full bg-[#1e2b58]" disabled={busy || newPass.length < 10 || !current} onClick={changePass}>
+                  Guardar contraseña
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {needsMfa && (
+          <div className={cn("rounded-2xl bg-white p-5 space-y-2.5", mfaDone && "opacity-60")}>
+            <div className="font-bold text-[#1e2b58] text-sm">
+              {mfaDone ? "✔ MFA activado" : `${needsPassword ? "2" : "1"} · Activa el código de seguridad (MFA)`}
+            </div>
+            {!mfaDone && (
+              <>
+                <ol className="list-decimal pl-4 space-y-1 text-[13px] text-slate-600">
+                  <li>En tu teléfono abre <b>Google Authenticator</b> (gratis en App Store / Play Store).</li>
+                  <li>Toca <b>+</b> → "Introducir clave de configuración" → cuenta: <b>FTS ATLAS</b> → pega esta clave:</li>
+                </ol>
+                <div className="rounded-lg bg-slate-100 p-2 text-center font-mono text-xs break-all select-all">
+                  {secret ?? "…"}
+                </div>
+                {uri && (
+                  <a href={uri} className="block text-center text-xs text-[#e8542f] underline">
+                    (si estás en el teléfono, toca aquí y se agrega sola)
+                  </a>
+                )}
+                <Input placeholder="Código de 6 dígitos (usa uno recién generado)" inputMode="numeric" value={code}
+                  onChange={(e) => setCode(e.target.value)} />
+                <Button className="w-full bg-[#1e2b58]" disabled={busy || code.replace(/\s/g, "").length < 6} onClick={confirmMfa}>
+                  Confirmar y activar
+                </Button>
+                <p className="text-[11px] text-slate-400">
+                  El código cambia cada 30 s — escribe el que esté en pantalla y confirma de una vez.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ============================== LOGIN ============================== */

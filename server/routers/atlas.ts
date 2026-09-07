@@ -2,7 +2,7 @@
 // a coordinator/technician session (or a direct API call) gets FORBIDDEN.
 import { desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { executiveProcedure, router } from "../_core/trpc";
+import { executiveBaseProcedure, executiveProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
   execAuditLog,
@@ -25,13 +25,27 @@ function calgaryToday(): string {
 }
 
 export const atlasRouter = router({
-  /** Session probe — also writes the access-log entry for this visit. */
-  me: executiveProcedure.query(async ({ ctx }) => {
+  /**
+   * Session probe — role check only, so the client can learn that account
+   * setup (definitive password + MFA) is still pending. Every DATA procedure
+   * below refuses to serve until setup is complete.
+   */
+  me: executiveBaseProcedure.query(async ({ ctx }) => {
+    const d = await db();
+    const { executiveAuth } = await import("../../drizzle/schema");
+    const rows = await d
+      .select()
+      .from(executiveAuth)
+      .where(eq(executiveAuth.email, (ctx.user.email ?? "").toLowerCase()))
+      .limit(1);
+    const row = rows[0] ?? null;
     await execAudit(ctx.user.email ?? "executive", "view", "ATLAS opened");
     return {
       email: ctx.user.email,
       name: ctx.user.name,
       today: calgaryToday(),
+      needsPasswordChange: row ? row.mustChangePassword : false,
+      needsMfa: row ? !row.totpEnabled : false,
     };
   }),
 

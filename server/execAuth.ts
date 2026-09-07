@@ -92,12 +92,14 @@ export function totpCode(secretB32: string, timeMs = Date.now()): string {
   return String(code % 1_000_000).padStart(6, "0");
 }
 
-/** Accept the current window ±1 (clock drift). */
-export function verifyTotp(secretB32: string, code: string): boolean {
+/** Accept the current window ±windows (clock drift). Login uses ±1. */
+export function verifyTotp(secretB32: string, code: string, windows = 1): boolean {
   const clean = code.replace(/\s+/g, "");
   if (!/^\d{6}$/.test(clean)) return false;
   const now = Date.now();
-  return [-1, 0, 1].some((w) => totpCode(secretB32, now + w * 30_000) === clean);
+  const range: number[] = [];
+  for (let w = -windows; w <= windows; w++) range.push(w);
+  return range.some((w) => totpCode(secretB32, now + w * 30_000) === clean);
 }
 
 /* ------------------------------- audit ------------------------------- */
@@ -270,7 +272,7 @@ export function registerExecAuth(app: Express) {
     const code = String(req.body?.code ?? "");
     const row = await getExecRow(user.email ?? "");
     if (!row?.totpSecret) return res.status(400).json({ ok: false });
-    if (!verifyTotp(row.totpSecret, code)) {
+    if (!verifyTotp(row.totpSecret, code, 2)) {
       return res
         .status(400)
         .json({ ok: false, error: "Code didn't match — try the next one." });
