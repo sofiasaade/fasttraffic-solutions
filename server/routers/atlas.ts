@@ -335,13 +335,12 @@ export const atlasRouter = router({
         walk(rep?.Rows?.Row ?? []);
         return val;
       };
-      const income = find("Total Income");
+      const income = find("Total Income") ?? find("Total Revenue");
       const expenses = find("Total Expenses");
-      let net: number | null = null;
-      for (const r of rep?.Rows?.Row ?? []) {
-        const cols = r.Summary?.ColData ?? [];
-        if (cols[0]?.value === "Net Income" && cols[1]?.value != null) net = Number(cols[1].value);
-      }
+      // Label varies by region/version ("Net Income", "Net Earnings", "Profit for the year");
+      // when absent, net = income − expenses is exact arithmetic, not an estimate.
+      let net = find("Net Income") ?? find("Net Earnings") ?? find("Profit");
+      if (net == null && income != null && expenses != null) net = income - expenses;
       out.pnl = {
         from: monthStart,
         to: today,
