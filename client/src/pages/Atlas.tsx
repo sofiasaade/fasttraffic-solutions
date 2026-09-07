@@ -480,6 +480,81 @@ function UnbilledTable({ jobs, over48h }: { jobs: any[]; over48h: number }) {
 
 function CeoTab() {
   const q = trpc.atlas.ceo.useQuery(undefined, { refetchInterval: 10 * 60_000 });
+  const utils = trpc.useUtils();
+  const [printing, setPrinting] = useState(false);
+
+  const printWeekly = async () => {
+    setPrinting(true);
+    try {
+      const [ceo, cfo, coll, prios] = await Promise.all([
+        utils.client.atlas.ceo.query(),
+        utils.client.atlas.cfo.query(),
+        utils.client.atlas.collectionsList.query(),
+        utils.client.atlas.prioritiesList.query(),
+      ]);
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+      const m = (cents: number | null | undefined) =>
+        cents == null ? "—" : (cents / 100).toLocaleString("en-CA", { style: "currency", currency: "CAD" });
+      const cf: any = cfo;
+      const openPrios = prios.filter((p: any) => p.status !== "completed" && p.status !== "cancelled");
+      const overduePrios = openPrios.filter((p: any) => p.dueDate && p.dueDate < today);
+      const promises = coll.rows.filter((r: any) => r.followUp?.promiseToPay);
+      const disputes = coll.rows.filter((r: any) => r.followUp?.dispute);
+      const months = ((ceo as any).months ?? []).filter((x: any) => x.incomeCents != null);
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>Reporte semanal FTS — ${today}</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1e2b58;margin:0;padding:32px 40px;font-size:13px}
+  .brand{font-weight:800;font-size:20px}.brand span{color:#e8542f}
+  h1{font-size:20px;margin:4px 0 2px}.sub{color:#6b7280;font-size:12px;margin-bottom:18px}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#e8542f;border-bottom:2px solid #fdece5;padding-bottom:3px;margin:20px 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:#94a3b8;font-size:10px;text-transform:uppercase;padding:3px 6px;border-bottom:1px solid #e2e8f0}
+  td{padding:4px 6px;border-bottom:1px solid #f1f5f9}.r{text-align:right;font-variant-numeric:tabular-nums}
+  ul{margin:4px 0;padding-left:18px}li{margin:3px 0}
+  .kpis{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0}
+  .kpi{border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;min-width:150px}
+  .kpi b{display:block;font-size:16px}.kpi span{font-size:10px;color:#6b7280;text-transform:uppercase}
+  .foot{margin-top:24px;color:#94a3b8;font-size:10px}
+  @media print{body{padding:16px 20px}}
+</style></head><body>
+<div class="brand">FAST<span>»</span>TRAFFIC</div>
+<h1>Reporte semanal ejecutivo</h1>
+<div class="sub">${today} · generado por ATLAS · fuentes: QuickBooks (solo lectura), FTS OS, Airtable</div>
+<h2>Resumen</h2>
+<ul>${((ceo as any).summary ?? []).map((s: string) => `<li>${s}</li>`).join("")}</ul>
+<h2>Cifras clave</h2>
+<div class="kpis">
+  <div class="kpi"><span>Efectivo en bancos (QB)</span><b>${m(cf?.cash?.totalCents)}</b></div>
+  <div class="kpi"><span>Por cobrar contable (QB)</span><b>${m(cf?.ar?.totalCents)}</b></div>
+  <div class="kpi"><span>Vencido +60 días (QB)</span><b>${m(cf?.ar ? (cf.ar.buckets["61-90"] ?? 0) + (cf.ar.buckets["90+"] ?? 0) : null)}</b></div>
+  <div class="kpi"><span>Facturado este mes (app)</span><b>${m((ceo as any).ops.invoicedThisMonthCents)}</b></div>
+  <div class="kpi"><span>Trabajos sin facturar</span><b>${(ceo as any).ops.unbilledJobs ?? "—"}</b></div>
+</div>
+<h2>Tendencia mensual (P&L QuickBooks)</h2>
+<table><tr><th>Mes</th><th class="r">Ingresos</th><th class="r">Gastos</th><th class="r">Neto</th></tr>
+${months.map((x: any) => `<tr><td>${x.title}</td><td class="r">${m(x.incomeCents)}</td><td class="r">${m(x.expensesCents)}</td><td class="r">${m(x.netCents)}</td></tr>`).join("")}
+</table>
+<h2>Cobranza</h2>
+<ul>
+  <li>${coll.rows.length} facturas por cobrar en la app por ${m(coll.outstandingCents)}.</li>
+  <li>${promises.length} con promesa de pago · ${disputes.length} en disputa.</li>
+  ${cf?.ar?.topCustomers?.length ? `<li>Quien más debe (QB): ${cf.ar.topCustomers.slice(0, 3).map((t: any) => `${t.name} (${m(t.cents)})`).join(" · ")}</li>` : ""}
+</ul>
+<h2>Mis prioridades</h2>
+<ul>
+  <li>${openPrios.length} prioridades activas · ${overduePrios.length} vencidas.</li>
+  ${overduePrios.slice(0, 5).map((p: any) => `<li>VENCIDA: ${p.title} (${p.dueDate})</li>`).join("")}
+</ul>
+<div class="foot">Confidencial — uso exclusivo de la dirección de Fast Traffic Solutions Ltd. Cifras tomadas en vivo al momento de generar; nada es estimado.</div>
+<script>window.print()</script>
+</body></html>`;
+      const w = window.open("", "_blank");
+      if (w) { w.document.write(html); w.document.close(); }
+    } catch (e: any) {
+      toast.error("No se pudo generar el reporte: " + (e?.message ?? ""));
+    } finally { setPrinting(false); }
+  };
+
   if (q.isLoading)
     return <div className="py-20 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>;
   const c: any = q.data;
@@ -489,6 +564,11 @@ function CeoTab() {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={printWeekly} disabled={printing}>
+          {printing && <Loader2 className="size-3.5 animate-spin mr-1" />} 🖨 Reporte semanal
+        </Button>
+      </div>
       {/* Written summary */}
       {c.summary?.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
