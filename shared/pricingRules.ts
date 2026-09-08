@@ -416,6 +416,36 @@ function pushStampLines(lines: QuoteLine[], input: QuoteInput): boolean {
   return false;
 }
 
+
+/**
+ * Sofia's fixed display order for Charges & Services (Sep 8 2026):
+ * 1 permit acquisition · 2 TMP/TAS/plan · 3 city & hoarding permits ·
+ * 4 parking ban · 5 stockpile · 6 setup · everything else after.
+ * Only service lines are reordered (stable); rentals/boards/flaggers untouched.
+ */
+export function serviceOrderRank(description: string): number {
+  const d = description.toLowerCase();
+  if (/permit acquisition|\bacq\b/.test(d)) return 1;
+  if (/tmp|\btas\b|traffic management plan|engineering stamp|traffic accommodation/.test(d)) return 2;
+  if (/street use|hoarding|^su\d|city (permit|cost)|pass-through/.test(d)) return 3;
+  if (/parking ban/.test(d)) return 4;
+  if (/stockpile/.test(d)) return 5;
+  if (/setup/.test(d)) return 6;
+  return 7;
+}
+
+function sortServiceLines(lines: QuoteLine[]): QuoteLine[] {
+  const services = lines
+    .map((l, i) => ({ l, i }))
+    .filter((x) => (x.l.section ?? "service") === "service");
+  const sorted = [...services].sort(
+    (a, b) => serviceOrderRank(a.l.description) - serviceOrderRank(b.l.description) || a.i - b.i,
+  );
+  const out = [...lines];
+  services.forEach((slot, k) => { out[slot.i] = sorted[k].l; });
+  return out;
+}
+
 /** Build a suggested quote from the FTS pricing rules. */
 export function buildQuote(input: QuoteInput): QuoteResult {
   const industry = industryFor(input.company);
@@ -449,7 +479,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       });
     }
     lines.push({ description: "Parking Ban (NP install)", quantity: 1, unitCents: FIXED.parkingBan, section: "service" });
-    return { industry, complexity, lines, reasons };
+    return { industry, complexity, lines: sortServiceLines(lines), reasons };
   }
 
   // "Plan Only": the client only got the plan — bill the plan (stamp or TMP)
@@ -470,7 +500,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
       lines.push({ description: "Street Use Permit — city cost (pass-through)", quantity: 1, unitCents: input.permitCostCents, section: "service" });
     }
     reasons.push("PLAN ONLY — only the plan is billed: no setup, no rental, no signs");
-    return { industry, complexity, lines, reasons };
+    return { industry, complexity, lines: sortServiceLines(lines), reasons };
   }
 
   // ---- Setup fee ----
@@ -710,5 +740,5 @@ export function buildQuote(input: QuoteInput): QuoteResult {
     );
   }
 
-  return { industry, complexity, lines, reasons };
+  return { industry, complexity, lines: sortServiceLines(lines), reasons };
 }

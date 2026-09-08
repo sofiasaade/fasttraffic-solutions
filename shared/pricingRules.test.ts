@@ -413,3 +413,33 @@ describe("Sofia's Aug 25 rules", () => {
     expect(q.lines.some((l) => /TAS/.test(l.description))).toBe(false);
   });
 });
+
+describe("service line order (Sofia, Sep 8 2026)", () => {
+  it("orders services: ACQ, TMP/TAS, city permits, parking ban, stockpile, setup", () => {
+    const q = buildQuote({
+      ...baseInput(),
+      hasStamp: true,
+      parkingBan: true,
+      stockpile: true,
+      permitLines: [{ label: "SU2026-12345 Aug 1-5", cents: 12300 }],
+    });
+    const services = q.lines
+      .filter((l) => (l.section ?? "service") === "service")
+      .map((l) => l.description);
+    const idx = (re: RegExp) => services.findIndex((d) => re.test(d));
+    const acq = idx(/Permit acquisition/);
+    const tmp = idx(/Engineering Stamp|TMP|TAS/);
+    const city = idx(/^SU2026/);
+    const ban = idx(/Parking Ban/);
+    const stock = idx(/[Ss]tockpile/);
+    const setup = idx(/Setup fee/);
+    for (const [name, v] of Object.entries({ acq, tmp, city, ban, stock, setup })) {
+      expect(v, `${name} line missing: ${services.join(" | ")}`).toBeGreaterThanOrEqual(0);
+    }
+    expect(acq).toBeLessThan(tmp);
+    expect(tmp).toBeLessThan(city);
+    expect(city).toBeLessThan(ban);
+    expect(ban).toBeLessThan(stock);
+    expect(stock).toBeLessThan(setup);
+  });
+});
