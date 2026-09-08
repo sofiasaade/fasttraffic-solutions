@@ -771,6 +771,34 @@ export const atlasRouter = router({
       out.ops.unbilledJobs = null;
     }
 
+    // Jobs per month, this year vs same month last year (Airtable start dates;
+    // its query window covers ~18 months, enough for a 6-month YoY strip).
+    try {
+      const { fetchAllJobsForDetection } = await import("../airtable");
+      const all = await fetchAllJobsForDetection();
+      const counts = new Map<string, number>();
+      for (const j of all as any[]) {
+        const k = (j.startDate ?? "").slice(0, 7);
+        if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+      const rows: any[] = [];
+      for (let back = 5; back >= 0; back--) {
+        const d0 = new Date(today.slice(0, 7) + "-01T00:00:00");
+        d0.setMonth(d0.getMonth() - back);
+        const key = d0.toISOString().slice(0, 7);
+        const prevKey = String(Number(key.slice(0, 4)) - 1) + key.slice(4);
+        rows.push({
+          month: key,
+          jobs: counts.get(key) ?? 0,
+          jobsPrevYear: counts.get(prevKey) ?? null,
+          partial: key === today.slice(0, 7),
+        });
+      }
+      out.jobsYoY = { rows, dayOfMonth: Number(today.slice(8, 10)) };
+    } catch (err) {
+      out.errors.push("Trabajos año vs año (Airtable): " + String(err).slice(0, 150));
+    }
+
     // Written summary — every sentence traces to a figure above.
     const s: string[] = [];
     const m = out.months.filter((x: any) => x.netCents != null);

@@ -621,6 +621,50 @@ ${months.map((x: any) => `<tr><td>${x.title}</td><td class="r">${m(x.incomeCents
         </div>
       )}
 
+      {/* Jobs: this year vs last year */}
+      {c.jobsYoY?.rows?.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">
+            Trabajos por mes — este año vs el año pasado
+          </div>
+          <p className="text-[12px] text-slate-500 mb-3">
+            Cuántos trabajos INICIARON cada mes (Airtable, excluye cancelados). La barra gris es el mismo mes del año anterior.
+          </p>
+          <div className="flex items-end gap-3 h-36">
+            {c.jobsYoY.rows.map((r: any) => {
+              const max = Math.max(1, ...c.jobsYoY.rows.flatMap((x: any) => [x.jobs, x.jobsPrevYear ?? 0]));
+              const delta = r.jobsPrevYear ? Math.round(((r.jobs - r.jobsPrevYear) / r.jobsPrevYear) * 100) : null;
+              return (
+                <div key={r.month} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+                  <div className="text-[10px] tabular-nums font-bold text-[#1e2b58]">
+                    {r.jobs}{r.jobsPrevYear != null && <span className="text-slate-400 font-normal"> / {r.jobsPrevYear}</span>}
+                  </div>
+                  <div className="w-full flex items-end gap-0.5 flex-1">
+                    <div className="flex-1 bg-[#1e2b58] rounded-t" style={{ height: `${(r.jobs / max) * 100}%`, minHeight: 3 }}
+                      title={`${r.month}: ${r.jobs} trabajos${r.partial ? " (mes en curso)" : ""}`} />
+                    <div className="flex-1 bg-slate-300 rounded-t" style={{ height: `${((r.jobsPrevYear ?? 0) / max) * 100}%`, minHeight: r.jobsPrevYear != null ? 3 : 0 }}
+                      title={r.jobsPrevYear != null ? `mismo mes ${Number(r.month.slice(0, 4)) - 1}: ${r.jobsPrevYear} trabajos` : "sin dato del año anterior"} />
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate w-full text-center">
+                    {r.month.slice(5)}/{r.month.slice(2, 4)}{r.partial && "*"}
+                  </div>
+                  {delta != null && !r.partial && (
+                    <div className={cn("text-[10px] font-semibold tabular-nums", delta >= 0 ? "text-emerald-600" : "text-red-600")}>
+                      {delta >= 0 ? "+" : ""}{delta}%
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex gap-4 text-[10px] text-slate-500">
+            <span><span className="inline-block size-2 bg-[#1e2b58] rounded-sm mr-1" />Este año</span>
+            <span><span className="inline-block size-2 bg-slate-300 rounded-sm mr-1" />Año pasado</span>
+            <span>* mes en curso (día {c.jobsYoY.dayOfMonth}) — se compara contra el mes COMPLETO anterior</span>
+          </div>
+        </div>
+      )}
+
       <EarnedIncome />
 
       {/* Ops pulse */}
