@@ -425,7 +425,7 @@ function AtlasShell({ email, onLogout }: { email: string; onLogout: () => void }
             <div className="py-20 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>
           )
         )}
-        {tab === "CFO" && <CfoTab />}
+        {tab === "CFO" && <CfoTab onNavigate={(t) => setTab(t as any)} />}
         {tab === "CEO" && <CeoTab />}
         {tab === "CMO" && <CmoTab />}
       </main>
@@ -860,15 +860,18 @@ function CashFlow13() {
 
 /* ==================== F1d — CFO (QuickBooks read-only) ==================== */
 
-function CfoTab() {
+function CfoTab({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const statusQ = trpc.atlas.qbStatus.useQuery();
-  const cfoQ = trpc.atlas.cfo.useQuery(undefined, {
-    enabled: !!statusQ.data?.connected,
-    refetchInterval: 10 * 60_000,
-  });
+  const [period, setPeriod] = useState<"month" | "last_month" | "quarter" | "ytd" | "12m">("month");
+  const [seriesMonths, setSeriesMonths] = useState<3 | 6 | 12 | 24>(12);
+  const ovQ = trpc.atlas.cfoOverview.useQuery(
+    { period, seriesMonths },
+    { enabled: !!statusQ.data?.connected, refetchInterval: 10 * 60_000 },
+  );
+  const cfQ = trpc.atlas.cashflow13.useQuery(undefined, { enabled: !!statusQ.data?.connected });
   const utils = trpc.useUtils();
+  const [showMore, setShowMore] = useState(false);
 
-  // Surface the OAuth redirect result once.
   useEffect(() => {
     const qb = new URLSearchParams(window.location.search).get("qb");
     if (!qb) return;
@@ -908,115 +911,508 @@ function CfoTab() {
           </p>
         </div>
         {st.configured ? (
-          <Button
-            className="bg-[#2CA01C] hover:bg-[#238015] text-white"
-            onClick={() => { window.location.href = "/api/qb/connect"; }}
-          >
+          <Button className="bg-[#2CA01C] hover:bg-[#238015] text-white"
+            onClick={() => { window.location.href = "/api/qb/connect"; }}>
             Conectar con Intuit
           </Button>
         ) : (
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[13px] text-amber-800 text-left">
-            Falta configurar las llaves de la app de Intuit (QB_CLIENT_ID y QB_CLIENT_SECRET en
-            Railway). Sigue la guía que te dio Claude para crearlas en developer.intuit.com.
+            Falta configurar las llaves de la app de Intuit (QB_CLIENT_ID y QB_CLIENT_SECRET en Railway).
           </div>
         )}
       </div>
     );
   }
 
-  const c: any = cfoQ.data;
+  const o: any = ovQ.data;
+  const PERIODS: { key: typeof period; label: string }[] = [
+    { key: "month", label: "Este mes" },
+    { key: "last_month", label: "Mes pasado" },
+    { key: "quarter", label: "Trimestre" },
+    { key: "ytd", label: "Año (YTD)" },
+    { key: "12m", label: "12 meses" },
+  ];
+  const updatedAt = o ? new Date(o.generatedAt).toLocaleTimeString() : "";
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+      {/* connection + global filter */}
+      <div className="flex flex-wrap items-center gap-2 justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
         <span className="text-emerald-800">
           <b>QuickBooks conectado</b>{st.companyName ? <> — {st.companyName}</> : null} · solo lectura
+          {o && <span className="text-emerald-700/70"> · sincronizado {updatedAt}</span>}
         </span>
-        <button onClick={disconnect} className="text-xs text-emerald-700 underline hover:text-emerald-900">
-          Desconectar
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => ovQ.refetch()} className="text-xs text-emerald-700 underline">Actualizar</button>
+          <button onClick={disconnect} className="text-xs text-emerald-700 underline">Desconectar</button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        {PERIODS.map((pp) => (
+          <button key={pp.key} onClick={() => setPeriod(pp.key)}
+            className={cn("rounded-full px-3 py-1 text-xs font-semibold border",
+              period === pp.key ? "bg-[#1e2b58] text-white border-[#1e2b58]" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400")}>
+            {pp.label}
+          </button>
+        ))}
+        <button onClick={() => { setPeriod("month"); setSeriesMonths(12); }}
+          className="text-[11px] text-slate-400 underline ml-1">Restablecer filtros</button>
       </div>
 
-      {cfoQ.isLoading && (
-        <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>
-      )}
+      {ovQ.isLoading && <div className="py-16 flex justify-center"><Loader2 className="size-6 animate-spin text-slate-400" /></div>}
 
-      {c?.connected && (
+      {o?.connected && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Efectivo en bancos</div>
-              <div className="mt-1 text-2xl font-extrabold tabular-nums text-[#1e2b58]">
-                {c.cash ? money(c.cash.totalCents) : "—"}
-              </div>
-              {c.cash?.accounts?.map((a: any) => (
-                <div key={a.name} className="text-[11px] text-slate-500 flex justify-between">
-                  <span>{a.name}</span><span className="tabular-nums">{money(a.balanceCents)}</span>
-                </div>
-              ))}
-              <div className="mt-1 text-[10px] text-slate-400">Fuente: QuickBooks (en vivo)</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Por cobrar (QB, contable)</div>
-              <div className="mt-1 text-2xl font-extrabold tabular-nums text-[#1e2b58]">
-                {c.ar ? money(c.ar.totalCents) : "—"}
-              </div>
-              {c.ar && (
-                <div className="text-[11px] text-slate-500">
-                  {c.ar.openInvoices} facturas abiertas ·
-                  {" "}vencido +60: <b className="text-red-600">{money((c.ar.buckets["61-90"] ?? 0) + (c.ar.buckets["90+"] ?? 0))}</b>
-                </div>
-              )}
-              <div className="mt-1 text-[10px] text-slate-400">Fuente: QuickBooks (en vivo)</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">P&L del mes ({c.pnl?.from ?? ""})</div>
-              <div className="mt-1 text-2xl font-extrabold tabular-nums text-[#1e2b58]">
-                {c.pnl?.netCents != null ? money(c.pnl.netCents) : "—"}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Ingresos {c.pnl?.incomeCents != null ? money(c.pnl.incomeCents) : "—"} ·
-                Gastos {c.pnl?.expensesCents != null ? money(c.pnl.expensesCents) : "—"}
-              </div>
-              <div className="mt-1 text-[10px] text-slate-400">Fuente: reporte P&L de QuickBooks</div>
-            </div>
+          {/* ============ 1. SALUD FINANCIERA DE UN VISTAZO ============ */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Kpi2 label="Efectivo disponible" cents={o.cash?.totalCents ?? null}
+              tip="Suma de los saldos actuales de tus cuentas bancarias en QuickBooks."
+              source="QuickBooks · bancos" updated={updatedAt}
+              onClick={() => setShowMore(true)} />
+            <Kpi2 label="Facturado (periodo)" cents={o.pnl?.cur?.incomeCents ?? null} prev={o.pnl?.prev?.incomeCents ?? null}
+              tip="Ingresos del P&L de QuickBooks en el periodo elegido. Facturar no es cobrar."
+              source="QuickBooks · P&L" updated={updatedAt} />
+            <Kpi2 label="Cobrado en efectivo (periodo)" cents={o.collected?.curCents ?? null} prev={o.collected?.prevCents ?? null}
+              tip="Pagos realmente recibidos de clientes en el periodo (registro de Payments en QuickBooks)."
+              source="QuickBooks · pagos" updated={updatedAt} />
+            <Kpi2 label="Por cobrar (total)" cents={o.ar?.totalCents ?? null}
+              tip="Saldo abierto de todas las facturas sin pagar. Sin comparación: no guardamos fotos históricas de la cartera."
+              source="QuickBooks · facturas abiertas" updated={updatedAt}
+              onClick={() => onNavigate("Collections")} />
+            <Kpi2 label="Por cobrar VENCIDO" cents={o.ar?.overdueCents ?? null} warn
+              tip="Parte de la cartera cuya fecha de vencimiento ya pasó."
+              source="QuickBooks · facturas abiertas" updated={updatedAt}
+              onClick={() => onNavigate("Collections")} />
+            <Kpi2 label="Completado sin facturar" count={o.cbnb?.total ?? null} warn={(o.cbnb?.total ?? 0) > 0}
+              tip="Trabajos terminados u recogidos en Airtable que no tienen factura en la app. El valor en dólares no es calculable todavía (no existe factura)."
+              source="Airtable + FTS OS" updated={updatedAt}
+              onClick={() => onNavigate("Unbilled")} />
+            <Kpi2 label="Margen bruto" cents={null}
+              unavailableText={o.pnl?.cur?.grossCents != null ? undefined : "No disponible — tu QuickBooks no registra costos de venta (COGS); no se calcula un margen falso."}
+              centsOverride={o.pnl?.cur?.grossCents ?? null}
+              pctOf={o.pnl?.cur?.grossCents != null ? o.pnl?.cur?.incomeCents : null}
+              tip="Ingresos menos costos directos de los trabajos (COGS). Solo se muestra si QuickBooks tiene esos costos registrados."
+              source="QuickBooks · P&L" updated={updatedAt} />
+            <Kpi2 label="Resultado neto (periodo)" cents={o.pnl?.cur?.netCents ?? null} prev={o.pnl?.prev?.netCents ?? null}
+              tip="Lo que queda después de todos los gastos del periodo, según el P&L de QuickBooks."
+              source="QuickBooks · P&L" updated={updatedAt} />
           </div>
 
-          {c.ar && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Antigüedad AR (QB)</div>
-                {["current", "1-30", "31-60", "61-90", "90+"].map((b) => (
-                  <div key={b} className="flex justify-between text-sm py-0.5">
-                    <span className="text-slate-600">{BUCKET_LABEL[b]}</span>
-                    <span className={cn("tabular-nums font-semibold",
-                      (b === "61-90" || b === "90+") && (c.ar.buckets[b] ?? 0) > 0 ? "text-red-600" : "text-slate-800")}>
-                      {money(c.ar.buckets[b] ?? 0)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">Quién nos debe más (QB)</div>
-                {c.ar.topCustomers.map((tc: any) => (
-                  <div key={tc.name} className="flex justify-between text-sm py-0.5">
-                    <span className="text-slate-600 truncate mr-2">{tc.name}</span>
-                    <span className="tabular-nums font-semibold">{money(tc.cents)}</span>
-                  </div>
-                ))}
+          {/* ============ 2. RESUMEN EJECUTIVO ============ */}
+          {o.summary && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">¿Cómo está la empresa? — resumen en palabras simples</div>
+              {o.summary.hechos?.length > 0 && (
+                <ul className="space-y-1">{o.summary.hechos.map((t: string, i: number) => (
+                  <li key={i} className="text-sm text-slate-700 flex gap-2"><span className="text-slate-400 font-bold shrink-0">Hecho ·</span>{t}</li>))}
+                </ul>
+              )}
+              {o.summary.alertas?.length > 0 && (
+                <ul className="space-y-1">{o.summary.alertas.map((t: string, i: number) => (
+                  <li key={i} className="text-sm text-amber-800 flex gap-2"><span className="text-amber-500 font-bold shrink-0">Alerta ·</span>{t}</li>))}
+                </ul>
+              )}
+              {o.summary.acciones?.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mt-1">Revisa primero</div>
+                  <ol className="list-decimal pl-5 space-y-0.5">{o.summary.acciones.map((t: string, i: number) => (
+                    <li key={i} className="text-sm font-medium text-[#1e2b58]">{t}</li>))}
+                  </ol>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============ 3. GRÁFICAS PRINCIPALES ============ */}
+          {o.series && (
+            <RevCollectChart series={o.series} months={seriesMonths} onMonths={setSeriesMonths}
+              capped={o.invoicesCapped || o.paymentsCapped} />
+          )}
+          {o.ar && <ArAgingBar ar={o.ar} onOpen={() => onNavigate("Collections")} />}
+          {cfQ.data?.connected && o.cash && (
+            <CashProjectionChart cf={cfQ.data} cashCents={o.cash.totalCents} />
+          )}
+          {o.cbnb && <CbnbBars cbnb={o.cbnb} onOpen={() => onNavigate("Unbilled")} />}
+
+          {/* ============ 4. MÁS ANÁLISIS ============ */}
+          <button onClick={() => setShowMore((v) => !v)}
+            className="w-full rounded-xl border border-dashed border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-600 hover:border-slate-400">
+            {showMore ? "▲ Ocultar análisis adicional" : "▼ Más análisis financiero (gastos por categoría, obligaciones, bancos, deudores)"}
+          </button>
+          {showMore && (
+            <div className="space-y-4">
+              <OpexCategories cur={o.pnl?.cur} prev={o.pnl?.prev} />
+              {o.obligations && <Obligations ob={o.obligations} />}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Cuentas bancarias</div>
+                  {o.cash?.accounts?.map((a: any) => (
+                    <div key={a.name} className="text-sm flex justify-between py-0.5">
+                      <span className="text-slate-600 truncate mr-2">{a.name}</span>
+                      <span className="tabular-nums font-semibold">{money(a.balanceCents)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                  <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">Top 5 vencidas — llama primero aquí</div>
+                  {o.ar?.topOverdue?.map((t: any) => (
+                    <div key={t.doc} className="text-sm flex justify-between py-0.5 gap-2">
+                      <span className="text-slate-600 truncate">{t.customer} <span className="text-slate-400 text-xs">#{t.doc} · {t.age} días</span></span>
+                      <span className="tabular-nums font-semibold text-red-600">{money(t.cents)}</span>
+                    </div>
+                  ))}
+                  {(o.ar?.topOverdue?.length ?? 0) === 0 && <p className="text-sm text-slate-400">Nada vencido ✔</p>}
+                </div>
               </div>
             </div>
           )}
 
-          <CashFlow13 />
-
-          {c.errors?.length > 0 && (
+          {o.errors?.length > 0 && (
             <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">
-              Datos no disponibles ahora mismo (se muestran solo cifras reales):
-              <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+              Datos no disponibles ahora mismo (solo se muestran cifras reales):
+              <ul className="list-disc pl-4">{o.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
             </div>
           )}
+          <p className="text-[10px] text-slate-400">
+            Fuente contable: QuickBooks (solo lectura) · Fuente operativa: Airtable + FTS OS · Periodo: {o.range?.cur?.start} → {o.range?.cur?.end} · Actualizado {updatedAt}.
+            {(o.invoicesCapped || o.paymentsCapped) && " Historial limitado a los últimos 1000 registros por consulta."}
+          </p>
         </>
       )}
+    </div>
+  );
+}
+
+/* ---------- KPI card v2 ---------- */
+function Kpi2({ label, cents, centsOverride, count, prev, pctOf, warn, tip, source, updated, onClick, unavailableText }: {
+  label: string; cents?: number | null; centsOverride?: number | null; count?: number | null;
+  prev?: number | null; pctOf?: number | null; warn?: boolean; tip: string; source: string;
+  updated: string; onClick?: () => void; unavailableText?: string;
+}) {
+  const val = centsOverride ?? cents;
+  const hasVal = val != null || count != null;
+  const delta = val != null && prev != null && prev !== 0 ? ((val - prev) / Math.abs(prev)) * 100 : null;
+  return (
+    <div title={tip} onClick={onClick}
+      className={cn("rounded-xl border bg-white p-3.5 text-left",
+        warn && hasVal ? "border-amber-300" : "border-slate-200",
+        onClick && "cursor-pointer hover:border-[#1e2b58]/50")}>
+      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{label}</div>
+      {hasVal ? (
+        <>
+          <div className={cn("mt-1 text-xl font-extrabold tabular-nums", warn ? "text-amber-700" : "text-[#1e2b58]")}>
+            {val != null ? money(val) : String(count)}
+            {pctOf != null && pctOf > 0 && val != null && (
+              <span className="ml-1 text-sm font-bold text-slate-500">({Math.round((val / pctOf) * 100)}%)</span>
+            )}
+          </div>
+          {delta != null && (
+            <div className={cn("text-[11px] font-semibold tabular-nums", delta >= 0 ? "text-emerald-600" : "text-red-600")}>
+              {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(0)}% vs periodo anterior
+            </div>
+          )}
+          {delta == null && prev != null && <div className="text-[11px] text-slate-400">anterior: {money(prev)}</div>}
+        </>
+      ) : (
+        <div className="mt-1 text-sm font-semibold text-slate-400">{unavailableText ?? "No disponible"}</div>
+      )}
+      <div className="mt-1 text-[10px] text-slate-400">{source} · {updated}</div>
+    </div>
+  );
+}
+
+/* ---------- Gráfica 1: Facturado vs Cobrado ---------- */
+function RevCollectChart({ series, months, onMonths, capped }: {
+  series: any[]; months: 3 | 6 | 12 | 24; onMonths: (m: 3 | 6 | 12 | 24) => void; capped?: boolean;
+}) {
+  const [sel, setSel] = useState<string | null>(null);
+  const W = 720, H = 200, PAD = 8;
+  const max = Math.max(1, ...series.map((s) => Math.max(s.invoicedCents, s.collectedCents)));
+  const bw = (W - PAD * 2) / series.length;
+  const y = (c: number) => H - (c / max) * (H - 24);
+  const line = series.map((s, i) => `${i === 0 ? "M" : "L"}${PAD + bw * i + bw / 2},${y(s.collectedCents)}`).join(" ");
+  const selRow = series.find((s) => s.month === sel);
+  const mesCorto = (k: string) => k.slice(5) + "/" + k.slice(2, 4);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider flex items-center justify-between gap-2 flex-wrap">
+        <span>Facturado vs Cobrado por mes</span>
+        <span className="flex gap-1">
+          {([3, 6, 12, 24] as const).map((m) => (
+            <button key={m} onClick={() => onMonths(m)}
+              className={cn("rounded px-2 py-0.5 text-[11px]", months === m ? "bg-white text-[#1e2b58]" : "bg-white/10")}>{m}m</button>
+          ))}
+        </span>
+      </div>
+      <p className="px-4 pt-2 text-[12px] text-slate-500">
+        Las barras son lo que facturaste cada mes; la línea naranja es el dinero que realmente entró. Si la línea va muy por debajo de las barras, estás financiando a tus clientes.
+      </p>
+      <div className="px-2 overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H + 18}`} className="w-full min-w-[480px]">
+          {series.map((s, i) => (
+            <g key={s.month} onClick={() => setSel(sel === s.month ? null : s.month)} className="cursor-pointer">
+              <rect x={PAD + bw * i + bw * 0.15} y={y(s.invoicedCents)} width={bw * 0.7} height={H - y(s.invoicedCents)}
+                fill={sel === s.month ? "#2a3a72" : "#1e2b58"} rx="2">
+                <title>{`${s.month}: facturado ${money(s.invoicedCents)} (${s.invoicedCount} fact.) · cobrado ${money(s.collectedCents)} (${s.collectedCount} pagos)`}</title>
+              </rect>
+              <text x={PAD + bw * i + bw / 2} y={H + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">{mesCorto(s.month)}</text>
+            </g>
+          ))}
+          <path d={line} fill="none" stroke="#e8542f" strokeWidth="2.5" />
+          {series.map((s, i) => (
+            <circle key={s.month} cx={PAD + bw * i + bw / 2} cy={y(s.collectedCents)} r="3" fill="#e8542f">
+              <title>{`${s.month}: cobrado ${money(s.collectedCents)}`}</title>
+            </circle>
+          ))}
+        </svg>
+      </div>
+      {selRow && (
+        <div className="mx-4 mb-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-slate-700">
+          <b>{selRow.month}</b>: facturado {money(selRow.invoicedCents)} en {selRow.invoicedCount} facturas · cobrado {money(selRow.collectedCents)} en {selRow.collectedCount} pagos.
+          Diferencia: <b className={selRow.invoicedCents - selRow.collectedCents > 0 ? "text-amber-700" : "text-emerald-700"}>{money(selRow.invoicedCents - selRow.collectedCents)}</b>
+          {" "}· el detalle factura por factura está en QuickBooks.
+        </div>
+      )}
+      <div className="px-4 pb-2 flex gap-4 text-[10px] text-slate-500">
+        <span><span className="inline-block size-2 bg-[#1e2b58] rounded-sm mr-1" />Facturado (fecha de factura)</span>
+        <span><span className="inline-block size-2 bg-[#e8542f] rounded-full mr-1" />Cobrado (fecha de pago)</span>
+        <span className="text-slate-400">Fuente: QuickBooks{capped ? " · limitado a 1000 registros" : ""} · toca un mes para el detalle</span>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Gráfica 2: Antigüedad de cartera ---------- */
+const AGING_STYLES: Record<string, { bg: string; label: string }> = {
+  current: { bg: "#94a3b8", label: "Al día" },
+  "1-30": { bg: "#fbbf24", label: "1-30 días" },
+  "31-60": { bg: "#f97316", label: "31-60 días" },
+  "61-90": { bg: "#ef4444", label: "61-90 días" },
+  "90+": { bg: "#b91c1c", label: "+90 días" },
+};
+function ArAgingBar({ ar, onOpen }: { ar: any; onOpen: () => void }) {
+  const total = Math.max(1, ar.totalCents);
+  const over60 = (ar.buckets["61-90"]?.cents ?? 0) + (ar.buckets["90+"]?.cents ?? 0);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        ¿Qué tan vieja es la plata que te deben?
+      </div>
+      <p className="px-4 pt-2 text-[12px] text-slate-500">
+        Todo lo que está por cobrar ({money(ar.totalCents)} en {ar.openInvoices} facturas), separado por cuánto tiempo lleva vencido. Toca cualquier franja para abrir Collections.
+      </p>
+      <div className="px-4 py-3">
+        <div className="flex h-9 w-full overflow-hidden rounded-lg cursor-pointer" onClick={onOpen}>
+          {Object.entries(AGING_STYLES).map(([k, st]) => {
+            const b = ar.buckets[k] ?? { cents: 0, count: 0 };
+            if (!b.cents) return null;
+            return (
+              <div key={k} style={{ width: `${Math.max(3, (b.cents / total) * 100)}%`, background: st.bg }}
+                className="h-full" title={`${st.label}: ${money(b.cents)} (${b.count} facturas)`} />
+            );
+          })}
+        </div>
+        <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+          {Object.entries(AGING_STYLES).map(([k, st]) => {
+            const b = ar.buckets[k] ?? { cents: 0, count: 0 };
+            return (
+              <button key={k} onClick={onOpen} className="rounded-lg border border-slate-100 p-1.5 text-left hover:border-slate-300">
+                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                  <span className="size-2 rounded-sm" style={{ background: st.bg }} />{st.label}
+                </div>
+                <div className="text-sm font-extrabold tabular-nums text-[#1e2b58]">{money(b.cents)}</div>
+                <div className="text-[10px] text-slate-400">{b.count} fact. · {Math.round((b.cents / total) * 100)}%</div>
+              </button>
+            );
+          })}
+        </div>
+        {over60 > 0 && (
+          <p className="mt-2 text-[12px] text-slate-700">
+            <b className="text-red-600">{money(over60)}</b> tienen más de 60 días ({Math.round((over60 / total) * 100)}% del total).
+            <b> Qué significa:</b> a esa edad, cada semana que pasa baja la probabilidad de cobro.
+            <b> Acción:</b> revisa primero las 5 de mayor valor (lista en "Más análisis").
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Gráfica 3: Caja real + proyección 13 semanas ---------- */
+function CashProjectionChart({ cf, cashCents }: { cf: any; cashCents: number }) {
+  const [showTable, setShowTable] = useState(false);
+  const exp = cf.avgWeeklyExpenseCents ?? 0;
+  let opt = cashCents, pes = cashCents;
+  const pts = cf.weeks.map((w: any, i: number) => {
+    opt = opt + w.inflowCents - exp;
+    pes = pes - exp;
+    return { i: i + 1, start: w.start, opt, pes, inflow: w.inflowCents };
+  });
+  const W = 720, H = 180, PAD = 8;
+  const vals = [cashCents, ...pts.map((p: any) => p.opt), ...pts.map((p: any) => p.pes)];
+  const min = Math.min(0, ...vals), max = Math.max(1, ...vals);
+  const x = (i: number) => PAD + (i / 13) * (W - PAD * 2);
+  const y = (c: number) => 12 + (1 - (c - min) / (max - min)) * (H - 24);
+  const lineOf = (key: "opt" | "pes") =>
+    `M${x(0)},${y(cashCents)} ` + pts.map((p: any) => `L${x(p.i)},${y(p[key])}`).join(" ");
+  const band = `M${x(0)},${y(cashCents)} ` + pts.map((p: any) => `L${x(p.i)},${y(p.opt)}`).join(" ")
+    + ` L${x(13)},${y(pts[12].pes)} ` + [...pts].reverse().slice(1).map((p: any) => `L${x(p.i)},${y(p.pes)}`).join(" ") + ` Z`;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        Caja: hoy y las próximas 13 semanas
+      </div>
+      <p className="px-4 pt-2 text-[12px] text-slate-500">
+        Parte de tu caja real de hoy ({money(cashCents)}) y proyecta un rango: la línea de arriba supone que todos pagan a tiempo; la de abajo, que nadie paga. La realidad casi siempre cae en la franja del medio.
+      </p>
+      <div className="px-2 overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H + 16}`} className="w-full min-w-[480px]">
+          {min < 0 && <line x1={PAD} x2={W - PAD} y1={y(0)} y2={y(0)} stroke="#ef4444" strokeDasharray="4 3" strokeWidth="1" />}
+          <path d={band} fill="#1e2b58" opacity="0.08" />
+          <path d={lineOf("opt")} fill="none" stroke="#059669" strokeWidth="2" strokeDasharray="5 4" />
+          <path d={lineOf("pes")} fill="none" stroke="#b91c1c" strokeWidth="2" strokeDasharray="5 4" />
+          <circle cx={x(0)} cy={y(cashCents)} r="4" fill="#1e2b58"><title>{`Hoy: ${money(cashCents)} (dato real)`}</title></circle>
+          {pts.map((p: any) => (
+            <g key={p.i}>
+              <circle cx={x(p.i)} cy={y(p.opt)} r="2.5" fill="#059669"><title>{`S${p.i} (${p.start}) si todos pagan a tiempo: ${money(p.opt)} · cobros esperados ${money(p.inflow)}`}</title></circle>
+              <circle cx={x(p.i)} cy={y(p.pes)} r="2.5" fill="#b91c1c"><title>{`S${p.i} (${p.start}) si nadie paga: ${money(p.pes)}`}</title></circle>
+            </g>
+          ))}
+          {[0, 4, 8, 13].map((i) => (
+            <text key={i} x={x(i)} y={H + 12} textAnchor="middle" fontSize="9" fill="#94a3b8">{i === 0 ? "Hoy" : `S${i}`}</text>
+          ))}
+        </svg>
+      </div>
+      <div className="px-4 pb-2 space-y-1">
+        <div className="flex flex-wrap gap-3 text-[10px] text-slate-500">
+          <span><span className="inline-block size-2 rounded-full bg-[#1e2b58] mr-1" />Dato real (hoy)</span>
+          <span><span className="inline-block w-3 border-t-2 border-dashed border-emerald-600 mr-1 align-middle" />Si todos pagan a su vencimiento</span>
+          <span><span className="inline-block w-3 border-t-2 border-dashed border-red-700 mr-1 align-middle" />Si nadie paga (solo gastos)</span>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          Suposiciones: cobros = fechas de vencimiento reales de QuickBooks ({cf.overdueCents > 0 ? `lo ya vencido, ${money(cf.overdueCents)}, NO se cuenta — hay que gestionarlo` : "sin vencidos"}); gastos = tu promedio real de las últimas 12 semanas ({money(exp)}/semana). Es una proyección, no una garantía. Nómina e impuestos futuros no confirmados no están incluidos.
+        </p>
+        <button onClick={() => setShowTable((v) => !v)} className="text-[11px] text-slate-500 underline">
+          {showTable ? "Ocultar tabla semana a semana" : "Ver tabla semana a semana"}
+        </button>
+        {showTable && (
+          <table className="w-full text-[12px]">
+            <thead><tr className="text-[9px] uppercase text-slate-400"><th className="text-left">Semana</th><th className="text-right">Cobros esperados</th><th className="text-right">Gastos (ref.)</th><th className="text-right">Rango proyectado</th></tr></thead>
+            <tbody>
+              {pts.map((p: any) => (
+                <tr key={p.i} className="border-t border-slate-100">
+                  <td className="py-0.5">S{p.i} · {p.start}</td>
+                  <td className="text-right tabular-nums text-emerald-700">{p.inflow ? money(p.inflow) : "—"}</td>
+                  <td className="text-right tabular-nums text-slate-500">{money(exp)}</td>
+                  <td className="text-right tabular-nums font-semibold">{money(p.pes)} – {money(p.opt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Gráfica 4: Completado sin facturar ---------- */
+function CbnbBars({ cbnb, onOpen }: { cbnb: any; onOpen: () => void }) {
+  const groups = [
+    { k: "0-2", label: "0-2 días", color: "#94a3b8" },
+    { k: "3-7", label: "3-7 días", color: "#fbbf24" },
+    { k: "8-14", label: "8-14 días", color: "#f97316" },
+    { k: "14+", label: "+14 días", color: "#b91c1c" },
+  ];
+  const max = Math.max(1, ...groups.map((g) => cbnb[g.k] ?? 0));
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        Trabajo terminado que aún no se factura ({cbnb.total})
+      </div>
+      <p className="px-4 pt-2 text-[12px] text-slate-500">
+        Cada trabajo aquí es dinero que no entra hasta que se facture. Meta interna: facturar en 24-48 h. Toca una barra para abrir la lista.
+      </p>
+      <div className="px-4 py-3 grid grid-cols-4 gap-3 items-end h-36">
+        {groups.map((g) => (
+          <button key={g.k} onClick={onOpen} className="flex flex-col items-center justify-end h-full gap-1">
+            <span className="text-sm font-extrabold tabular-nums text-[#1e2b58]">{cbnb[g.k] ?? 0}</span>
+            <div className="w-full rounded-t" style={{ background: g.color, height: `${((cbnb[g.k] ?? 0) / max) * 80}%`, minHeight: (cbnb[g.k] ?? 0) > 0 ? 6 : 2 }} />
+            <span className="text-[10px] text-slate-500">{g.label}</span>
+          </button>
+        ))}
+      </div>
+      <p className="px-4 pb-2.5 text-[11px] text-slate-400">
+        {cbnb.valueNote}{cbnb.unknown ? ` · ${cbnb.unknown} trabajos sin fecha de fin conocida.` : ""} Fuente: Airtable + facturas FTS OS.
+      </p>
+    </div>
+  );
+}
+
+/* ---------- Más análisis: gastos por categoría ---------- */
+function OpexCategories({ cur, prev }: { cur: any; prev: any }) {
+  if (!cur?.categories?.length) return null;
+  const prevByName = new Map<string, number>((prev?.categories ?? []).map((c: any) => [c.name, c.cents]));
+  const top = cur.categories.slice(0, 10);
+  const max = Math.max(1, ...top.map((c: any) => c.cents));
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-2">
+        ¿En qué se va el dinero? — gastos del periodo por categoría (top 10)
+      </div>
+      {top.map((c: any) => {
+        const pv = prevByName.get(c.name);
+        return (
+          <div key={c.name} className="py-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-600 truncate mr-2">{c.name}</span>
+              <span className="tabular-nums font-semibold">
+                {money(c.cents)}
+                {pv != null && pv > 0 && (
+                  <span className={cn("ml-1 text-[10px]", c.cents > pv ? "text-red-600" : "text-emerald-600")}>
+                    {c.cents > pv ? "▲" : "▼"}{Math.abs(Math.round(((c.cents - pv) / pv) * 100))}%
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="h-1.5 rounded bg-slate-100"><div className="h-full rounded bg-[#e8542f]/70" style={{ width: `${(c.cents / max) * 100}%` }} /></div>
+          </div>
+        );
+      })}
+      <p className="mt-1 text-[10px] text-slate-400">Fuente: P&L de QuickBooks · comparación contra el periodo anterior equivalente.</p>
+    </div>
+  );
+}
+
+/* ---------- Más análisis: obligaciones ---------- */
+function Obligations({ ob }: { ob: any }) {
+  const Section = ({ title, rows, tone }: { title: string; rows: any[]; tone?: string }) =>
+    rows?.length ? (
+      <div>
+        <div className={cn("text-[10px] font-bold uppercase tracking-wide", tone ?? "text-slate-500")}>{title}</div>
+        {rows.map((a: any) => (
+          <div key={a.name} className="flex justify-between text-sm py-0.5">
+            <span className="text-slate-600 truncate mr-2">{a.name}</span>
+            <span className="tabular-nums font-semibold">{money(a.cents)}</span>
+          </div>
+        ))}
+      </div>
+    ) : null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2.5">
+      <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        Obligaciones registradas en QuickBooks (lo que hay que pagar)
+      </div>
+      <Section title="Proveedores (AP)" rows={ob.ap} />
+      <Section title="Impuestos (GST / income tax)" rows={ob.tax} tone="text-amber-600" />
+      <Section title="Tarjetas de crédito" rows={ob.creditCards} />
+      <Section title="Préstamos" rows={ob.loans} />
+      <Section title="Otros pasivos corrientes" rows={ob.otherCurrent} />
+      {ob.intercompany?.length > 0 && (
+        <div className="rounded-lg bg-indigo-50 border border-indigo-200 p-2">
+          <Section title="Intercompany / Holding — separado de la operación" rows={ob.intercompany} tone="text-indigo-600" />
+        </div>
+      )}
+      <p className="text-[10px] text-slate-400">{ob.payrollNote} · Saldos actuales de cuentas de pasivo en QuickBooks; las fechas exactas de pago no están registradas ahí.</p>
     </div>
   );
 }

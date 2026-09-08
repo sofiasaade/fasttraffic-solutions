@@ -370,6 +370,303 @@ export const atlasRouter = router({
     return out;
   }),
 
+  /* ==================== CFO v2 — OVERVIEW (un solo fetch) ==================== */
+
+  /**
+   * Everything the CFO dashboard shows, with previous-period comparisons.
+   * QuickBooks is the accounting source (read-only); app+Airtable provide the
+   * operational layer (completed-but-not-billed). Anything unavailable is
+   * returned as null with the reason — the UI must say "no disponible", not 0.
+   */
+  cfoOverview: executiveProcedure
+    .input(
+      z
+        .object({
+          period: z.enum(["month", "last_month", "quarter", "ytd", "12m"]).default("month"),
+          seriesMonths: z.union([z.literal(3), z.literal(6), z.literal(12), z.literal(24)]).default(12),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const period = input?.period ?? "month";
+      const seriesMonths = input?.seriesMonths ?? 12;
+      const conn = await getQbConnection().catch(() => null);
+      const today = calgaryToday();
+      const out: any = {
+        connected: Boolean(conn),
+        generatedAt: new Date().toISOString(),
+        period,
+        errors: [] as string[],
+      };
+      if (!conn) return out;
+
+      /* ---- period ranges ---- */
+      const iso = (d: Date) => d.toISOString().slice(0, 10);
+      const monthStart = today.slice(0, 7) + "-01";
+      const mk = (s: string, e: string) => ({ start: s, end: e });
+      const shiftMonths = (base: string, n: number) => {
+        const d0 = new Date(base + "T00:00:00");
+        d0.setMonth(d0.getMonth() + n);
+        return iso(d0);
+      };
+      let cur: { start: string; end: string };
+      let prev: { start: string; end: string };
+      if (period === "month") {
+        cur = mk(monthStart, today);
+        prev = mk(shiftMonths(monthStart, -1), shiftMonths(monthStart, -1).slice(0, 8) + today.slice(8, 10));
+      } else if (period === "last_month") {
+        const s = shiftMonths(monthStart, -1);
+        const e = iso(new Date(new Date(monthStart + "T00:00:00").getTime() - 86400000));
+        cur = mk(s, e);
+        const s2 = shiftMonths(monthStart, -2);
+        const e2 = iso(new Date(new Date(s + "T00:00:00").getTime() - 86400000));
+        prev = mk(s2, e2);
+      } else if (period === "quarter") {
+        const m = Number(today.slice(5, 7));
+        const qStartMonth = m - ((m - 1) % 3);
+        const s = today.slice(0, 5) + String(qStartMonth).padStart(2, "0") + "-01";
+        cur = mk(s, today);
+        prev = mk(shiftMonths(s, -3), shiftMonths(s, -3 + 3).slice(0, 10) < today ? iso(new Date(new Date(s + "T00:00:00").getTime() - 86400000)) : today);
+        prev = mk(shiftMonths(s, -3), iso(new Date(new Date(s + "T00:00:00").getTime() - 86400000)));
+      } else if (period === "ytd") {
+        cur = mk(today.slice(0, 4) + "-01-01", today);
+        prev = mk(String(Number(today.slice(0, 4)) - 1) + "-01-01", String(Number(today.slice(0, 4)) - 1) + today.slice(4, 10));
+      } else {
+        cur = mk(shiftMonths(monthStart, -11), today);
+        prev = mk(shiftMonths(monthStart, -23), iso(new Date(new Date(shiftMonths(monthStart, -11) + "T00:00:00").getTime() - 86400000)));
+      }
+      out.range = { cur, prev };
+
+      /* ---- P&L for a range: income, expenses, COGS/gross when QB has them, expense categories ---- */
+      const pnlFor = async (r: { start: string; end: string }) => {
+        const rep = await qbGet<any>(`reports/ProfitAndLoss?start_date=${r.start}&end_date=${r.end}`);
+        const res: any = { incomeCents: null, expensesCents: null, cogsCents: null, grossCents: null, categories: [] };
+        const catRows: { name: string; cents: number }[] = [];
+        const walk = (rows: any[], inExpenses: boolean) => {
+          for (const row of rows ?? []) {
+            const sum = row.Summary?.ColData ?? [];
+            const label = sum[0]?.value;
+            const val = sum[1]?.value != null ? Number(sum[1].value) : null;
+            if (label === "Total Income" || label === "Total Revenue") res.incomeCents = Math.round((val ?? 0) * 100);
+            if (label === "Total Expenses") res.expensesCents = Math.round((val ?? 0) * 100);
+            if (label === "Total Cost of Goods Sold") res.cogsCents = Math.round((val ?? 0) * 100);
+            if (label === "Gross Profit") res.grossCents = Math.round((val ?? 0) * 100);
+            const isExpensesGroup = row.group === "Expenses";
+            // leaf expense lines: ColData [name, value] with no nested rows
+            if (inExpenses && row.ColData?.length >= 2 && !row.Rows) {
+              const n = Number(row.ColData[1]?.value);
+              if (row.ColData[0]?.value && !Number.isNaN(n) && n !== 0) {
+                catRows.push({ name: row.ColData[0].value, cents: Math.round(n * 100) });
+              }
+            }
+            if (row.Rows?.Row) walk(row.Rows.Row, inExpenses || isExpensesGroup);
+          }
+        };
+        walk(rep?.Rows?.Row ?? [], false);
+        res.categories = catRows.sort((a, b) => b.cents - a.cents);
+        res.netCents =
+          res.incomeCents != null && res.expensesCents != null
+            ? res.incomeCents - (res.cogsCents ?? 0) - res.expensesCents
+            : null;
+        return res;
+      };
+      let pnlCur: any = null;
+      let pnlPrev: any = null;
+      try {
+        pnlCur = await pnlFor(cur);
+        pnlPrev = await pnlFor(prev);
+        out.pnl = { cur: pnlCur, prev: pnlPrev };
+      } catch (err) {
+        out.errors.push("P&L: " + String(err).slice(0, 150));
+      }
+
+      /* ---- payments (cash collected) ---- */
+      let payments: any[] = [];
+      try {
+        const res = await qbQuery<any>("SELECT TotalAmt, TxnDate FROM Payment ORDERBY TxnDate DESC MAXRESULTS 1000");
+        payments = res?.QueryResponse?.Payment ?? [];
+        out.paymentsCapped = payments.length === 1000;
+        const inRange = (p: any, r: { start: string; end: string }) => p.TxnDate >= r.start && p.TxnDate <= r.end;
+        out.collected = {
+          curCents: Math.round(payments.filter((p) => inRange(p, cur)).reduce((n, p) => n + (p.TotalAmt ?? 0), 0) * 100),
+          prevCents: Math.round(payments.filter((p) => inRange(p, prev)).reduce((n, p) => n + (p.TotalAmt ?? 0), 0) * 100),
+        };
+      } catch (err) {
+        out.errors.push("Pagos recibidos: " + String(err).slice(0, 150));
+      }
+
+      /* ---- invoiced by month + collected by month (chart 1) ---- */
+      try {
+        const res = await qbQuery<any>("SELECT TotalAmt, TxnDate FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 1000");
+        const invs = res?.QueryResponse?.Invoice ?? [];
+        out.invoicesCapped = invs.length === 1000;
+        const first = shiftMonths(monthStart, -(seriesMonths - 1));
+        const keys: string[] = [];
+        for (let k = 0; k < seriesMonths; k++) keys.push(shiftMonths(first, k).slice(0, 7));
+        const invByM = new Map<string, { cents: number; count: number }>();
+        const payByM = new Map<string, { cents: number; count: number }>();
+        for (const i of invs) {
+          const key = (i.TxnDate ?? "").slice(0, 7);
+          const m = invByM.get(key) ?? { cents: 0, count: 0 };
+          m.cents += Math.round((i.TotalAmt ?? 0) * 100);
+          m.count++;
+          invByM.set(key, m);
+        }
+        for (const p of payments) {
+          const key = (p.TxnDate ?? "").slice(0, 7);
+          const m = payByM.get(key) ?? { cents: 0, count: 0 };
+          m.cents += Math.round((p.TotalAmt ?? 0) * 100);
+          m.count++;
+          payByM.set(key, m);
+        }
+        out.series = keys.map((key) => ({
+          month: key,
+          invoicedCents: invByM.get(key)?.cents ?? 0,
+          invoicedCount: invByM.get(key)?.count ?? 0,
+          collectedCents: payByM.get(key)?.cents ?? 0,
+          collectedCount: payByM.get(key)?.count ?? 0,
+        }));
+      } catch (err) {
+        out.errors.push("Serie mensual: " + String(err).slice(0, 150));
+      }
+
+      /* ---- cash + AR (reuse the same queries the classic cfo uses) ---- */
+      try {
+        const res = await qbQuery<any>("SELECT Name, CurrentBalance FROM Account WHERE AccountType = 'Bank'");
+        const accounts = (res?.QueryResponse?.Account ?? []).map((a: any) => ({
+          name: a.Name,
+          balanceCents: Math.round((a.CurrentBalance ?? 0) * 100),
+        }));
+        out.cash = { totalCents: accounts.reduce((n: number, a: any) => n + a.balanceCents, 0), accounts };
+      } catch (err) {
+        out.errors.push("Bancos: " + String(err).slice(0, 150));
+      }
+      try {
+        const res = await qbQuery<any>(
+          "SELECT DocNumber, Balance, DueDate, TxnDate, CustomerRef FROM Invoice WHERE Balance > '0' MAXRESULTS 1000",
+        );
+        const invs = res?.QueryResponse?.Invoice ?? [];
+        const t0 = new Date(today + "T00:00:00").getTime();
+        const buckets: Record<string, { cents: number; count: number }> = {
+          current: { cents: 0, count: 0 }, "1-30": { cents: 0, count: 0 }, "31-60": { cents: 0, count: 0 },
+          "61-90": { cents: 0, count: 0 }, "90+": { cents: 0, count: 0 },
+        };
+        let totalCents = 0;
+        let overdueCents = 0;
+        const topOverdue: any[] = [];
+        for (const i of invs) {
+          const cents = Math.round((i.Balance ?? 0) * 100);
+          totalCents += cents;
+          const ref = i.DueDate ?? i.TxnDate;
+          const age = ref ? Math.floor((t0 - new Date(ref + "T00:00:00").getTime()) / 86400000) : 0;
+          const b = age <= 0 ? "current" : age <= 30 ? "1-30" : age <= 60 ? "31-60" : age <= 90 ? "61-90" : "90+";
+          buckets[b].cents += cents;
+          buckets[b].count++;
+          if (age > 0) {
+            overdueCents += cents;
+            topOverdue.push({ doc: i.DocNumber, customer: i.CustomerRef?.name ?? "", cents, age });
+          }
+        }
+        out.ar = {
+          totalCents, overdueCents, openInvoices: invs.length, buckets,
+          topOverdue: topOverdue.sort((a, b) => b.cents - a.cents).slice(0, 5),
+        };
+      } catch (err) {
+        out.errors.push("Cuentas por cobrar: " + String(err).slice(0, 150));
+      }
+
+      /* ---- obligations: AP, GST, taxes, loans + intercompany separated ---- */
+      try {
+        const res = await qbQuery<any>(
+          "SELECT Name, AccountType, AccountSubType, CurrentBalance FROM Account WHERE Active = true MAXRESULTS 1000",
+        );
+        const accounts = (res?.QueryResponse?.Account ?? []) as any[];
+        const pick = (types: string[]) =>
+          accounts
+            .filter((a) => types.includes(a.AccountType) && Math.round((a.CurrentBalance ?? 0) * 100) !== 0)
+            .map((a) => ({ name: a.Name, type: a.AccountType, cents: Math.round((a.CurrentBalance ?? 0) * 100) }));
+        const isInterco = (n: string) => /holding|intercompan|inter-compan|due to.*related|related part/i.test(n);
+        const liabilities = pick(["Accounts Payable", "Other Current Liability", "Credit Card", "Long Term Liability"]);
+        out.obligations = {
+          ap: liabilities.filter((a) => a.type === "Accounts Payable" && !isInterco(a.name)),
+          tax: liabilities.filter((a) => a.type === "Other Current Liability" && /gst|tax|impuesto|cra|receiver general/i.test(a.name) && !isInterco(a.name)),
+          creditCards: liabilities.filter((a) => a.type === "Credit Card" && !isInterco(a.name)),
+          loans: liabilities.filter((a) => a.type === "Long Term Liability" && !isInterco(a.name)),
+          otherCurrent: liabilities.filter((a) => a.type === "Other Current Liability" && !/gst|tax|impuesto|cra|receiver general/i.test(a.name) && !isInterco(a.name)),
+          intercompany: liabilities.filter((a) => isInterco(a.name)),
+          payrollNote: "Nómina: no disponible — QuickBooks Payroll no expone estos datos por el API de contabilidad.",
+        };
+      } catch (err) {
+        out.errors.push("Obligaciones: " + String(err).slice(0, 150));
+      }
+
+      /* ---- completed-but-not-billed aging (operational, Airtable+app) ---- */
+      try {
+        const d = await db();
+        const appInv = await d.select().from(invoices);
+        const live = appInv.filter((r) => !r.deletedAt && r.status !== "quote" && r.status !== "void");
+        const invByJob = new Set(live.filter((r) => r.airtableJobId).map((r) => r.airtableJobId as string));
+        const { fetchAccountingJobs } = await import("../airtable");
+        const jobs = (await fetchAccountingJobs()) as any[];
+        const now = Date.now();
+        const cb = { "0-2": 0, "3-7": 0, "8-14": 0, "14+": 0, unknown: 0, total: 0 };
+        for (const j of jobs) {
+          const st = (j.status ?? "").toLowerCase();
+          if (!(/ready to bill/.test(st) || /picked/.test(st)) || invByJob.has(j.id)) continue;
+          cb.total++;
+          const end = j.endDate ? new Date(String(j.endDate).slice(0, 10) + "T00:00:00").getTime() : null;
+          if (end == null) { cb.unknown++; continue; }
+          const days = Math.floor((now - end) / 86400000);
+          if (days <= 2) cb["0-2"]++;
+          else if (days <= 7) cb["3-7"]++;
+          else if (days <= 14) cb["8-14"]++;
+          else cb["14+"]++;
+        }
+        out.cbnb = {
+          ...cb,
+          valueNote:
+            "Valor potencial: no calculable — estos trabajos aún no tienen factura ni cotización ligada. Cargo potencial omitido = requiere revisión humana.",
+        };
+      } catch (err) {
+        out.errors.push("Completado sin facturar: " + String(err).slice(0, 150));
+      }
+
+      /* ---- executive summary: hechos / alertas / acciones ---- */
+      const money0 = (c: number) => "$" + Math.round(c / 100).toLocaleString("en-CA");
+      const hechos: string[] = [];
+      const alertas: string[] = [];
+      const acciones: string[] = [];
+      if (out.cash) hechos.push(`Hay ${money0(out.cash.totalCents)} de efectivo en ${out.cash.accounts.length} cuentas bancarias.`);
+      if (pnlCur?.incomeCents != null) hechos.push(`En el periodo se facturaron ${money0(pnlCur.incomeCents)} (periodo anterior: ${pnlPrev?.incomeCents != null ? money0(pnlPrev.incomeCents) : "n/d"}).`);
+      if (out.collected) hechos.push(`Se cobraron ${money0(out.collected.curCents)} en efectivo (anterior: ${money0(out.collected.prevCents)}). Facturar no es lo mismo que cobrar.`);
+      if (out.ar) {
+        const pct = out.ar.totalCents ? Math.round((out.ar.overdueCents / out.ar.totalCents) * 100) : 0;
+        if (out.ar.overdueCents > 0) {
+          alertas.push(`${money0(out.ar.overdueCents)} de la cartera está VENCIDA (${pct}% del total por cobrar de ${money0(out.ar.totalCents)}).`);
+          if (out.ar.topOverdue?.length) {
+            acciones.push(`Contactar primero las ${Math.min(5, out.ar.topOverdue.length)} facturas vencidas de mayor valor (empiezan con ${out.ar.topOverdue[0].customer} por ${money0(out.ar.topOverdue[0].cents)}). Abre Collections.`);
+          }
+        }
+      }
+      if (out.cbnb?.total > 0) {
+        alertas.push(`${out.cbnb.total} trabajos completados siguen sin factura${out.cbnb["14+"] ? ` — ${out.cbnb["14+"]} llevan más de 14 días` : ""}. Ese dinero no entra hasta facturarlo.`);
+        acciones.push("Completar la facturación de los trabajos más viejos de la lista Unbilled (meta interna: 24-48 h).");
+      }
+      if (pnlCur?.netCents != null && pnlCur.netCents < 0) alertas.push(`El periodo va con resultado neto NEGATIVO: ${money0(pnlCur.netCents)}.`);
+      if (out.obligations) {
+        const oblig = [...out.obligations.ap, ...out.obligations.tax].reduce((n: number, a: any) => n + a.cents, 0);
+        if (oblig > 0) hechos.push(`Obligaciones registradas (proveedores + impuestos): ${money0(oblig)}.`);
+        if (out.cash && oblig > out.cash.totalCents) alertas.push("Las obligaciones registradas superan el efectivo disponible — hay presión de caja.");
+      }
+      if (acciones.length < 3 && out.ar?.buckets?.["90+"]?.cents > 0) {
+        acciones.push(`Decidir qué hacer con los ${money0(out.ar.buckets["90+"].cents)} con más de 90 días (cobrar, negociar o llevar a Decision Inbox).`);
+      }
+      out.summary = { hechos, alertas, acciones: acciones.slice(0, 3) };
+
+      await execAudit(ctx.user.email ?? "executive", "view", `cfoOverview ${period}`);
+      return out;
+    }),
+
   /* ========================= F2 — CEO / CASHFLOW / CMO ========================= */
 
   /**
