@@ -567,8 +567,27 @@ export const atlasRouter = router({
             topOverdue.push({ doc: i.DocNumber, customer: i.CustomerRef?.name ?? "", cents, age });
           }
         }
+        // Open credit memos and unapplied payments reduce what is truly
+        // collectible — without them the AR figure overstates (found in the
+        // Sep 8 validation against QB's AgedReceivables report).
+        let creditsCents = 0;
+        try {
+          const cms = await qbQuery<any>("SELECT Balance FROM CreditMemo MAXRESULTS 1000");
+          creditsCents += Math.round(
+            (cms?.QueryResponse?.CreditMemo ?? []).reduce((n: number, x: any) => n + (x.Balance ?? 0), 0) * 100,
+          );
+          const ups = await qbQuery<any>("SELECT UnappliedAmt FROM Payment MAXRESULTS 1000");
+          creditsCents += Math.round(
+            (ups?.QueryResponse?.Payment ?? []).reduce((n: number, x: any) => n + (x.UnappliedAmt ?? 0), 0) * 100,
+          );
+        } catch {
+          // credits unavailable — report gross only, never a guessed net
+          creditsCents = -1;
+        }
         out.ar = {
           totalCents, overdueCents, openInvoices: invs.length, buckets,
+          creditsCents: creditsCents >= 0 ? creditsCents : null,
+          netCents: creditsCents >= 0 ? totalCents - creditsCents : null,
           topOverdue: topOverdue.sort((a, b) => b.cents - a.cents).slice(0, 5),
         };
       } catch (err) {

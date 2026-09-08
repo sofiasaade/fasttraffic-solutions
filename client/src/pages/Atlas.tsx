@@ -975,9 +975,11 @@ function CfoTab({ onNavigate }: { onNavigate: (tab: string) => void }) {
             <Kpi2 label="Cobrado en efectivo (periodo)" cents={o.collected?.curCents ?? null} prev={o.collected?.prevCents ?? null}
               tip="Pagos realmente recibidos de clientes en el periodo (registro de Payments en QuickBooks)."
               source="QuickBooks · pagos" updated={updatedAt} />
-            <Kpi2 label="Por cobrar (total)" cents={o.ar?.totalCents ?? null}
-              tip="Saldo abierto de todas las facturas sin pagar. Sin comparación: no guardamos fotos históricas de la cartera."
-              source="QuickBooks · facturas abiertas" updated={updatedAt}
+            <Kpi2 label="Por cobrar (neto)" cents={o.ar?.netCents ?? o.ar?.totalCents ?? null}
+              tip={o.ar?.creditsCents != null
+                ? `Facturas abiertas ${money(o.ar.totalCents)} menos créditos a favor de clientes y pagos sin aplicar ${money(o.ar.creditsCents)}. Es lo realmente cobrable.`
+                : "Saldo abierto de todas las facturas sin pagar."}
+              source="QuickBooks · facturas − créditos" updated={updatedAt}
               onClick={() => onNavigate("Collections")} />
             <Kpi2 label="Por cobrar VENCIDO" cents={o.ar?.overdueCents ?? null} warn
               tip="Parte de la cartera cuya fecha de vencimiento ya pasó."
