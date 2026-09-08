@@ -621,6 +621,8 @@ ${months.map((x: any) => `<tr><td>${x.title}</td><td class="r">${m(x.incomeCents
         </div>
       )}
 
+      <EarnedIncome />
+
       {/* Ops pulse */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Kpi icon={Receipt} label="Facturado este mes (app)" value={money(c.ops.invoicedThisMonthCents)}
@@ -638,6 +640,77 @@ ${months.map((x: any) => `<tr><td>${x.title}</td><td class="r">${m(x.incomeCents
 
       {c.errors?.length > 0 && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-[12px] text-amber-800">
+          <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============== INGRESO POR MES DE TRABAJO (devengado) ============== */
+
+function EarnedIncome() {
+  const q = trpc.atlas.earnedIncome.useQuery(undefined, { refetchInterval: 10 * 60_000 });
+  if (q.isLoading)
+    return <div className="py-6 flex justify-center"><Loader2 className="size-5 animate-spin text-slate-400" /></div>;
+  const c: any = q.data;
+  if (!c?.connected || !c.months?.length) return null;
+
+  const monthName = (key: string) => {
+    const [y, m] = key.split("-");
+    const names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    return `${names[Number(m) - 1]} ${y}`;
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        Neto por mes de TRABAJO — el ingreso se cuenta cuando se hizo el proyecto, no cuando se facturó
+      </div>
+      <div className="px-4 py-2 text-[12px] text-slate-600 bg-slate-50 border-b">
+        {Math.round(c.coverage * 100)}% del ingreso pudo atribuirse a su mes real de trabajo
+        (fecha de servicio en la factura, o fecha de fin del proyecto en Airtable).
+        El resto se muestra aparte como «mes de factura».
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-slate-400 border-b">
+              <th className="text-left px-4 py-1.5">Mes</th>
+              <th className="text-right px-2">Trabajo realizado</th>
+              <th className="text-right px-2">Sin fecha (mes de factura)</th>
+              <th className="text-right px-2">Gastos</th>
+              <th className="text-right px-4">Neto del mes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {c.months.map((m: any) => (
+              <tr key={m.month}>
+                <td className="px-4 py-1.5 font-medium text-slate-700">{monthName(m.month)}</td>
+                <td className="px-2 text-right tabular-nums font-semibold text-[#1e2b58]">
+                  {m.earnedCents ? money(m.earnedCents) : "—"}
+                </td>
+                <td className="px-2 text-right tabular-nums text-slate-500">
+                  {m.unattributedCents ? money(m.unattributedCents) : "—"}
+                </td>
+                <td className="px-2 text-right tabular-nums text-slate-500">
+                  {m.expensesCents != null ? money(m.expensesCents) : "—"}
+                </td>
+                <td className={cn("px-4 text-right tabular-nums font-bold",
+                  m.netCents == null ? "text-slate-400" : m.netCents >= 0 ? "text-emerald-700" : "text-red-600")}>
+                  {m.netCents != null ? money(m.netCents) : "sin gastos QB"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-4 py-2 text-[11px] text-slate-400">
+        Fuente: facturas de QuickBooks reasignadas a su mes de trabajo + gastos del P&L mensual de QuickBooks.
+        {c.window?.capped && " Historial limitado a las últimas 1000 facturas."}
+      </p>
+      {c.errors?.length > 0 && (
+        <div className="mx-4 mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[12px] text-amber-800">
           <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
         </div>
       )}

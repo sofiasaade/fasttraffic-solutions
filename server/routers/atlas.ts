@@ -504,6 +504,129 @@ export const atlasRouter = router({
   }),
 
   /**
+   * Income attributed to the month the WORK happened, not the invoice date.
+   * Sofia's problem: invoices often go out 1+ month after the job, so P&L by
+   * invoice date misstates each month. Work date per QB invoice comes from
+   * (in order): the earliest ServiceDate on its lines; the linked Airtable
+   * job's end date (matched app invoice via DocNumber); otherwise the income
+   * stays in its invoice month but is counted separately as "sin fecha de
+   * trabajo" — attribution coverage is reported, never glossed over.
+   */
+  earnedIncome: executiveProcedure.query(async ({ ctx }) => {
+    const conn = await getQbConnection().catch(() => null);
+    if (!conn) return { connected: false as const };
+    const today = calgaryToday();
+    const out: any = { connected: true as const, errors: [] as string[] };
+
+    // App invoice → Airtable job end-date map (100% of app invoices link a job).
+    const jobEndByQbNumber = new Map<string, string>();
+    const jobEndByInvoiceNumber = new Map<string, string>();
+    try {
+      const d = await db();
+      const appInv = await d.select().from(invoices);
+      const { fetchAccountingJobs } = await import("../airtable");
+      const jobs = (await fetchAccountingJobs()) as any[];
+      const endByJob = new Map<string, string>();
+      for (const j of jobs) {
+        if (j.id && j.endDate) endByJob.set(j.id, String(j.endDate).slice(0, 10));
+      }
+      for (const r of appInv) {
+        if (r.deletedAt || !r.airtableJobId) continue;
+        const end = endByJob.get(r.airtableJobId);
+        if (!end) continue;
+        if (r.qbNumber) jobEndByQbNumber.set(String(r.qbNumber), end);
+        jobEndByInvoiceNumber.set(r.invoiceNumber, end);
+      }
+    } catch (err) {
+      out.errors.push("Fechas de proyecto (Airtable): " + String(err).slice(0, 150));
+    }
+
+    try {
+      // Full entities (SELECT *) so each invoice carries its Line ServiceDates.
+      const res = await qbQuery<any>("SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 1000");
+      const invs = (res?.QueryResponse?.Invoice ?? []) as any[];
+      out.window = invs.length
+        ? { from: invs[invs.length - 1].TxnDate, to: invs[0].TxnDate, count: invs.length, capped: invs.length === 1000 }
+        : null;
+
+      type MonthAgg = { earnedCents: number; unattributedCents: number };
+      const byMonth = new Map<string, MonthAgg>();
+      const agg = (key: string) => {
+        let m = byMonth.get(key);
+        if (!m) byMonth.set(key, (m = { earnedCents: 0, unattributedCents: 0 }));
+        return m;
+      };
+      let attributedCents = 0;
+      let totalCents = 0;
+      for (const i of invs) {
+        const cents = Math.round((i.TotalAmt ?? 0) * 100);
+        totalCents += cents;
+        let work: string | null = null;
+        for (const l of i.Line ?? []) {
+          const sd = l.SalesItemLineDetail?.ServiceDate;
+          if (sd && (!work || sd < work)) work = sd;
+        }
+        if (!work && i.DocNumber) work = jobEndByQbNumber.get(String(i.DocNumber)) ?? null;
+        if (work) {
+          agg(work.slice(0, 7)).earnedCents += cents;
+          attributedCents += cents;
+        } else {
+          agg((i.TxnDate ?? today).slice(0, 7)).unattributedCents += cents;
+        }
+      }
+      out.coverage = totalCents ? attributedCents / totalCents : 0;
+
+      // Monthly expenses from the real P&L (expenses land close to their month).
+      const first = Array.from(byMonth.keys()).sort()[0];
+      const start = (first ?? today.slice(0, 7)) + "-01";
+      const rep = await qbGet<any>(
+        `reports/ProfitAndLoss?start_date=${start}&end_date=${today}&summarize_column_by=Month`,
+      );
+      const columns: string[] = (rep?.Columns?.Column ?? []).map((c: any) => c.ColTitle ?? "");
+      let expensesRow: number[] | null = null;
+      const walk = (rows: any[]) => {
+        for (const r of rows ?? []) {
+          const cols = r.Summary?.ColData ?? [];
+          if (cols[0]?.value === "Total Expenses") {
+            expensesRow = cols.slice(1).map((c: any) => Number(c.value) || 0);
+          }
+          if (r.Rows?.Row) walk(r.Rows.Row);
+        }
+      };
+      walk(rep?.Rows?.Row ?? []);
+      // Map QB's column titles ("Apr. 2026", "Sep. 1-6, 2026") to YYYY-MM keys.
+      const MONTHS: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+      const expByMonth = new Map<string, number>();
+      columns.slice(1).forEach((title, idx) => {
+        if (/total/i.test(title)) return;
+        const m = title.toLowerCase().match(/([a-z]{3})[^\d]*(\d{4})/);
+        if (m && MONTHS[m[1]] && expensesRow) {
+          expByMonth.set(`${m[2]}-${MONTHS[m[1]]}`, Math.round((expensesRow[idx] ?? 0) * 100));
+        }
+      });
+
+      const keys = Array.from(new Set([...Array.from(byMonth.keys()), ...Array.from(expByMonth.keys())])).sort();
+      out.months = keys.map((key) => {
+        const m = byMonth.get(key) ?? { earnedCents: 0, unattributedCents: 0 };
+        const exp = expByMonth.get(key) ?? null;
+        return {
+          month: key,
+          earnedCents: m.earnedCents,
+          unattributedCents: m.unattributedCents,
+          expensesCents: exp,
+          netCents: exp != null ? m.earnedCents + m.unattributedCents - exp : null,
+          netAttributedCents: exp != null ? m.earnedCents - exp : null,
+        };
+      });
+    } catch (err) {
+      out.errors.push("Ingreso por mes de trabajo: " + String(err).slice(0, 200));
+    }
+
+    await execAudit(ctx.user.email ?? "executive", "view", "earnedIncome");
+    return out;
+  }),
+
+  /**
    * 13-week cash view. Inflows = REAL due dates of open QB invoices.
    * The expense reference is the actual weekly average of the last 12 weeks
    * from QB's P&L — labeled as a reference, never presented as a forecast fact.
