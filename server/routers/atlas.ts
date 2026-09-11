@@ -686,6 +686,169 @@ export const atlasRouter = router({
       return out;
     }),
 
+  /* ============== IMPUESTOS — VISTA APROXIMADA (Sofia, Sep 11) ============== */
+
+  /**
+   * Tax picture: GST owed per the books (FACT from QB liability accounts) and
+   * an ESTIMATE of corporate income tax on YTD accounting profit using
+   * published Alberta CCPC rates (11% small-business up to $500K, ~23% above).
+   * Clearly labeled estimate — accounting profit ≠ taxable income (CCA etc.);
+   * the accountant has the final word. Nothing here files or pays anything.
+   */
+  taxEstimate: executiveProcedure.query(async ({ ctx }) => {
+    const conn = await getQbConnection().catch(() => null);
+    if (!conn) return { connected: false as const };
+    const today = calgaryToday();
+    const yearStart = today.slice(0, 4) + "-01-01";
+    const out: any = { connected: true as const, asOf: today, errors: [] as string[] };
+
+    // FACT: GST / tax liability accounts as booked in QB.
+    try {
+      const res = await qbQuery<any>(
+        "SELECT Name, AccountType, CurrentBalance FROM Account WHERE Active = true MAXRESULTS 1000",
+      );
+      const gst = (res?.QueryResponse?.Account ?? []).filter(
+        (a: any) => a.AccountType === "Other Current Liability" && /gst|hst/i.test(a.Name),
+      );
+      out.gstAccounts = gst.map((a: any) => ({ name: a.Name, cents: Math.round((a.CurrentBalance ?? 0) * 100) }));
+      out.gstCents = out.gstAccounts.reduce((n: number, a: any) => n + a.cents, 0);
+    } catch (err) {
+      out.errors.push("GST: " + String(err).slice(0, 120));
+    }
+
+    // FACT: YTD P&L → net accounting profit so far.
+    try {
+      const rep = await qbGet<any>(`reports/ProfitAndLoss?start_date=${yearStart}&end_date=${today}`);
+      let income: number | null = null, expenses: number | null = null, cogs = 0;
+      const walk = (rows: any[]) => {
+        for (const r of rows ?? []) {
+          const cols = r.Summary?.ColData ?? [];
+          if (cols[0]?.value === "Total Income" || cols[0]?.value === "Total Revenue") income = Number(cols[1]?.value);
+          if (cols[0]?.value === "Total Expenses") expenses = Number(cols[1]?.value);
+          if (cols[0]?.value === "Total Cost of Goods Sold") cogs = Number(cols[1]?.value) || 0;
+          if (r.Rows?.Row) walk(r.Rows.Row);
+        }
+      };
+      walk(rep?.Rows?.Row ?? []);
+      if (income != null && expenses != null) {
+        const netYtdCents = Math.round((income - cogs - expenses) * 100);
+        out.netYtdCents = netYtdCents;
+        // ESTIMATE: Alberta CCPC — 11% (9% fed + 2% AB) up to the $500K
+        // small-business limit; ~23% (15% + 8%) on the excess.
+        const LIMIT = 500_000_00;
+        const est = (net: number) =>
+          net <= 0 ? 0 : Math.round(Math.min(net, LIMIT) * 0.11 + Math.max(0, net - LIMIT) * 0.23);
+        out.taxYtdCents = est(netYtdCents);
+        const doy = Math.max(
+          1,
+          Math.floor((new Date(today + "T00:00:00").getTime() - new Date(yearStart + "T00:00:00").getTime()) / 86400000) + 1,
+        );
+        const annualizedNetCents = Math.round((netYtdCents / doy) * 365);
+        out.projection = {
+          dayOfYear: doy,
+          annualizedNetCents,
+          taxFullYearCents: est(annualizedNetCents),
+        };
+        out.rates = { small: 0.11, general: 0.23, limitCents: LIMIT };
+      } else {
+        out.errors.push("P&L YTD incompleto — no se estima nada.");
+      }
+    } catch (err) {
+      out.errors.push("P&L: " + String(err).slice(0, 120));
+    }
+
+    await execAudit(ctx.user.email ?? "executive", "view", "taxEstimate");
+    return out;
+  }),
+
+  /* ============== COMPARATIVA DE TRABAJOS AÑO VS AÑO (Sofia, Sep 11) ============== */
+
+  /**
+   * Jobs this year vs last year, overall, per month and per client — from the
+   * full Airtable job history (cancelled / permit-declined excluded).
+   * "Same period" = Jan 1 up to today's month+day, both years.
+   */
+  jobsCompare: executiveProcedure.query(async ({ ctx }) => {
+    const today = calgaryToday();
+    const curYear = today.slice(0, 4);
+    const prevYear = String(Number(curYear) - 1);
+    const cutoff = today.slice(4); // "-MM-DD"
+
+    const { fetchAllJobsForDetection } = await import("../airtable");
+    const all = (await fetchAllJobsForDetection()) as any[];
+    const jobs = all.filter((j) => {
+      const st = (j.status ?? "").toLowerCase();
+      if (/cancel|permit declined/.test(st)) return false;
+      return Boolean(j.startDate);
+    });
+
+    const inYtd = (d: string, year: string) => d.startsWith(year) && d.slice(4) <= cutoff;
+    const byMonth: Record<string, { cur: number; prev: number }> = {};
+    for (let m = 1; m <= 12; m++) byMonth[String(m).padStart(2, "0")] = { cur: 0, prev: 0 };
+    const byClient = new Map<string, { curYtd: number; prevYtd: number; prevFull: number }>();
+    let curYtdTotal = 0;
+    let prevYtdTotal = 0;
+    let prevFullTotal = 0;
+    let earliest = "9999";
+
+    for (const j of jobs) {
+      const d = String(j.startDate).slice(0, 10);
+      if (d < earliest) earliest = d;
+      const month = d.slice(5, 7);
+      const client = (j.company ?? "(sin cliente)").trim() || "(sin cliente)";
+      const rec = byClient.get(client) ?? { curYtd: 0, prevYtd: 0, prevFull: 0 };
+      if (d.startsWith(curYear)) {
+        byMonth[month].cur++;
+        if (inYtd(d, curYear)) { curYtdTotal++; rec.curYtd++; }
+      } else if (d.startsWith(prevYear)) {
+        byMonth[month].prev++;
+        prevFullTotal++;
+        rec.prevFull++;
+        if (inYtd(d, prevYear)) { prevYtdTotal++; rec.prevYtd++; }
+      }
+      byClient.set(client, rec);
+    }
+
+    const clients = Array.from(byClient.entries())
+      .map(([name, v]) => ({ name, ...v, delta: v.curYtd - v.prevYtd }))
+      .filter((c) => c.curYtd > 0 || c.prevYtd > 0);
+    const top = [...clients].sort((a, b) => b.curYtd - a.curYtd || b.prevYtd - a.prevYtd).slice(0, 15);
+    const lost = clients
+      .filter((c) => c.curYtd === 0 && c.prevYtd >= 3)
+      .sort((a, b) => b.prevYtd - a.prevYtd)
+      .slice(0, 10);
+    const nuevos = clients
+      .filter((c) => c.prevFull === 0 && c.curYtd >= 1)
+      .sort((a, b) => b.curYtd - a.curYtd)
+      .slice(0, 10);
+
+    await execAudit(ctx.user.email ?? "executive", "view", "jobsCompare");
+    return {
+      curYear,
+      prevYear,
+      asOf: today,
+      coverageFrom: earliest,
+      ytd: {
+        cur: curYtdTotal,
+        prev: prevYtdTotal,
+        deltaPct: prevYtdTotal ? Math.round(((curYtdTotal - prevYtdTotal) / prevYtdTotal) * 100) : null,
+      },
+      prevFullTotal,
+      months: Object.entries(byMonth).map(([m, v]) => ({
+        month: m,
+        cur: v.cur,
+        prev: v.prev,
+        future: Number(m) > Number(today.slice(5, 7)),
+        partial: m === today.slice(5, 7),
+      })),
+      topClients: top,
+      lostClients: lost,
+      newClients: nuevos,
+      activeClientsCur: clients.filter((c) => c.curYtd > 0).length,
+      activeClientsPrev: clients.filter((c) => c.prevYtd > 0).length,
+    };
+  }),
+
   /* ========================= F2 — CEO / CASHFLOW / CMO ========================= */
 
   /**

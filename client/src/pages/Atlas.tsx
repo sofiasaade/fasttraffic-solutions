@@ -638,49 +638,7 @@ ${months.map((x: any) => `<tr><td>${x.title}</td><td class="r">${m(x.incomeCents
         </div>
       )}
 
-      {/* Jobs: this year vs last year */}
-      {c.jobsYoY?.rows?.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">
-            Trabajos por mes — este año vs el año pasado
-          </div>
-          <p className="text-[12px] text-slate-500 mb-3">
-            Cuántos trabajos INICIARON cada mes (Airtable, excluye cancelados). La barra gris es el mismo mes del año anterior.
-          </p>
-          <div className="flex items-end gap-3 h-36">
-            {c.jobsYoY.rows.map((r: any) => {
-              const max = Math.max(1, ...c.jobsYoY.rows.flatMap((x: any) => [x.jobs, x.jobsPrevYear ?? 0]));
-              const delta = r.jobsPrevYear ? Math.round(((r.jobs - r.jobsPrevYear) / r.jobsPrevYear) * 100) : null;
-              return (
-                <div key={r.month} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                  <div className="text-[10px] tabular-nums font-bold text-[#1e2b58]">
-                    {r.jobs}{r.jobsPrevYear != null && <span className="text-slate-400 font-normal"> / {r.jobsPrevYear}</span>}
-                  </div>
-                  <div className="w-full flex items-end gap-0.5 flex-1">
-                    <div className="flex-1 bg-[#1e2b58] rounded-t" style={{ height: `${(r.jobs / max) * 100}%`, minHeight: 3 }}
-                      title={`${r.month}: ${r.jobs} trabajos${r.partial ? " (mes en curso)" : ""}`} />
-                    <div className="flex-1 bg-slate-300 rounded-t" style={{ height: `${((r.jobsPrevYear ?? 0) / max) * 100}%`, minHeight: r.jobsPrevYear != null ? 3 : 0 }}
-                      title={r.jobsPrevYear != null ? `mismo mes ${Number(r.month.slice(0, 4)) - 1}: ${r.jobsPrevYear} trabajos` : "sin dato del año anterior"} />
-                  </div>
-                  <div className="text-[10px] text-slate-500 truncate w-full text-center">
-                    {r.month.slice(5)}/{r.month.slice(2, 4)}{r.partial && "*"}
-                  </div>
-                  {delta != null && !r.partial && (
-                    <div className={cn("text-[10px] font-semibold tabular-nums", delta >= 0 ? "text-emerald-600" : "text-red-600")}>
-                      {delta >= 0 ? "+" : ""}{delta}%
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-2 flex gap-4 text-[10px] text-slate-500">
-            <span><span className="inline-block size-2 bg-[#1e2b58] rounded-sm mr-1" />Este año</span>
-            <span><span className="inline-block size-2 bg-slate-300 rounded-sm mr-1" />Año pasado</span>
-            <span>* mes en curso (día {c.jobsYoY.dayOfMonth}) — se compara contra el mes COMPLETO anterior</span>
-          </div>
-        </div>
-      )}
+      <JobsCompare />
 
       <EarnedIncome />
 
@@ -773,6 +731,202 @@ function EarnedIncome() {
       {c.errors?.length > 0 && (
         <div className="mx-4 mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[12px] text-amber-800">
           <ul className="list-disc pl-4">{c.errors.map((e: string, i: number) => <li key={i}>{e}</li>)}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ============ COMPARATIVA ANUAL DE TRABAJOS (Sofia, Sep 11) ============ */
+
+const MES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+function JobsCompare() {
+  const q = trpc.atlas.jobsCompare.useQuery(undefined, { refetchInterval: 15 * 60_000 });
+  const [showClients, setShowClients] = useState(true);
+  if (q.isLoading)
+    return <div className="py-8 flex justify-center"><Loader2 className="size-5 animate-spin text-slate-400" /></div>;
+  const c: any = q.data;
+  if (!c) return null;
+  const maxM = Math.max(1, ...c.months.flatMap((m: any) => [m.cur, m.prev]));
+  const up = (c.ytd.deltaPct ?? 0) >= 0;
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        ¿Vamos mejor que el año pasado? — trabajos {c.curYear} vs {c.prevYear}
+      </div>
+
+      {/* Veredicto grande y simple */}
+      <div className="px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-100">
+        <div>
+          <div className="text-[10px] font-bold uppercase text-slate-400">Este año (1 Ene → hoy)</div>
+          <div className="text-3xl font-extrabold tabular-nums text-[#1e2b58]">{c.ytd.cur}</div>
+          <div className="text-[11px] text-slate-500">trabajos</div>
+        </div>
+        <div>
+          <div className="text-[10px] font-bold uppercase text-slate-400">Mismo periodo {c.prevYear}</div>
+          <div className="text-3xl font-extrabold tabular-nums text-slate-400">{c.ytd.prev}</div>
+          <div className="text-[11px] text-slate-500">trabajos</div>
+        </div>
+        {c.ytd.deltaPct != null && (
+          <div className={cn("rounded-xl px-4 py-2 text-center", up ? "bg-emerald-50" : "bg-red-50")}>
+            <div className={cn("text-2xl font-extrabold tabular-nums", up ? "text-emerald-600" : "text-red-600")}>
+              {up ? "▲" : "▼"} {Math.abs(c.ytd.deltaPct)}%
+            </div>
+            <div className={cn("text-[11px] font-semibold", up ? "text-emerald-700" : "text-red-700")}>
+              {up ? "más trabajos que el año pasado" : "menos trabajos que el año pasado"}
+            </div>
+          </div>
+        )}
+        <div className="text-[11px] text-slate-500 leading-snug">
+          Clientes activos: <b>{c.activeClientsCur}</b> este año vs <b>{c.activeClientsPrev}</b> el pasado.<br />
+          {c.prevYear} completo cerró con <b>{c.prevFullTotal}</b> trabajos.
+        </div>
+      </div>
+
+      {/* Mes a mes */}
+      <div className="px-4 pt-3">
+        <div className="flex items-end gap-1.5 h-32">
+          {c.months.map((m: any) => (
+            <div key={m.month} className={cn("flex-1 flex flex-col items-center gap-0.5 min-w-0", m.future && "opacity-30")}>
+              <div className="text-[9px] tabular-nums font-bold text-[#1e2b58]">
+                {m.future ? "" : m.cur}<span className="text-slate-400 font-normal">{m.prev ? `/${m.prev}` : ""}</span>
+              </div>
+              <div className="w-full flex items-end gap-px flex-1">
+                <div className="flex-1 bg-[#1e2b58] rounded-t" style={{ height: `${(m.cur / maxM) * 100}%`, minHeight: m.cur ? 3 : 0 }}
+                  title={`${MES[Number(m.month) - 1]} ${c.curYear}: ${m.cur} trabajos${m.partial ? " (mes en curso)" : ""}`} />
+                <div className="flex-1 bg-slate-300 rounded-t" style={{ height: `${(m.prev / maxM) * 100}%`, minHeight: m.prev ? 3 : 0 }}
+                  title={`${MES[Number(m.month) - 1]} ${c.prevYear}: ${m.prev} trabajos`} />
+              </div>
+              <div className="text-[9px] text-slate-500">{MES[Number(m.month) - 1]}{m.partial && "*"}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-4 text-[10px] text-slate-500 pt-1.5">
+          <span><span className="inline-block size-2 bg-[#1e2b58] rounded-sm mr-1" />{c.curYear}</span>
+          <span><span className="inline-block size-2 bg-slate-300 rounded-sm mr-1" />{c.prevYear}</span>
+          <span>* mes en curso</span>
+        </div>
+      </div>
+
+      {/* Por cliente */}
+      <button onClick={() => setShowClients((v) => !v)}
+        className="mx-4 my-2.5 text-[12px] font-semibold text-slate-600 underline">
+        {showClients ? "Ocultar detalle por cliente" : "Ver detalle por cliente"}
+      </button>
+      {showClients && (
+        <div className="px-4 pb-4 space-y-3">
+          <div className="overflow-x-auto rounded-lg border border-slate-100">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-slate-400 border-b bg-slate-50">
+                  <th className="text-left px-3 py-1.5">Cliente</th>
+                  <th className="text-right px-2">{c.prevYear} (mismo periodo)</th>
+                  <th className="text-right px-2">{c.curYear}</th>
+                  <th className="text-right px-3">Cambio</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {c.topClients.map((t: any) => (
+                  <tr key={t.name}>
+                    <td className="px-3 py-1.5 font-medium truncate max-w-[220px]">{t.name}</td>
+                    <td className="px-2 text-right tabular-nums text-slate-500">{t.prevYtd}</td>
+                    <td className="px-2 text-right tabular-nums font-bold text-[#1e2b58]">{t.curYtd}</td>
+                    <td className={cn("px-3 text-right tabular-nums font-semibold",
+                      t.delta > 0 ? "text-emerald-600" : t.delta < 0 ? "text-red-600" : "text-slate-400")}>
+                      {t.delta > 0 ? "▲ +" : t.delta < 0 ? "▼ " : "= "}{t.delta !== 0 ? t.delta : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {c.lostClients.length > 0 && (
+              <div className="rounded-lg bg-red-50 border border-red-100 p-3">
+                <div className="text-[10px] font-bold uppercase text-red-600 mb-1">
+                  Nos daban trabajo el año pasado y este año NADA — ¿los llamamos?
+                </div>
+                {c.lostClients.map((t: any) => (
+                  <div key={t.name} className="flex justify-between text-[12px] py-0.5">
+                    <span className="text-slate-700 truncate mr-2">{t.name}</span>
+                    <span className="tabular-nums text-red-600 font-semibold">{t.prevYtd} en {c.prevYear}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {c.newClients.length > 0 && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3">
+                <div className="text-[10px] font-bold uppercase text-emerald-700 mb-1">
+                  Clientes NUEVOS este año (no existían en {c.prevYear})
+                </div>
+                {c.newClients.map((t: any) => (
+                  <div key={t.name} className="flex justify-between text-[12px] py-0.5">
+                    <span className="text-slate-700 truncate mr-2">{t.name}</span>
+                    <span className="tabular-nums text-emerald-700 font-semibold">{t.curYtd} trabajos</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400">
+            Fuente: Airtable (mes de inicio del trabajo; excluye cancelados y permisos rechazados) · historial desde {c.coverageFrom} · actualizado {c.asOf}.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============ IMPUESTOS — VISTA APROXIMADA (Sofia, Sep 11) ============ */
+
+function TaxCard() {
+  const q = trpc.atlas.taxEstimate.useQuery(undefined, { refetchInterval: 30 * 60_000 });
+  const c: any = q.data;
+  if (q.isLoading)
+    return <div className="py-6 flex justify-center"><Loader2 className="size-5 animate-spin text-slate-400" /></div>;
+  if (!c?.connected) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-4 py-2.5 bg-[#1e2b58] text-white text-[12px] font-bold uppercase tracking-wider">
+        Impuestos — cuánto ir apartando (vista aproximada)
+      </div>
+      <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-lg border border-slate-100 p-3">
+          <div className="text-[10px] font-bold uppercase text-slate-400">GST por pagar (según libros)</div>
+          <div className="mt-0.5 text-xl font-extrabold tabular-nums text-[#1e2b58]">
+            {c.gstCents != null ? money(c.gstCents) : "No disponible"}
+          </div>
+          <div className="text-[10px] text-slate-400">HECHO · cuentas GST/HST en QuickBooks</div>
+        </div>
+        <div className="rounded-lg border border-slate-100 p-3">
+          <div className="text-[10px] font-bold uppercase text-slate-400">Impuesto corporativo sobre lo ganado hasta hoy</div>
+          <div className="mt-0.5 text-xl font-extrabold tabular-nums text-amber-700">
+            {c.taxYtdCents != null ? "≈ " + money(c.taxYtdCents) : "No disponible"}
+          </div>
+          <div className="text-[10px] text-slate-400">
+            ESTIMACIÓN · ganancia neta YTD {c.netYtdCents != null ? money(c.netYtdCents) : "n/d"} × 11% (tasa Alberta pequeña empresa{c.netYtdCents > 50000000 ? "; el exceso de $500K al 23%" : ""})
+          </div>
+        </div>
+        <div className="rounded-lg border border-slate-100 p-3">
+          <div className="text-[10px] font-bold uppercase text-slate-400">Proyección a fin de año (si el ritmo sigue)</div>
+          <div className="mt-0.5 text-xl font-extrabold tabular-nums text-slate-600">
+            {c.projection ? "≈ " + money(c.projection.taxFullYearCents) : "No disponible"}
+          </div>
+          <div className="text-[10px] text-slate-400">
+            INFERENCIA · ganancia anualizada {c.projection ? money(c.projection.annualizedNetCents) : "n/d"} (día {c.projection?.dayOfYear} de 365)
+          </div>
+        </div>
+      </div>
+      <p className="px-4 pb-3 text-[11px] text-slate-500">
+        <b>Qué significa:</b> si apartas ~11% de cada dólar de ganancia neta, el impuesto corporativo no te sorprende en abril.
+        La ganancia contable no es idéntica a la ganancia fiscal (depreciación, ajustes) — <b>este número es una guía para apartar plata, no reemplaza a tu contador</b>. ATLAS no presenta ni paga nada.
+      </p>
+      {c.errors?.length > 0 && (
+        <div className="mx-4 mb-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-[11px] text-amber-800">
+          {c.errors.join(" · ")}
         </div>
       )}
     </div>
@@ -1096,6 +1250,7 @@ function CfoTab({ onNavigate }: { onNavigate: (tab: string) => void }) {
             <CashProjectionChart cf={cfQ.data} cashCents={o.cash.totalCents} />
           )}
           {o.cbnb && <CbnbBars cbnb={o.cbnb} onOpen={() => onNavigate("Unbilled")} />}
+          <TaxCard />
 
           {/* ============ 4. MÁS ANÁLISIS ============ */}
           <button onClick={() => setShowMore((v) => !v)}
