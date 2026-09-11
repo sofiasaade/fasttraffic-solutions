@@ -136,7 +136,7 @@ export const atlasRouter = router({
         quickbooks: await (async () => {
           const conn = await getQbConnection().catch(() => null);
           return conn
-            ? { ok: true, label: `QuickBooks — ${conn.companyName ?? "conectado"}` }
+            ? { ok: true, label: `QuickBooks — ${conn.companyName ?? "connected"}` }
             : { ok: false, label: "QuickBooks — not connected yet (F1d)" };
         })(),
       },
@@ -250,8 +250,8 @@ export const atlasRouter = router({
       outstandingCents: rows.reduce((n, r) => n + r.totalCents, 0),
       qb: { connected: Boolean(qbConn), joined: qbJoined, error: qbError },
       note: qbJoined
-        ? "Facturas de FTS OS; el saldo QB por factura viene en vivo de QuickBooks (solo lectura)."
-        : "Basado en facturas de FTS OS (sent / in QB). El saldo contable exacto llega con QuickBooks (F1d).",
+        ? "FTS OS invoices; the per-invoice QB balance comes live from QuickBooks (read-only)."
+        : "Based on FTS OS invoices (sent / in QB). The exact accounting balance arrives with QuickBooks (F1d).",
     };
   }),
 
@@ -293,7 +293,7 @@ export const atlasRouter = router({
         accounts,
       };
     } catch (err) {
-      out.errors.push("Bancos: " + String(err).slice(0, 150));
+      out.errors.push("Banks: " + String(err).slice(0, 150));
     }
 
     // AR: open invoices with aging by DueDate (QB is the accounting truth here).
@@ -326,7 +326,7 @@ export const atlasRouter = router({
           .slice(0, 10),
       };
     } catch (err) {
-      out.errors.push("Cuentas por cobrar: " + String(err).slice(0, 150));
+      out.errors.push("Accounts receivable: " + String(err).slice(0, 150));
     }
 
     // P&L month-to-date, straight from the QB report.
@@ -492,7 +492,7 @@ export const atlasRouter = router({
           prevCents: Math.round(payments.filter((p) => inRange(p, prev)).reduce((n, p) => n + (p.TotalAmt ?? 0), 0) * 100),
         };
       } catch (err) {
-        out.errors.push("Pagos recibidos: " + String(err).slice(0, 150));
+        out.errors.push("Payments received: " + String(err).slice(0, 150));
       }
 
       /* ---- invoiced by month + collected by month (chart 1) ---- */
@@ -527,7 +527,7 @@ export const atlasRouter = router({
           collectedCount: payByM.get(key)?.count ?? 0,
         }));
       } catch (err) {
-        out.errors.push("Serie mensual: " + String(err).slice(0, 150));
+        out.errors.push("Monthly series: " + String(err).slice(0, 150));
       }
 
       /* ---- cash + AR (reuse the same queries the classic cfo uses) ---- */
@@ -539,7 +539,7 @@ export const atlasRouter = router({
         }));
         out.cash = { totalCents: accounts.reduce((n: number, a: any) => n + a.balanceCents, 0), accounts };
       } catch (err) {
-        out.errors.push("Bancos: " + String(err).slice(0, 150));
+        out.errors.push("Banks: " + String(err).slice(0, 150));
       }
       try {
         const res = await qbQuery<any>(
@@ -591,7 +591,7 @@ export const atlasRouter = router({
           topOverdue: topOverdue.sort((a, b) => b.cents - a.cents).slice(0, 5),
         };
       } catch (err) {
-        out.errors.push("Cuentas por cobrar: " + String(err).slice(0, 150));
+        out.errors.push("Accounts receivable: " + String(err).slice(0, 150));
       }
 
       /* ---- obligations: AP, GST, taxes, loans + intercompany separated ---- */
@@ -613,10 +613,10 @@ export const atlasRouter = router({
           loans: liabilities.filter((a) => a.type === "Long Term Liability" && !isInterco(a.name)),
           otherCurrent: liabilities.filter((a) => a.type === "Other Current Liability" && !/gst|tax|impuesto|cra|receiver general/i.test(a.name) && !isInterco(a.name)),
           intercompany: liabilities.filter((a) => isInterco(a.name)),
-          payrollNote: "Nómina: no disponible — QuickBooks Payroll no expone estos datos por el API de contabilidad.",
+          payrollNote: "Payroll: not available — QuickBooks Payroll does not expose this data through the accounting API.",
         };
       } catch (err) {
-        out.errors.push("Obligaciones: " + String(err).slice(0, 150));
+        out.errors.push("Obligations: " + String(err).slice(0, 150));
       }
 
       /* ---- completed-but-not-billed aging (operational, Airtable+app) ---- */
@@ -644,10 +644,10 @@ export const atlasRouter = router({
         out.cbnb = {
           ...cb,
           valueNote:
-            "Valor potencial: no calculable — estos trabajos aún no tienen factura ni cotización ligada. Cargo potencial omitido = requiere revisión humana.",
+            "Potential value: not computable — these jobs have no invoice or linked quote yet. Potential missing charge = requires human review.",
         };
       } catch (err) {
-        out.errors.push("Completado sin facturar: " + String(err).slice(0, 150));
+        out.errors.push("Completed not billed: " + String(err).slice(0, 150));
       }
 
       /* ---- executive summary: hechos / alertas / acciones ---- */
@@ -655,30 +655,30 @@ export const atlasRouter = router({
       const hechos: string[] = [];
       const alertas: string[] = [];
       const acciones: string[] = [];
-      if (out.cash) hechos.push(`Hay ${money0(out.cash.totalCents)} de efectivo en ${out.cash.accounts.length} cuentas bancarias.`);
-      if (pnlCur?.incomeCents != null) hechos.push(`En el periodo se facturaron ${money0(pnlCur.incomeCents)} (periodo anterior: ${pnlPrev?.incomeCents != null ? money0(pnlPrev.incomeCents) : "n/d"}).`);
-      if (out.collected) hechos.push(`Se cobraron ${money0(out.collected.curCents)} en efectivo (anterior: ${money0(out.collected.prevCents)}). Facturar no es lo mismo que cobrar.`);
+      if (out.cash) hechos.push(`There is ${money0(out.cash.totalCents)} of cash across ${out.cash.accounts.length} bank accounts.`);
+      if (pnlCur?.incomeCents != null) hechos.push(`${money0(pnlCur.incomeCents)} was invoiced in the period (previous period: ${pnlPrev?.incomeCents != null ? money0(pnlPrev.incomeCents) : "n/a"}).`);
+      if (out.collected) hechos.push(`${money0(out.collected.curCents)} was collected in cash (previous: ${money0(out.collected.prevCents)}). Invoicing is not the same as collecting.`);
       if (out.ar) {
         const pct = out.ar.totalCents ? Math.round((out.ar.overdueCents / out.ar.totalCents) * 100) : 0;
         if (out.ar.overdueCents > 0) {
-          alertas.push(`${money0(out.ar.overdueCents)} de la cartera está VENCIDA (${pct}% del total por cobrar de ${money0(out.ar.totalCents)}).`);
+          alertas.push(`${money0(out.ar.overdueCents)} of receivables is OVERDUE (${pct}% of the ${money0(out.ar.totalCents)} total outstanding).`);
           if (out.ar.topOverdue?.length) {
-            acciones.push(`Contactar primero las ${Math.min(5, out.ar.topOverdue.length)} facturas vencidas de mayor valor (empiezan con ${out.ar.topOverdue[0].customer} por ${money0(out.ar.topOverdue[0].cents)}). Abre Collections.`);
+            acciones.push(`Contact the ${Math.min(5, out.ar.topOverdue.length)} highest-value overdue invoices first (starting with ${out.ar.topOverdue[0].customer} at ${money0(out.ar.topOverdue[0].cents)}). Open Collections.`);
           }
         }
       }
       if (out.cbnb?.total > 0) {
-        alertas.push(`${out.cbnb.total} trabajos completados siguen sin factura${out.cbnb["14+"] ? ` — ${out.cbnb["14+"]} llevan más de 14 días` : ""}. Ese dinero no entra hasta facturarlo.`);
-        acciones.push("Completar la facturación de los trabajos más viejos de la lista Unbilled (meta interna: 24-48 h).");
+        alertas.push(`${out.cbnb.total} completed jobs still have no invoice${out.cbnb["14+"] ? ` — ${out.cbnb["14+"]} are over 14 days old` : ""}. That money does not come in until it is billed.`);
+        acciones.push("Finish billing the oldest jobs on the Unbilled list (internal goal: 24-48h).");
       }
-      if (pnlCur?.netCents != null && pnlCur.netCents < 0) alertas.push(`El periodo va con resultado neto NEGATIVO: ${money0(pnlCur.netCents)}.`);
+      if (pnlCur?.netCents != null && pnlCur.netCents < 0) alertas.push(`The period is running at a NEGATIVE net result: ${money0(pnlCur.netCents)}.`);
       if (out.obligations) {
         const oblig = [...out.obligations.ap, ...out.obligations.tax].reduce((n: number, a: any) => n + a.cents, 0);
-        if (oblig > 0) hechos.push(`Obligaciones registradas (proveedores + impuestos): ${money0(oblig)}.`);
-        if (out.cash && oblig > out.cash.totalCents) alertas.push("Las obligaciones registradas superan el efectivo disponible — hay presión de caja.");
+        if (oblig > 0) hechos.push(`Obligations on the books (suppliers + taxes): ${money0(oblig)}.`);
+        if (out.cash && oblig > out.cash.totalCents) alertas.push("Booked obligations exceed available cash — there is cash pressure.");
       }
       if (acciones.length < 3 && out.ar?.buckets?.["90+"]?.cents > 0) {
-        acciones.push(`Decidir qué hacer con los ${money0(out.ar.buckets["90+"].cents)} con más de 90 días (cobrar, negociar o llevar a Decision Inbox).`);
+        acciones.push(`Decide what to do with the ${money0(out.ar.buckets["90+"].cents)} that is over 90 days old (collect, negotiate, or take it to the Decision Inbox).`);
       }
       out.summary = { hechos, alertas, acciones: acciones.slice(0, 3) };
 
@@ -751,7 +751,7 @@ export const atlasRouter = router({
         };
         out.rates = { small: 0.11, general: 0.23, limitCents: LIMIT };
       } else {
-        out.errors.push("P&L YTD incompleto — no se estima nada.");
+        out.errors.push("YTD P&L incomplete — nothing is estimated.");
       }
     } catch (err) {
       out.errors.push("P&L: " + String(err).slice(0, 120));
@@ -903,7 +903,7 @@ export const atlasRouter = router({
               : null,
         }));
       } catch (err) {
-        out.errors.push("Tendencia mensual (QB): " + String(err).slice(0, 150));
+        out.errors.push("Monthly trend (QB): " + String(err).slice(0, 150));
       }
     }
 
@@ -959,7 +959,7 @@ export const atlasRouter = router({
       }
       out.jobsYoY = { rows, dayOfMonth: Number(today.slice(8, 10)) };
     } catch (err) {
-      out.errors.push("Trabajos año vs año (Airtable): " + String(err).slice(0, 150));
+      out.errors.push("Jobs year vs year (Airtable): " + String(err).slice(0, 150));
     }
 
     // Written summary — every sentence traces to a figure above.
@@ -973,37 +973,37 @@ export const atlasRouter = router({
       // in % against a full month — that reads as a collapse that isn't real.
       const isPartial = /\d+\s*-\s*\d+/.test(last.title);
       if (isPartial) {
-        s.push(`${last.title} va en ${fmt(last.incomeCents)} de ingresos (mes en curso; ${prev.title} cerró en ${fmt(prev.incomeCents)}).`);
+        s.push(`${last.title} is at ${fmt(last.incomeCents)} of income so far (month in progress; ${prev.title} closed at ${fmt(prev.incomeCents)}).`);
       } else {
         s.push(
-          `Ingresos de ${last.title}: ${fmt(last.incomeCents)} (mes anterior ${fmt(prev.incomeCents)}${
+          `Income for ${last.title}: ${fmt(last.incomeCents)} (previous month ${fmt(prev.incomeCents)}${
             prev.incomeCents > 0
               ? `, ${last.incomeCents >= prev.incomeCents ? "+" : ""}${Math.round(((last.incomeCents - prev.incomeCents) / prev.incomeCents) * 100)}%`
               : ""
           }).`,
         );
       }
-      s.push(`Resultado neto de ${last.title}: ${fmt(last.netCents)} — fuente: P&L de QuickBooks.`);
+      s.push(`Net result for ${last.title}: ${fmt(last.netCents)} — source: QuickBooks P&L.`);
       const fullPrev = m.filter((x: any) => !/\d+\s*-\s*\d+/.test(x.title));
       if (fullPrev.length >= 2) {
         const a = fullPrev[fullPrev.length - 2];
         const b = fullPrev[fullPrev.length - 1];
         if (a.incomeCents > 0 && b.incomeCents >= a.incomeCents) {
-          s.push(`Tendencia: ${b.title} creció ${Math.round(((b.incomeCents - a.incomeCents) / a.incomeCents) * 100)}% sobre ${a.title}.`);
+          s.push(`Trend: ${b.title} grew ${Math.round(((b.incomeCents - a.incomeCents) / a.incomeCents) * 100)}% over ${a.title}.`);
         }
       }
     }
     if (out.ops.unbilledJobs != null && out.ops.unbilledJobs > 0) {
-      s.push(`Hay ${out.ops.unbilledJobs} trabajos completados sin factura — dinero en la mesa (ver Unbilled).`);
+      s.push(`${out.ops.unbilledJobs} completed jobs have no invoice — money on the table (see Unbilled).`);
     }
     if (out.ops.quotesCount > 0) {
-      s.push(`Pipeline de cotizaciones: ${out.ops.quotesCount} quotes por ${"$" + Math.round(out.ops.quotesCents / 100).toLocaleString("en-CA")}.`);
+      s.push(`Quotes pipeline: ${out.ops.quotesCount} quotes worth ${"$" + Math.round(out.ops.quotesCents / 100).toLocaleString("en-CA")}.`);
     }
     out.summary = s;
     out.profitability = {
       available: false,
       reason:
-        "Datos de costos insuficientes: no hay costos por trabajo (salarios/combustible/equipo por proyecto) en ninguna fuente conectada. No se muestran márgenes estimados.",
+        "Insufficient cost data: no per-job costs (wages/fuel/equipment per project) exist in any connected source. Estimated margins are not shown.",
     };
 
     await execAudit(ctx.user.email ?? "executive", "view", "ceo");
@@ -1045,7 +1045,7 @@ export const atlasRouter = router({
         jobEndByInvoiceNumber.set(r.invoiceNumber, end);
       }
     } catch (err) {
-      out.errors.push("Fechas de proyecto (Airtable): " + String(err).slice(0, 150));
+      out.errors.push("Project dates (Airtable): " + String(err).slice(0, 150));
     }
 
     try {
@@ -1126,7 +1126,7 @@ export const atlasRouter = router({
         };
       });
     } catch (err) {
-      out.errors.push("Ingreso por mes de trabajo: " + String(err).slice(0, 200));
+      out.errors.push("Income by work month: " + String(err).slice(0, 200));
     }
 
     await execAudit(ctx.user.email ?? "executive", "view", "earnedIncome");
@@ -1151,7 +1151,7 @@ export const atlasRouter = router({
         (res?.QueryResponse?.Account ?? []).reduce((n: number, a: any) => n + (a.CurrentBalance ?? 0), 0) * 100,
       );
     } catch (err) {
-      out.errors.push("Bancos: " + String(err).slice(0, 150));
+      out.errors.push("Banks: " + String(err).slice(0, 150));
     }
 
     try {
@@ -1176,7 +1176,7 @@ export const atlasRouter = router({
         return { start: startD.toISOString().slice(0, 10), inflowCents: w.inflowCents };
       });
     } catch (err) {
-      out.errors.push("Vencimientos AR: " + String(err).slice(0, 150));
+      out.errors.push("AR due dates: " + String(err).slice(0, 150));
     }
 
     try {
@@ -1193,7 +1193,7 @@ export const atlasRouter = router({
       walk(rep?.Rows?.Row ?? []);
       out.avgWeeklyExpenseCents = expenses != null ? Math.round(((expenses as number) / 12) * 100) : null;
     } catch (err) {
-      out.errors.push("Promedio de gastos: " + String(err).slice(0, 150));
+      out.errors.push("Expense average: " + String(err).slice(0, 150));
     }
 
     await execAudit(ctx.user.email ?? "executive", "view", "cashflow13");
@@ -1257,11 +1257,11 @@ export const atlasRouter = router({
       out.newByMonth = months;
       if (out.window?.capped) {
         out.errors.push(
-          "El historial cubre las últimas 1000 facturas — clientes más antiguos que esa ventana pueden contarse como 'nuevos'.",
+          "History covers the latest 1000 invoices — clients older than that window may be counted as 'new'.",
         );
       }
     } catch (err) {
-      out.errors.push("Clientes (QB): " + String(err).slice(0, 150));
+      out.errors.push("Clients (QB): " + String(err).slice(0, 150));
     }
 
     await execAudit(ctx.user.email ?? "executive", "view", "cmo");

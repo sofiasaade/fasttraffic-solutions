@@ -198,7 +198,7 @@ export function registerQbRoutes(app: Express) {
     if (!qbConfigured()) {
       return res
         .status(400)
-        .send("QuickBooks no está configurado todavía: faltan QB_CLIENT_ID / QB_CLIENT_SECRET en Railway.");
+        .send("QuickBooks is not configured yet: QB_CLIENT_ID / QB_CLIENT_SECRET are missing in Railway.");
     }
     const url =
       `${AUTHORIZE_URL}?client_id=${encodeURIComponent(ENV.qbClientId)}` +
