@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Loader2, ShieldCheck, LogOut, RefreshCw, Landmark, FileWarning,
-  Receipt, TrendingUp, Lock,
+  Receipt, TrendingUp, Lock, Eye, EyeOff,
 } from "lucide-react";
 
 const money = (c: number) =>
@@ -140,10 +140,8 @@ function AtlasSetup({ needsPassword, needsMfa, onDone }: {
             </div>
             {!passDone && (
               <>
-                <Input placeholder="Contraseña actual (la temporal)" type="password" value={current}
-                  onChange={(e) => setCurrent(e.target.value)} />
-                <Input placeholder="Nueva contraseña (mín. 10 caracteres)" type="password" value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)} />
+                <PasswordInput placeholder="Contraseña actual (la temporal)" value={current} onChange={setCurrent} />
+                <PasswordInput placeholder="Nueva contraseña (mín. 10 caracteres)" value={newPass} onChange={setNewPass} />
                 <Button className="w-full bg-[#1e2b58]" disabled={busy || newPass.length < 10 || !current} onClick={changePass}>
                   Guardar contraseña
                 </Button>
@@ -184,6 +182,25 @@ function AtlasSetup({ needsPassword, needsMfa, onDone }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** Password field with a show/hide toggle (Sofia, Sep 11 2026). */
+function PasswordInput({ placeholder, value, onChange }: {
+  placeholder: string; value: string; onChange: (v: string) => void;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input placeholder={placeholder} type={show ? "text" : "password"} value={value}
+        onChange={(e) => onChange(e.target.value)} className="pr-9" />
+      <button type="button" tabIndex={-1} onClick={() => setShow((v) => !v)}
+        title={show ? "Ocultar" : "Ver lo que escribo"}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+        {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+      </button>
     </div>
   );
 }
@@ -281,8 +298,8 @@ function AtlasLogin({ onDone }: { onDone: () => void }) {
         {step === "login" && (
           <div className="space-y-2.5">
             <Input placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Input placeholder="Contraseña" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <Input placeholder="Código MFA (6 dígitos, si ya lo activaste)" inputMode="numeric" value={totp} onChange={(e) => setTotp(e.target.value)} />
+            <PasswordInput placeholder="Contraseña" value={password} onChange={setPassword} />
+            <Input placeholder="Código de Google Authenticator (OBLIGATORIO si ya activaste MFA)" inputMode="numeric" value={totp} onChange={(e) => setTotp(e.target.value)} />
             <Button className="w-full bg-[#1e2b58] hover:bg-[#2a3a72]" disabled={busy || !email || !password} onClick={doLogin}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Lock className="size-4 mr-1" />} Entrar
             </Button>
@@ -312,7 +329,7 @@ function AtlasLogin({ onDone }: { onDone: () => void }) {
         {step === "change-password" && (
           <div className="space-y-2.5">
             <p className="text-sm font-semibold text-[#1e2b58]">Crea tu contraseña definitiva</p>
-            <Input placeholder="Nueva contraseña (mín. 10 caracteres)" type="password" value={newPass} onChange={(e) => setNewPass(e.target.value)} />
+            <PasswordInput placeholder="Nueva contraseña (mín. 10 caracteres)" value={newPass} onChange={setNewPass} />
             <Button className="w-full bg-[#1e2b58]" disabled={busy || newPass.length < 10} onClick={changePassword}>
               Guardar y entrar
             </Button>
