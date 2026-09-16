@@ -1646,9 +1646,40 @@ const RISK_STYLE: Record<string, string> = {
   high: "bg-red-100 text-red-700",
 };
 
+function ActivityTrail({ invoiceId }: { invoiceId: number }) {
+  const q = trpc.atlas.collectionsActivity.useQuery({ invoiceId });
+  if (q.isLoading) return <div className="mt-2 text-[11px] text-slate-400">Loading activity…</div>;
+  const rows = q.data ?? [];
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Activity — who did what</div>
+      {rows.length === 0 ? (
+        <p className="text-[11px] text-slate-400">No activity logged yet.</p>
+      ) : (
+        <ul className="space-y-0.5 max-h-32 overflow-y-auto">
+          {rows.map((a: any) => (
+            <li key={a.id} className="text-[11px] text-slate-600">
+              <b className={a.actor === "Sofia" ? "text-[#1e2b58]" : "text-emerald-700"}>{a.actor}</b>
+              {" · "}{String(a.action).replace("_", " ")}{" · "}{new Date(a.createdAt).toLocaleString()}
+              {a.note ? <span className="text-slate-500"> — {a.note}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function CollectionsTab() {
   const utils = trpc.useUtils();
   const q = trpc.atlas.collectionsList.useQuery();
+  const request = trpc.atlas.collectionsRequest.useMutation({
+    onSuccess: () => {
+      utils.atlas.collectionsList.invalidate();
+      toast.success("Follow-up requested — it now shows in the bookkeeper's Accounting queue");
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const update = trpc.atlas.collectionsUpdate.useMutation({
     onSuccess: () => {
       utils.atlas.collectionsList.invalidate();
@@ -1776,8 +1807,25 @@ function CollectionsTab() {
                       ) : (
                         !r.followUp && <span className="text-slate-400">No follow-up yet</span>
                       )}
+                      {r.followUp?.workStatus === "requested" && (
+                        <span className="block text-amber-700 font-semibold">⚠ Requested {r.followUp.requestedAt ? new Date(r.followUp.requestedAt).toLocaleDateString("en-CA") : ""} — no action yet</span>
+                      )}
+                      {r.followUp?.workStatus === "in_progress" && (
+                        <span className="block text-blue-700 font-semibold">✓ Bookkeeper working it{r.followUp.lastContact ? ` · last contact ${r.followUp.lastContact}` : ""}</span>
+                      )}
+                      {r.followUp?.workStatus === "done" && (
+                        <span className="block text-emerald-700 font-semibold">✓ Done by bookkeeper</span>
+                      )}
                     </td>
                     <td className="px-2 text-right">
+                      <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 mr-1" disabled={request.isPending}
+                        onClick={() => {
+                          const note = window.prompt("Instruction for the bookkeeper (e.g. 'chase this one, remind them of their promise'):");
+                          if (note === null) return;
+                          request.mutate({ invoiceId: r.invoiceId, note: note || undefined });
+                        }}>
+                        Request follow-up
+                      </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openRow(r)}>
                         {openId === r.invoiceId ? "Close" : "Manage"}
                       </Button>
@@ -1836,6 +1884,7 @@ function CollectionsTab() {
                               className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs" />
                           </label>
                         </div>
+                        <ActivityTrail invoiceId={r.invoiceId} />
                         <div className="mt-2 flex justify-end">
                           <Button size="sm" className="bg-[#1e2b58]" disabled={update.isPending} onClick={() => save(r.invoiceId)}>
                             {update.isPending && <Loader2 className="size-3.5 animate-spin mr-1" />} Save follow-up

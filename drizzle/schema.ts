@@ -881,9 +881,30 @@ export const execCollections = mysqlTable("exec_collections", {
   disputeNote: varchar("disputeNote", { length: 500 }),
   riskLevel: varchar("riskLevel", { length: 8 }).default("low").notNull(),
   notes: text("notes"),
+  /** Follow-up assignment: executive requests, bookkeeper works it. */
+  assignedTo: varchar("assignedTo", { length: 64 }),
+  requestNote: varchar("requestNote", { length: 500 }),
+  requestedAt: timestamp("requestedAt"),
+  /** none | requested | in_progress | done */
+  workStatus: varchar("workStatus", { length: 16 }).default("none").notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type ExecCollection = typeof execCollections.$inferSelect;
+
+/**
+ * Collections activity log — shared between the executive (ATLAS) and the
+ * bookkeeper (Accounting). Append-only trail: who did what on which invoice.
+ */
+export const collectionActivities = mysqlTable("collection_activities", {
+  id: int("id").autoincrement().primaryKey(),
+  invoiceId: int("invoiceId").notNull(),
+  actor: varchar("actor", { length: 64 }).notNull(),
+  /** requested | email_sent | called | note | escalated */
+  action: varchar("action", { length: 24 }).notNull(),
+  note: varchar("note", { length: 800 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CollectionActivity = typeof collectionActivities.$inferSelect;
 
 /**
  * ATLAS F1d: QuickBooks OAuth connection (single row — one company file).

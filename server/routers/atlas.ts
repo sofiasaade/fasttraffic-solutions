@@ -1268,6 +1268,61 @@ export const atlasRouter = router({
     return out;
   }),
 
+  /**
+   * Executive asks the bookkeeper to work an invoice. Shows up in the
+   * Accounting → Collections queue; every action she logs comes back here.
+   */
+  collectionsRequest: executiveProcedure
+    .input(
+      z.object({
+        invoiceId: z.number().int(),
+        note: z.string().max(500).optional(),
+        assignedTo: z.string().max(64).default("Bookkeeper"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const d = await db();
+      const existing = await d
+        .select()
+        .from(execCollections)
+        .where(eq(execCollections.invoiceId, input.invoiceId))
+        .limit(1);
+      const fields = {
+        assignedTo: input.assignedTo,
+        requestNote: input.note ?? null,
+        requestedAt: new Date(),
+        workStatus: "requested",
+      };
+      if (existing[0]) {
+        await d.update(execCollections).set(fields).where(eq(execCollections.invoiceId, input.invoiceId));
+      } else {
+        await d.insert(execCollections).values({ invoiceId: input.invoiceId, ...fields });
+      }
+      const { collectionActivities } = await import("../../drizzle/schema");
+      await d.insert(collectionActivities).values({
+        invoiceId: input.invoiceId,
+        actor: "Sofia",
+        action: "requested",
+        note: input.note ?? null,
+      });
+      await execAudit(ctx.user.email ?? "executive", "edit", `collections follow-up requested #${input.invoiceId}`);
+      return { ok: true };
+    }),
+
+  /** Activity trail for one invoice (newest first). */
+  collectionsActivity: executiveProcedure
+    .input(z.object({ invoiceId: z.number().int() }))
+    .query(async ({ input }) => {
+      const d = await db();
+      const { collectionActivities } = await import("../../drizzle/schema");
+      return d
+        .select()
+        .from(collectionActivities)
+        .where(eq(collectionActivities.invoiceId, input.invoiceId))
+        .orderBy(desc(collectionActivities.id))
+        .limit(50);
+    }),
+
   /** Upsert the follow-up record for one invoice (promise, dispute, next step). */
   collectionsUpdate: executiveProcedure
     .input(

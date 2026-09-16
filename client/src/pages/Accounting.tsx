@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -205,6 +205,8 @@ export default function Accounting() {
   );
   // Invoices tab: keep QuickBooks-posted invoices separate from the rest.
   const [invoicesView, setInvoicesView] = useState<"active" | "qb" | "trash">("active");
+  const [showCollections, setShowCollections] = useState(false);
+  const collectionsQ = trpc.accounting.collectionsQueue.useQuery(undefined, { retry: false });
   const statusCounts = useMemo(() => {
     const rows = airtableQ.data ?? [];
     return {
@@ -980,10 +982,24 @@ export default function Accounting() {
                   >
                     🗑 Trash ({trashN})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCollections((v) => !v)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      showCollections
+                        ? "bg-amber-600 text-white"
+                        : "bg-amber-100 text-amber-700 hover:bg-amber-200",
+                    )}
+                    title="Collections follow-up queue"
+                  >
+                    📞 Collections ({(collectionsQ.data ?? []).filter((r: any) => r.request?.workStatus === "requested" || r.request?.workStatus === "in_progress").length})
+                  </button>
                 </>
               );
             })()}
           </div>
+        {showCollections && <CollectionsQueue q={collectionsQ} />}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           {invoicesQ.isLoading ? (
             <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
@@ -2385,6 +2401,146 @@ export default function Accounting() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+/* ============ COLLECTIONS QUEUE (bookkeeper side — Sep 16 2026) ============
+ * Sofia requests a follow-up from ATLAS; whoever works Accounting sees it
+ * here, drafts the email, and logs what they did. Sofia sees the trail live. */
+function CollectionsQueue({ q }: { q: any }) {
+  const utils = trpc.useUtils();
+  const act = trpc.accounting.collectionsAct.useMutation({
+    onSuccess: () => {
+      utils.accounting.collectionsQueue.invalidate();
+      toast.success("Logged ✓ — Sofia can see it in ATLAS");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [openId, setOpenId] = useState<number | null>(null);
+  const money = (c: number) => (c / 100).toLocaleString("en-CA", { style: "currency", currency: "CAD" });
+
+  if (q.isLoading)
+    return (
+      <div className="rounded-2xl border border-border bg-card p-8 flex justify-center">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  const rows = (q.data ?? []) as any[];
+
+  const draftEmail = (r: any) => {
+    const num = r.qbNumber ? `${r.invoiceNumber} (QB #${r.qbNumber})` : r.invoiceNumber;
+    const subject = `Fast Traffic Solutions — Invoice ${num} (${money(r.totalCents)})`;
+    const body = [
+      `Hi,`,
+      ``,
+      `A friendly reminder about invoice ${num} for ${money(r.totalCents)}, issued ${r.issueDate}${r.dueDate ? ` and due ${r.dueDate}` : ""} — currently ${r.ageDays} days outstanding.`,
+      ``,
+      `Could you let us know when we can expect payment? If it has already been sent, please disregard this note.`,
+      ``,
+      `Thank you!`,
+      `Fast Traffic Solutions Ltd.`,
+    ].join("\n");
+    window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
+
+  const logWithNote = (invoiceId: number, action: "email_sent" | "called" | "note" | "done") => {
+    const label =
+      action === "email_sent" ? "Note for the log (optional) — e.g. sent to AP inbox"
+      : action === "called" ? "Who did you talk to / outcome?"
+      : action === "done" ? "Anything to note before closing this one? (optional)"
+      : "Note";
+    const note = window.prompt(label) ?? undefined;
+    if (note === undefined && action === "note") return;
+    act.mutate({ invoiceId, action, note: note || undefined });
+  };
+
+  const STATUS: Record<string, { label: string; cls: string }> = {
+    requested: { label: "⚠ REQUESTED by Sofia", cls: "bg-amber-100 text-amber-800" },
+    in_progress: { label: "In progress", cls: "bg-blue-100 text-blue-700" },
+    done: { label: "Done", cls: "bg-emerald-100 text-emerald-700" },
+  };
+
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-card overflow-hidden">
+      <div className="px-4 py-2.5 bg-amber-600 text-white text-[12px] font-bold uppercase tracking-wider">
+        Collections follow-up — log every email or call here so Sofia sees it without asking
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-muted-foreground border-b">
+              <th className="text-left px-4 py-2">Status</th>
+              <th className="text-left px-2">Invoice</th>
+              <th className="text-left px-2">Client</th>
+              <th className="text-right px-2">Total</th>
+              <th className="text-right px-2">Days</th>
+              <th className="text-left px-2">Sofia's note</th>
+              <th className="px-2" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((r: any) => {
+              const st = r.request?.workStatus && r.request.workStatus !== "none" ? STATUS[r.request.workStatus] : null;
+              return (
+                <Fragment key={r.invoiceId}>
+                  <tr className={cn("hover:bg-muted/40", r.request?.workStatus === "requested" && "bg-amber-50/60")}>
+                    <td className="px-4 py-2">
+                      {st ? (
+                        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-bold", st.cls)}>{st.label}</span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">overdue {r.ageDays}d</span>
+                      )}
+                    </td>
+                    <td className="px-2 font-mono text-xs">{r.invoiceNumber}{r.qbNumber && <span className="text-muted-foreground"> · QB {r.qbNumber}</span>}</td>
+                    <td className="px-2 font-medium">{r.clientName}</td>
+                    <td className="px-2 text-right tabular-nums font-semibold">{money(r.totalCents)}</td>
+                    <td className={cn("px-2 text-right tabular-nums font-bold", r.ageDays > 60 ? "text-red-600" : r.ageDays > 30 ? "text-amber-600" : "text-muted-foreground")}>{r.ageDays}</td>
+                    <td className="px-2 text-[11px] text-muted-foreground max-w-[200px] truncate" title={r.request?.requestNote ?? ""}>{r.request?.requestNote ?? "—"}</td>
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                      <Button size="sm" variant="outline" className="h-7 text-xs mr-1" onClick={() => draftEmail(r)}>✉ Draft email</Button>
+                      <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 mr-1" disabled={act.isPending}
+                        onClick={() => logWithNote(r.invoiceId, "email_sent")}>Email sent</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs mr-1" disabled={act.isPending}
+                        onClick={() => logWithNote(r.invoiceId, "called")}>Called</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setOpenId(openId === r.invoiceId ? null : r.invoiceId)}>
+                        {openId === r.invoiceId ? "Hide" : "History"}
+                      </Button>
+                    </td>
+                  </tr>
+                  {openId === r.invoiceId && (
+                    <tr className="bg-muted/30">
+                      <td colSpan={7} className="px-6 py-2">
+                        {(r.activity ?? []).length === 0 ? (
+                          <span className="text-xs text-muted-foreground">No activity yet.</span>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {r.activity.map((a: any) => (
+                              <li key={a.id} className="text-xs text-muted-foreground">
+                                <b className="text-foreground">{a.actor}</b> · {a.action.replace("_", " ")} · {new Date(a.createdAt).toLocaleString()}{a.note ? ` — ${a.note}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <div className="mt-1.5">
+                          <Button size="sm" variant="outline" className="h-6 text-[11px] mr-1" disabled={act.isPending}
+                            onClick={() => logWithNote(r.invoiceId, "note")}>+ Note</Button>
+                          <Button size="sm" variant="outline" className="h-6 text-[11px]" disabled={act.isPending}
+                            onClick={() => logWithNote(r.invoiceId, "done")}>Mark done</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">Nothing outstanding ✔</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

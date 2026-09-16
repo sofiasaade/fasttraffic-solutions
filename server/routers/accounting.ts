@@ -761,4 +761,107 @@ export const accountingRouter = router({
       await dbx.delete(invoices).where(eq(invoices.id, input.id));
       return { ok: true };
     }),
+
+  /* ============ COLLECTIONS QUEUE (bookkeeper side — Sofia, Sep 16) ============ */
+
+  /**
+   * The bookkeeper's collections worklist: every outstanding invoice with the
+   * executive's follow-up requests and the activity trail. Deliberately does
+   * NOT expose the executive's private notes or risk assessment.
+   */
+  collectionsQueue: accountingProcedure.query(async () => {
+    const dbx = await db();
+    const { execCollections, collectionActivities } = await import("../../drizzle/schema");
+    const inv = await dbx.select().from(invoices);
+    const heads = await dbx.select().from(execCollections);
+    const headByInvoice = new Map(heads.map((h) => [h.invoiceId, h]));
+    const acts = await dbx
+      .select()
+      .from(collectionActivities)
+      .orderBy(desc(collectionActivities.id))
+      .limit(500);
+    const actsByInvoice = new Map<number, typeof acts>();
+    for (const a of acts) {
+      const list = actsByInvoice.get(a.invoiceId) ?? [];
+      if (list.length < 5) list.push(a);
+      actsByInvoice.set(a.invoiceId, list);
+    }
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+    const t0 = new Date(today + "T00:00:00").getTime();
+    return inv
+      .filter((r) => !r.deletedAt && (r.status === "sent" || r.status === "in_qb"))
+      .map((r) => {
+        const h = headByInvoice.get(r.id) ?? null;
+        const ref = r.dueDate ?? r.issueDate;
+        const ageDays = Math.floor((t0 - new Date(ref + "T00:00:00").getTime()) / 86400000);
+        return {
+          invoiceId: r.id,
+          invoiceNumber: r.invoiceNumber,
+          qbNumber: r.qbNumber,
+          clientName: r.clientName,
+          totalCents: r.totalCents,
+          issueDate: r.issueDate,
+          dueDate: r.dueDate,
+          ageDays,
+          request: h
+            ? {
+                workStatus: h.workStatus,
+                assignedTo: h.assignedTo,
+                requestNote: h.requestNote,
+                requestedAt: h.requestedAt,
+                lastContact: h.lastContact,
+                nextFollowUp: h.nextFollowUp,
+                promiseToPay: h.promiseToPay,
+                promiseDate: h.promiseDate,
+                dispute: h.dispute,
+              }
+            : null,
+          activity: actsByInvoice.get(r.id) ?? [],
+        };
+      })
+      .sort((a, b) => {
+        const reqRank = (x: any) => (x.request?.workStatus === "requested" ? 0 : x.request?.workStatus === "in_progress" ? 1 : 2);
+        return reqRank(a) - reqRank(b) || b.ageDays - a.ageDays;
+      });
+  }),
+
+  /** Bookkeeper logs an action on an invoice (email sent, call, note, done). */
+  collectionsAct: accountingProcedure
+    .input(
+      z.object({
+        invoiceId: z.number().int(),
+        action: z.enum(["email_sent", "called", "note", "done"]),
+        note: z.string().max(800).optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const dbx = await db();
+      const { execCollections, collectionActivities } = await import("../../drizzle/schema");
+      await dbx.insert(collectionActivities).values({
+        invoiceId: input.invoiceId,
+        actor: "Bookkeeper",
+        action: input.action,
+        note: input.note ?? null,
+      });
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
+      const existing = await dbx
+        .select()
+        .from(execCollections)
+        .where(eq(execCollections.invoiceId, input.invoiceId))
+        .limit(1);
+      const contact = input.action === "email_sent" || input.action === "called";
+      const fields: Record<string, unknown> = {
+        workStatus: input.action === "done" ? "done" : "in_progress",
+      };
+      if (contact) {
+        fields.lastContact = today;
+        if (input.note) fields.contactOutcome = input.note.slice(0, 300);
+      }
+      if (existing[0]) {
+        await dbx.update(execCollections).set(fields).where(eq(execCollections.invoiceId, input.invoiceId));
+      } else {
+        await dbx.insert(execCollections).values({ invoiceId: input.invoiceId, ...fields });
+      }
+      return { ok: true };
+    }),
 });
