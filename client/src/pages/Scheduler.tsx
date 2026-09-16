@@ -54,6 +54,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { docViewUrl } from "@/lib/docView";
 import { fmtTime12, fmtTime12Range, fmtDate } from "@/lib/format";
 import { ChangeBadge, type JobChangeRow } from "@/components/ChangeBadge";
 import { BillingNotesButton } from "@/components/BillingNotes";
@@ -3854,6 +3855,7 @@ function DetailRow({
 }
 
 function PlanPreview({ url, filename }: { url: string; filename?: string }) {
+  const view = docViewUrl({ url, filename });
   const lower = (filename ?? url).toLowerCase();
   const isImage = /\.(png|jpe?g|gif|webp|bmp|svg)(\?|$)/.test(lower);
   const isPdf = /\.pdf(\?|$)/.test(lower);
@@ -3864,7 +3866,7 @@ function PlanPreview({ url, filename }: { url: string; filename?: string }) {
         <span className="text-xs font-medium truncate">{name}</span>
         <div className="flex items-center gap-1 shrink-0">
           <a
-            href={url}
+            href={view}
             target="_blank"
             rel="noreferrer"
             className="p-1.5 rounded hover:bg-accent"
@@ -3883,16 +3885,16 @@ function PlanPreview({ url, filename }: { url: string; filename?: string }) {
         </div>
       </div>
       {isImage ? (
-        <a href={url} target="_blank" rel="noreferrer" className="block">
+        <a href={view} target="_blank" rel="noreferrer" className="block">
           <img
-            src={url}
+            src={view}
             alt={name}
             className="w-full max-h-80 object-contain bg-background"
           />
         </a>
       ) : isPdf ? (
         <iframe
-          src={url}
+          src={view}
           title={name}
           className="w-full h-80 bg-background"
         />

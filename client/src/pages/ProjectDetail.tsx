@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { subStatusColor } from "@shared/subStatusColors";
 import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
+import { docViewUrl } from "@/lib/docView";
 import { useInvalidateJobData } from "@/hooks/useInvalidateJobData";
 import { toast } from "sonner";
 import {
@@ -301,7 +302,7 @@ export default function ProjectDetail() {
             const FileLink = ({ f, i, label }: any) => (
               <a
                 key={i}
-                href={f.url}
+                href={docViewUrl(f)}
                 target="_blank"
                 rel="noreferrer"
                 className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 hover:border-primary/50 hover:shadow-sm transition-all"
@@ -640,7 +641,7 @@ export default function ProjectDetail() {
             </button>
           ))}
           <a
-            href={viewerDoc.url}
+            href={docViewUrl(viewerDoc)}
             target="_blank"
             rel="noreferrer"
             className="ml-auto shrink-0 rounded px-2 py-1 text-[11px] font-medium text-primary hover:bg-accent"
@@ -649,7 +650,7 @@ export default function ProjectDetail() {
           </a>
         </div>
         <iframe
-          src={viewerDoc.url}
+          src={docViewUrl(viewerDoc)}
           title={viewerDoc.filename ?? "Document"}
           className="w-full flex-1 bg-white"
         />

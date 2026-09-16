@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import MiniJobMap from "@/components/MiniJobMap";
 import { pickPlans } from "@shared/planDocs";
+import { docViewUrl } from "@/lib/docView";
 import {
   Select,
   SelectContent,
@@ -242,7 +243,7 @@ export default function JobDetail() {
             const plan = pickPlans((job.planFile ?? []) as any[])[0];
             if (!plan?.url) return null;
             return (
-              <a href={plan.url} target="_blank" rel="noreferrer">
+              <a href={docViewUrl(plan)} target="_blank" rel="noreferrer">
                 <Button size="sm">
                   <FileText className="size-4 mr-1" /> Traffic Management Plan
                 </Button>

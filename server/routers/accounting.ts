@@ -271,7 +271,7 @@ export const accountingRouter = router({
       if (costEntries.length === 0 && permitCostCents == null) {
         const pn = rawGet("Permit #");
         if (pn) {
-          for (const m of String(pn).matchAll(/\$\s*([\d,]+(?:\.\d{1,2})?)/g)) {
+          for (const m of Array.from(String(pn).matchAll(/\$\s*([\d,]+(?:\.\d{1,2})?)/g))) {
             costEntries.push({
               cents: Math.round(Number(m[1].replace(/,/g, "")) * 100),
               dateText: null,

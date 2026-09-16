@@ -14,6 +14,7 @@ import { registerPinLogin } from "../pinLogin";
 import { registerExecAuth } from "../execAuth";
 import { registerQbRoutes } from "../qb";
 import { registerLegalPages } from "../legal";
+import { registerDocProxy } from "../docProxy";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -46,6 +47,7 @@ async function startServer() {
   registerExecAuth(app);
   registerQbRoutes(app);
   registerLegalPages(app);
+  registerDocProxy(app);
   // LOCAL DEV ONLY: enables /api/dev-login so the app can be viewed without Manus OAuth.
   // Local dev login is also allowed in production while ENABLE_DEV_LOGIN=true
   // (the pilot sign-in until real per-user auth ships). Keep the URL private.

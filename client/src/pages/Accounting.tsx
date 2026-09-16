@@ -38,12 +38,14 @@ import { toast } from "sonner";
 import QuoteTool from "./QuoteTool";
 import { fmtDate, fmtTime12 } from "@/lib/format";
 import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
+import { docViewUrl } from "@/lib/docView";
 import {
   parseSubmissionType,
   submissionTypeLabel,
   submissionTypeBillingNote,
   type SubmissionType,
 } from "@shared/pricingRules";
+
 
 function money(cents: number) {
   return (cents / 100).toLocaleString("en-CA", {
@@ -1937,7 +1939,7 @@ export default function Accounting() {
                         ))}
                         {viewDocs[docIdx] && (
                           <a
-                            href={viewDocs[docIdx].url}
+                            href={docViewUrl(viewDocs[docIdx])}
                             target="_blank"
                             rel="noreferrer"
                             className="ml-auto text-[11px] font-medium text-primary hover:underline"
@@ -1951,7 +1953,7 @@ export default function Accounting() {
                   {viewDocs[docIdx] && (
                     <iframe
                       key={viewDocs[docIdx].url}
-                      src={viewDocs[docIdx].url}
+                      src={docViewUrl(viewDocs[docIdx])}
                       title={viewDocs[docIdx].filename ?? "document"}
                       className="w-full h-[52vh] bg-muted/30"
                     />
