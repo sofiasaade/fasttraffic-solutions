@@ -2418,7 +2418,7 @@ function CollectionsQueue({ q }: { q: any }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const money = (c: number) => (c / 100).toLocaleString("en-CA", { style: "currency", currency: "CAD" });
 
   if (q.isLoading)
@@ -2430,12 +2430,12 @@ function CollectionsQueue({ q }: { q: any }) {
   const rows = (q.data ?? []) as any[];
 
   const draftEmail = (r: any) => {
-    const num = r.qbNumber ? `${r.invoiceNumber} (QB #${r.qbNumber})` : r.invoiceNumber;
-    const subject = `Fast Traffic Solutions — Invoice ${num} (${money(r.totalCents)})`;
+    const num = r.qbNumber ? `#${r.qbNumber}` : r.invoiceNumber;
+    const subject = `Fast Traffic Solutions — Invoice ${num} (${money(r.balanceCents)} outstanding)`;
     const body = [
       `Hi,`,
       ``,
-      `A friendly reminder about invoice ${num} for ${money(r.totalCents)}, issued ${r.issueDate}${r.dueDate ? ` and due ${r.dueDate}` : ""} — currently ${r.ageDays} days outstanding.`,
+      `A friendly reminder about invoice ${num} with ${money(r.balanceCents)} outstanding, issued ${r.issueDate}${r.dueDate ? ` and due ${r.dueDate}` : ""} — currently ${r.ageDays} days outstanding.`,
       ``,
       `Could you let us know when we can expect payment? If it has already been sent, please disregard this note.`,
       ``,
@@ -2445,7 +2445,7 @@ function CollectionsQueue({ q }: { q: any }) {
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
-  const logWithNote = (invoiceId: number, action: "email_sent" | "called" | "note" | "done") => {
+  const logWithNote = (ref: string, action: "email_sent" | "called" | "note" | "done") => {
     const label =
       action === "email_sent" ? "Note for the log (optional) — e.g. sent to AP inbox"
       : action === "called" ? "Who did you talk to / outcome?"
@@ -2453,7 +2453,7 @@ function CollectionsQueue({ q }: { q: any }) {
       : "Note";
     const note = window.prompt(label) ?? undefined;
     if (note === undefined && action === "note") return;
-    act.mutate({ invoiceId, action, note: note || undefined });
+    act.mutate({ ref, action, note: note || undefined });
   };
 
   const STATUS: Record<string, { label: string; cls: string }> = {
@@ -2484,7 +2484,7 @@ function CollectionsQueue({ q }: { q: any }) {
             {rows.map((r: any) => {
               const st = r.request?.workStatus && r.request.workStatus !== "none" ? STATUS[r.request.workStatus] : null;
               return (
-                <Fragment key={r.invoiceId}>
+                <Fragment key={r.ref}>
                   <tr className={cn("hover:bg-muted/40", r.request?.workStatus === "requested" && "bg-amber-50/60")}>
                     <td className="px-4 py-2">
                       {st ? (
@@ -2493,23 +2493,23 @@ function CollectionsQueue({ q }: { q: any }) {
                         <span className="text-[11px] text-muted-foreground">overdue {r.ageDays}d</span>
                       )}
                     </td>
-                    <td className="px-2 font-mono text-xs">{r.invoiceNumber}{r.qbNumber && <span className="text-muted-foreground"> · QB {r.qbNumber}</span>}</td>
+                    <td className="px-2 font-mono text-xs">{r.qbNumber ? <>QB #{r.qbNumber}</> : r.invoiceNumber}{r.qbNumber && r.invoiceNumber ? <span className="block text-[10px] text-muted-foreground">{r.invoiceNumber}</span> : null}</td>
                     <td className="px-2 font-medium">{r.clientName}</td>
-                    <td className="px-2 text-right tabular-nums font-semibold">{money(r.totalCents)}</td>
+                    <td className="px-2 text-right tabular-nums font-semibold">{money(r.balanceCents)}</td>
                     <td className={cn("px-2 text-right tabular-nums font-bold", r.ageDays > 60 ? "text-red-600" : r.ageDays > 30 ? "text-amber-600" : "text-muted-foreground")}>{r.ageDays}</td>
                     <td className="px-2 text-[11px] text-muted-foreground max-w-[200px] truncate" title={r.request?.requestNote ?? ""}>{r.request?.requestNote ?? "—"}</td>
                     <td className="px-2 py-1.5 text-right whitespace-nowrap">
                       <Button size="sm" variant="outline" className="h-7 text-xs mr-1" onClick={() => draftEmail(r)}>✉ Draft email</Button>
                       <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 mr-1" disabled={act.isPending}
-                        onClick={() => logWithNote(r.invoiceId, "email_sent")}>Email sent</Button>
+                        onClick={() => logWithNote(r.ref, "email_sent")}>Email sent</Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs mr-1" disabled={act.isPending}
-                        onClick={() => logWithNote(r.invoiceId, "called")}>Called</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setOpenId(openId === r.invoiceId ? null : r.invoiceId)}>
-                        {openId === r.invoiceId ? "Hide" : "History"}
+                        onClick={() => logWithNote(r.ref, "called")}>Called</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setOpenId(openId === r.ref ? null : r.ref)}>
+                        {openId === r.ref ? "Hide" : "History"}
                       </Button>
                     </td>
                   </tr>
-                  {openId === r.invoiceId && (
+                  {openId === r.ref && (
                     <tr className="bg-muted/30">
                       <td colSpan={7} className="px-6 py-2">
                         {(r.activity ?? []).length === 0 ? (
@@ -2525,9 +2525,9 @@ function CollectionsQueue({ q }: { q: any }) {
                         )}
                         <div className="mt-1.5">
                           <Button size="sm" variant="outline" className="h-6 text-[11px] mr-1" disabled={act.isPending}
-                            onClick={() => logWithNote(r.invoiceId, "note")}>+ Note</Button>
+                            onClick={() => logWithNote(r.ref, "note")}>+ Note</Button>
                           <Button size="sm" variant="outline" className="h-6 text-[11px]" disabled={act.isPending}
-                            onClick={() => logWithNote(r.invoiceId, "done")}>Mark done</Button>
+                            onClick={() => logWithNote(r.ref, "done")}>Mark done</Button>
                         </div>
                       </td>
                     </tr>

@@ -765,71 +765,123 @@ export const accountingRouter = router({
   /* ============ COLLECTIONS QUEUE (bookkeeper side — Sofia, Sep 16) ============ */
 
   /**
-   * The bookkeeper's collections worklist: every outstanding invoice with the
-   * executive's follow-up requests and the activity trail. Deliberately does
-   * NOT expose the executive's private notes or risk assessment.
+   * The bookkeeper's collections worklist over the REAL AR universe: every
+   * open QuickBooks invoice (balance > 0) plus app invoices not yet in QB —
+   * same rows the executive sees in ATLAS, minus her private notes/risk.
+   * Row identity is a `ref`: "qb:<DocNumber>" | "app:<appInvoiceId>".
    */
   collectionsQueue: accountingProcedure.query(async () => {
     const dbx = await db();
     const { execCollections, collectionActivities } = await import("../../drizzle/schema");
-    const inv = await dbx.select().from(invoices);
     const heads = await dbx.select().from(execCollections);
-    const headByInvoice = new Map(heads.map((h) => [h.invoiceId, h]));
+    const headByDoc = new Map(heads.filter((h) => h.qbDocNumber).map((h) => [h.qbDocNumber as string, h]));
+    const headByApp = new Map(heads.filter((h) => h.invoiceId != null).map((h) => [h.invoiceId as number, h]));
     const acts = await dbx
       .select()
       .from(collectionActivities)
       .orderBy(desc(collectionActivities.id))
       .limit(500);
-    const actsByInvoice = new Map<number, typeof acts>();
+    const actsByRef = new Map<string, typeof acts>();
     for (const a of acts) {
-      const list = actsByInvoice.get(a.invoiceId) ?? [];
+      const key = a.qbDocNumber ? `qb:${a.qbDocNumber}` : `app:${a.invoiceId}`;
+      const list = actsByRef.get(key) ?? [];
       if (list.length < 5) list.push(a);
-      actsByInvoice.set(a.invoiceId, list);
+      actsByRef.set(key, list);
     }
+    const appInv = await dbx.select().from(invoices);
+    const appLive = appInv.filter((r) => !(r as any).deletedAt && (r.status === "sent" || r.status === "in_qb"));
+    const appByQbNum = new Map(appLive.filter((r) => r.qbNumber).map((r) => [String(r.qbNumber), r]));
+
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
     const t0 = new Date(today + "T00:00:00").getTime();
-    return inv
-      .filter((r) => !r.deletedAt && (r.status === "sent" || r.status === "in_qb"))
-      .map((r) => {
-        const h = headByInvoice.get(r.id) ?? null;
-        const ref = r.dueDate ?? r.issueDate;
-        const ageDays = Math.floor((t0 - new Date(ref + "T00:00:00").getTime()) / 86400000);
-        return {
-          invoiceId: r.id,
+    const age = (due: string | null, issue: string | null) =>
+      Math.floor((t0 - new Date((due ?? issue ?? today) + "T00:00:00").getTime()) / 86400000);
+    const pack = (h: any) =>
+      h
+        ? {
+            workStatus: h.workStatus,
+            assignedTo: h.assignedTo,
+            requestNote: h.requestNote,
+            requestedAt: h.requestedAt,
+            lastContact: h.lastContact,
+            nextFollowUp: h.nextFollowUp,
+            promiseToPay: h.promiseToPay,
+            promiseDate: h.promiseDate,
+            dispute: h.dispute,
+          }
+        : null;
+
+    const rows: any[] = [];
+    try {
+      const { qbOpenInvoices } = await import("../qb");
+      const open = await qbOpenInvoices();
+      const seen = new Set<string>();
+      for (const i of open) {
+        const doc = i.docNumber ?? `id${i.qbId}`;
+        seen.add(doc);
+        const app = i.docNumber ? appByQbNum.get(i.docNumber) : undefined;
+        const h = headByDoc.get(doc) ?? (app ? headByApp.get(app.id) : undefined) ?? null;
+        const ref = `qb:${doc}`;
+        rows.push({
+          ref,
+          invoiceNumber: app?.invoiceNumber ?? null,
+          qbNumber: i.docNumber,
+          clientName: i.customer ?? app?.clientName ?? "(no client)",
+          totalCents: i.totalCents,
+          balanceCents: i.balanceCents,
+          issueDate: i.txnDate,
+          dueDate: i.dueDate,
+          ageDays: age(i.dueDate, i.txnDate),
+          request: pack(h),
+          activity: actsByRef.get(ref) ?? [],
+        });
+      }
+      for (const r of appLive) {
+        if (r.qbNumber) continue;
+        const ref = `app:${r.id}`;
+        rows.push({
+          ref,
           invoiceNumber: r.invoiceNumber,
-          qbNumber: r.qbNumber,
+          qbNumber: null,
           clientName: r.clientName,
           totalCents: r.totalCents,
+          balanceCents: r.totalCents,
           issueDate: r.issueDate,
           dueDate: r.dueDate,
-          ageDays,
-          request: h
-            ? {
-                workStatus: h.workStatus,
-                assignedTo: h.assignedTo,
-                requestNote: h.requestNote,
-                requestedAt: h.requestedAt,
-                lastContact: h.lastContact,
-                nextFollowUp: h.nextFollowUp,
-                promiseToPay: h.promiseToPay,
-                promiseDate: h.promiseDate,
-                dispute: h.dispute,
-              }
-            : null,
-          activity: actsByInvoice.get(r.id) ?? [],
-        };
-      })
-      .sort((a, b) => {
-        const reqRank = (x: any) => (x.request?.workStatus === "requested" ? 0 : x.request?.workStatus === "in_progress" ? 1 : 2);
-        return reqRank(a) - reqRank(b) || b.ageDays - a.ageDays;
-      });
+          ageDays: age(r.dueDate, r.issueDate),
+          request: pack(headByApp.get(r.id) ?? null),
+          activity: actsByRef.get(ref) ?? [],
+        });
+      }
+    } catch {
+      for (const r of appLive) {
+        const ref = `app:${r.id}`;
+        rows.push({
+          ref,
+          invoiceNumber: r.invoiceNumber,
+          qbNumber: r.qbNumber ?? null,
+          clientName: r.clientName,
+          totalCents: r.totalCents,
+          balanceCents: r.totalCents,
+          issueDate: r.issueDate,
+          dueDate: r.dueDate,
+          ageDays: age(r.dueDate, r.issueDate),
+          request: pack(headByApp.get(r.id) ?? null),
+          activity: actsByRef.get(ref) ?? [],
+        });
+      }
+    }
+    return rows.sort((a, b) => {
+      const rank = (x: any) => (x.request?.workStatus === "requested" ? 0 : x.request?.workStatus === "in_progress" ? 1 : 2);
+      return rank(a) - rank(b) || b.ageDays - a.ageDays;
+    });
   }),
 
   /** Bookkeeper logs an action on an invoice (email sent, call, note, done). */
   collectionsAct: accountingProcedure
     .input(
       z.object({
-        invoiceId: z.number().int(),
+        ref: z.string().regex(/^(qb:.{1,30}|app:\d+)$/),
         action: z.enum(["email_sent", "called", "note", "done"]),
         note: z.string().max(800).optional(),
       }),
@@ -837,18 +889,20 @@ export const accountingRouter = router({
     .mutation(async ({ input }) => {
       const dbx = await db();
       const { execCollections, collectionActivities } = await import("../../drizzle/schema");
+      const cols: any = input.ref.startsWith("qb:")
+        ? { qbDocNumber: input.ref.slice(3) }
+        : { invoiceId: Number(input.ref.slice(4)) };
+      const where = input.ref.startsWith("qb:")
+        ? eq(execCollections.qbDocNumber, input.ref.slice(3))
+        : eq(execCollections.invoiceId, Number(input.ref.slice(4)));
       await dbx.insert(collectionActivities).values({
-        invoiceId: input.invoiceId,
+        ...cols,
         actor: "Bookkeeper",
         action: input.action,
         note: input.note ?? null,
       });
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Edmonton" });
-      const existing = await dbx
-        .select()
-        .from(execCollections)
-        .where(eq(execCollections.invoiceId, input.invoiceId))
-        .limit(1);
+      const existing = await dbx.select().from(execCollections).where(where).limit(1);
       const contact = input.action === "email_sent" || input.action === "called";
       const fields: Record<string, unknown> = {
         workStatus: input.action === "done" ? "done" : "in_progress",
@@ -858,9 +912,9 @@ export const accountingRouter = router({
         if (input.note) fields.contactOutcome = input.note.slice(0, 300);
       }
       if (existing[0]) {
-        await dbx.update(execCollections).set(fields).where(eq(execCollections.invoiceId, input.invoiceId));
+        await dbx.update(execCollections).set(fields).where(eq(execCollections.id, existing[0].id));
       } else {
-        await dbx.insert(execCollections).values({ invoiceId: input.invoiceId, ...fields });
+        await dbx.insert(execCollections).values({ ...cols, ...fields });
       }
       return { ok: true };
     }),

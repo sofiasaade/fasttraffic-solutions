@@ -179,6 +179,32 @@ export async function qbQuery<T = any>(q: string): Promise<T> {
   return qbGet<T>(`query?query=${encodeURIComponent(q)}`);
 }
 
+/** Every open invoice in QuickBooks — the company's real AR universe. */
+export async function qbOpenInvoices(): Promise<
+  {
+    qbId: string;
+    docNumber: string | null;
+    customer: string | null;
+    balanceCents: number;
+    totalCents: number;
+    txnDate: string | null;
+    dueDate: string | null;
+  }[]
+> {
+  const res = await qbQuery<any>(
+    "SELECT Id, DocNumber, CustomerRef, Balance, TotalAmt, TxnDate, DueDate FROM Invoice WHERE Balance > '0' MAXRESULTS 1000",
+  );
+  return (res?.QueryResponse?.Invoice ?? []).map((i: any) => ({
+    qbId: String(i.Id),
+    docNumber: i.DocNumber != null ? String(i.DocNumber) : null,
+    customer: i.CustomerRef?.name ?? null,
+    balanceCents: Math.round((i.Balance ?? 0) * 100),
+    totalCents: Math.round((i.TotalAmt ?? 0) * 100),
+    txnDate: i.TxnDate ?? null,
+    dueDate: i.DueDate ?? null,
+  }));
+}
+
 /* ------------------------------- routes ------------------------------- */
 
 async function requireExec(req: Request, res: Response) {

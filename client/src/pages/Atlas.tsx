@@ -1646,8 +1646,8 @@ const RISK_STYLE: Record<string, string> = {
   high: "bg-red-100 text-red-700",
 };
 
-function ActivityTrail({ invoiceId }: { invoiceId: number }) {
-  const q = trpc.atlas.collectionsActivity.useQuery({ invoiceId });
+function ActivityTrail({ refKey }: { refKey: string }) {
+  const q = trpc.atlas.collectionsActivity.useQuery({ ref: refKey });
   if (q.isLoading) return <div className="mt-2 text-[11px] text-slate-400">Loading activity…</div>;
   const rows = q.data ?? [];
   return (
@@ -1687,7 +1687,7 @@ function CollectionsTab() {
     },
     onError: (e) => toast.error(e.message),
   });
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
 
   if (q.isLoading)
@@ -1696,7 +1696,7 @@ function CollectionsTab() {
   if (!data) return null;
 
   const openRow = (r: any) => {
-    setOpenId(r.invoiceId === openId ? null : r.invoiceId);
+    setOpenId(r.ref === openId ? null : r.ref);
     setForm({
       lastContact: r.followUp?.lastContact ?? "",
       contactOutcome: r.followUp?.contactOutcome ?? "",
@@ -1710,9 +1710,9 @@ function CollectionsTab() {
       notes: r.followUp?.notes ?? "",
     });
   };
-  const save = (invoiceId: number) =>
+  const save = (ref: string) =>
     update.mutate({
-      invoiceId,
+      ref,
       lastContact: form.lastContact || null,
       contactOutcome: form.contactOutcome || null,
       nextFollowUp: form.nextFollowUp || null,
@@ -1767,19 +1767,18 @@ function CollectionsTab() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {data.rows.map((r: any) => (
-                <Fragment key={r.invoiceId}>
+                <Fragment key={r.ref}>
                   <tr className="hover:bg-slate-50">
                     <td className="px-4 py-2 font-mono text-xs">
-                      {r.invoiceNumber}
-                      {r.qbNumber && <span className="text-slate-400"> · QB {r.qbNumber}</span>}
+                      {r.qbNumber ? <>QB #{r.qbNumber}</> : r.invoiceNumber}
+                      {r.qbNumber && r.invoiceNumber && <span className="block text-[10px] text-slate-400">{r.invoiceNumber}</span>}
+                      {!r.qbNumber && <span className="block text-[10px] text-amber-600">not in QB yet</span>}
                     </td>
                     <td className="px-2 font-medium">{r.clientName}</td>
                     <td className="px-2 text-right tabular-nums font-semibold">
-                      {money(r.totalCents)}
-                      {r.qbBalanceCents != null && (
-                        <span className="block text-[10px] font-normal text-emerald-700">
-                          QB owes: {money(r.qbBalanceCents)}
-                        </span>
+                      {money(r.balanceCents)}
+                      {r.balanceCents !== r.totalCents && (
+                        <span className="block text-[10px] font-normal text-slate-400">of {money(r.totalCents)} (partially paid)</span>
                       )}
                     </td>
                     <td className={cn("px-2 text-right tabular-nums font-bold",
@@ -1822,16 +1821,16 @@ function CollectionsTab() {
                         onClick={() => {
                           const note = window.prompt("Instruction for the bookkeeper (e.g. 'chase this one, remind them of their promise'):");
                           if (note === null) return;
-                          request.mutate({ invoiceId: r.invoiceId, note: note || undefined });
+                          request.mutate({ ref: r.ref, note: note || undefined });
                         }}>
                         Request follow-up
                       </Button>
                       <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openRow(r)}>
-                        {openId === r.invoiceId ? "Close" : "Manage"}
+                        {openId === r.ref ? "Close" : "Manage"}
                       </Button>
                     </td>
                   </tr>
-                  {openId === r.invoiceId && (
+                  {openId === r.ref && (
                     <tr className="bg-slate-50">
                       <td colSpan={7} className="px-4 py-3">
                         <div className="grid gap-2.5 md:grid-cols-3">
@@ -1884,9 +1883,9 @@ function CollectionsTab() {
                               className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs" />
                           </label>
                         </div>
-                        <ActivityTrail invoiceId={r.invoiceId} />
+                        <ActivityTrail refKey={r.ref} />
                         <div className="mt-2 flex justify-end">
-                          <Button size="sm" className="bg-[#1e2b58]" disabled={update.isPending} onClick={() => save(r.invoiceId)}>
+                          <Button size="sm" className="bg-[#1e2b58]" disabled={update.isPending} onClick={() => save(r.ref)}>
                             {update.isPending && <Loader2 className="size-3.5 animate-spin mr-1" />} Save follow-up
                           </Button>
                         </div>

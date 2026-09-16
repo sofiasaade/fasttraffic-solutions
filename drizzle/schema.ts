@@ -870,7 +870,10 @@ export type ExecDecision = typeof execDecisions.$inferSelect;
 /** ATLAS: collections follow-up per invoice (promises, disputes, next steps). */
 export const execCollections = mysqlTable("exec_collections", {
   id: int("id").autoincrement().primaryKey(),
-  invoiceId: int("invoiceId").notNull().unique(),
+  /** App invoice id — for invoices not (yet) in QuickBooks. */
+  invoiceId: int("invoiceId").unique(),
+  /** QuickBooks DocNumber — the key for the real AR universe. */
+  qbDocNumber: varchar("qbDocNumber", { length: 32 }).unique(),
   lastContact: varchar("lastContact", { length: 10 }),
   contactOutcome: varchar("contactOutcome", { length: 300 }),
   nextFollowUp: varchar("nextFollowUp", { length: 10 }),
@@ -897,7 +900,8 @@ export type ExecCollection = typeof execCollections.$inferSelect;
  */
 export const collectionActivities = mysqlTable("collection_activities", {
   id: int("id").autoincrement().primaryKey(),
-  invoiceId: int("invoiceId").notNull(),
+  invoiceId: int("invoiceId"),
+  qbDocNumber: varchar("qbDocNumber", { length: 32 }),
   actor: varchar("actor", { length: 64 }).notNull(),
   /** requested | email_sent | called | note | escalated */
   action: varchar("action", { length: 24 }).notNull(),

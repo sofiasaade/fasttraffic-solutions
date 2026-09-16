@@ -5,6 +5,7 @@ import { z } from "zod";
 import { executiveBaseProcedure, executiveProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
+  collectionActivities,
   execAuditLog,
   execCollections,
   execDecisions,
@@ -18,6 +19,24 @@ async function db() {
   const d = await getDb();
   if (!d) throw new Error("Database not available");
   return d;
+}
+
+/** Parse a collections ref ("qb:<doc>" | "app:<id>") into DB filters. */
+function refKey(ref: string) {
+  if (ref.startsWith("qb:")) {
+    const doc = ref.slice(3);
+    return {
+      cols: { qbDocNumber: doc } as any,
+      where: () => eq(execCollections.qbDocNumber, doc),
+      whereActivities: () => eq(collectionActivities.qbDocNumber, doc),
+    };
+  }
+  const id = Number(ref.slice(4));
+  return {
+    cols: { invoiceId: id } as any,
+    where: () => eq(execCollections.invoiceId, id),
+    whereActivities: () => eq(collectionActivities.invoiceId, id),
+  };
 }
 
 function calgaryToday(): string {
@@ -166,94 +185,210 @@ export const atlasRouter = router({
   /* ======================= F1c — COLLECTIONS ======================= */
 
   /**
-   * Collections worklist: every outstanding app invoice (sent / in_qb) joined
-   * with its follow-up record. Aging is computed from dueDate when the invoice
-   * has one, otherwise from issueDate — and the basis is reported per row so
-   * nothing is presented as more precise than it is. QB balances join in F1d.
+   * Collections worklist over the REAL AR universe: every open invoice in
+   * QuickBooks (balance > 0), plus app invoices that haven't reached QB yet.
+   * Follow-ups anchor to the QB DocNumber (or the app invoice id for app-only
+   * rows) via a `ref` of the form "qb:<doc>" | "app:<id>".
    */
   collectionsList: executiveProcedure.query(async ({ ctx }) => {
     const d = await db();
-    const inv = await d.select().from(invoices);
     const followUps = await d.select().from(execCollections);
-    const fuByInvoice = new Map(followUps.map((f) => [f.invoiceId, f]));
+    const fuByDoc = new Map(followUps.filter((f) => f.qbDocNumber).map((f) => [f.qbDocNumber as string, f]));
+    const fuByApp = new Map(followUps.filter((f) => f.invoiceId != null).map((f) => [f.invoiceId as number, f]));
+    const appInv = await d.select().from(invoices);
+    const appLive = appInv.filter((r) => !r.deletedAt && (r.status === "sent" || r.status === "in_qb"));
+    const appByQbNum = new Map(appLive.filter((r) => r.qbNumber).map((r) => [String(r.qbNumber), r]));
+
     const today = calgaryToday();
     const t0 = new Date(today + "T00:00:00").getTime();
+    const ageOf = (due: string | null, issue: string | null) => {
+      const basis = due ? "due" : "issue";
+      const ref = due ?? issue ?? today;
+      const ageDays = Math.floor((t0 - new Date(ref + "T00:00:00").getTime()) / 86400000);
+      const bucket =
+        basis === "due" && ageDays <= 0 ? "current"
+        : ageDays <= 30 ? "1-30" : ageDays <= 60 ? "31-60" : ageDays <= 90 ? "61-90" : "90+";
+      return { basis: basis as "due" | "issue", ageDays, bucket };
+    };
 
-    const rows = inv
-      .filter((r) => !r.deletedAt && (r.status === "sent" || r.status === "in_qb"))
-      .map((r) => {
-        const basis = r.dueDate ? "due" : "issue";
-        const ref = r.dueDate ?? r.issueDate;
-        const ageDays = Math.floor((t0 - new Date(ref + "T00:00:00").getTime()) / 86400000);
-        const bucket =
-          basis === "due" && ageDays <= 0
-            ? "current"
-            : ageDays <= 30
-              ? "1-30"
-              : ageDays <= 60
-                ? "31-60"
-                : ageDays <= 90
-                  ? "61-90"
-                  : "90+";
-        const f = fuByInvoice.get(r.id) ?? null;
-        return {
-          invoiceId: r.id,
+    const rows: any[] = [];
+    let qbOk = false;
+    let qbError: string | null = null;
+    try {
+      const { qbOpenInvoices } = await import("../qb");
+      const open = await qbOpenInvoices();
+      qbOk = true;
+      const seenDocs = new Set<string>();
+      for (const i of open) {
+        const doc = i.docNumber ?? `id${i.qbId}`;
+        seenDocs.add(doc);
+        const app = i.docNumber ? appByQbNum.get(i.docNumber) : undefined;
+        const f = fuByDoc.get(doc) ?? (app ? fuByApp.get(app.id) : undefined) ?? null;
+        const a = ageOf(i.dueDate, i.txnDate);
+        rows.push({
+          ref: `qb:${doc}`,
+          source: "qb",
+          qbNumber: i.docNumber,
+          invoiceNumber: app?.invoiceNumber ?? null,
+          appInvoiceId: app?.id ?? null,
+          clientName: i.customer ?? app?.clientName ?? "(no client)",
+          totalCents: i.totalCents,
+          balanceCents: i.balanceCents,
+          issueDate: i.txnDate,
+          dueDate: i.dueDate,
+          ageDays: a.ageDays,
+          agingBasis: a.basis,
+          bucket: a.bucket,
+          followUp: f,
+        });
+      }
+      // App invoices not yet in QB (sent but no matching open QB invoice, and
+      // no qbNumber that QB reports as paid).
+      for (const r of appLive) {
+        if (r.qbNumber && seenDocs.has(String(r.qbNumber))) continue;
+        if (r.qbNumber) continue; // in QB but balance 0 there → paid; not AR
+        const a = ageOf(r.dueDate, r.issueDate);
+        rows.push({
+          ref: `app:${r.id}`,
+          source: "app",
+          qbNumber: null,
           invoiceNumber: r.invoiceNumber,
-          qbNumber: r.qbNumber,
+          appInvoiceId: r.id,
           clientName: r.clientName,
-          status: r.status,
+          totalCents: r.totalCents,
+          balanceCents: r.totalCents,
           issueDate: r.issueDate,
           dueDate: r.dueDate,
+          ageDays: a.ageDays,
+          agingBasis: a.basis,
+          bucket: a.bucket,
+          followUp: fuByApp.get(r.id) ?? null,
+        });
+      }
+    } catch (err) {
+      qbError = String(err).slice(0, 200);
+      // QB unavailable → fall back to app invoices so the tab still works.
+      for (const r of appLive) {
+        const a = ageOf(r.dueDate, r.issueDate);
+        rows.push({
+          ref: `app:${r.id}`,
+          source: "app",
+          qbNumber: r.qbNumber ?? null,
+          invoiceNumber: r.invoiceNumber,
+          appInvoiceId: r.id,
+          clientName: r.clientName,
           totalCents: r.totalCents,
-          ageDays,
-          agingBasis: basis as "due" | "issue",
-          bucket,
-          followUp: f,
-        };
-      })
-      .sort((a, b) => b.ageDays - a.ageDays);
+          balanceCents: r.totalCents,
+          issueDate: r.issueDate,
+          dueDate: r.dueDate,
+          ageDays: a.ageDays,
+          agingBasis: a.basis,
+          bucket: a.bucket,
+          followUp: fuByApp.get(r.id) ?? null,
+        });
+      }
+    }
+    rows.sort((a, b) => b.ageDays - a.ageDays);
 
     const totals: Record<string, { cents: number; count: number }> = {};
     for (const r of rows) {
       const t = (totals[r.bucket] ??= { cents: 0, count: 0 });
-      t.cents += r.totalCents;
+      t.cents += r.balanceCents;
       t.count++;
     }
-    // When QuickBooks is connected, join the REAL open balance per invoice by
-    // matching our qbNumber against the QB DocNumber. Read-only; failure-safe.
-    let qbJoined = false;
-    let qbError: string | null = null;
-    const qbConn = await getQbConnection().catch(() => null);
-    if (qbConn) {
-      try {
-        const res = await qbQuery<any>(
-          "SELECT DocNumber, Balance, TotalAmt FROM Invoice WHERE Balance > '0' MAXRESULTS 1000",
-        );
-        const byDoc = new Map<string, { balance: number; total: number }>();
-        for (const qi of res?.QueryResponse?.Invoice ?? []) {
-          if (qi.DocNumber) byDoc.set(String(qi.DocNumber), { balance: qi.Balance, total: qi.TotalAmt });
-        }
-        for (const r of rows as any[]) {
-          const m = r.qbNumber ? byDoc.get(String(r.qbNumber)) : undefined;
-          r.qbBalanceCents = m ? Math.round(m.balance * 100) : null;
-        }
-        qbJoined = true;
-      } catch (err) {
-        qbError = String(err).slice(0, 200);
-      }
-    }
-
     await execAudit(ctx.user.email ?? "executive", "view", "collections");
     return {
       rows,
       totals,
-      outstandingCents: rows.reduce((n, r) => n + r.totalCents, 0),
-      qb: { connected: Boolean(qbConn), joined: qbJoined, error: qbError },
-      note: qbJoined
-        ? "FTS OS invoices; the per-invoice QB balance comes live from QuickBooks (read-only)."
-        : "Based on FTS OS invoices (sent / in QB). The exact accounting balance arrives with QuickBooks (F1d).",
+      outstandingCents: rows.reduce((n, r) => n + r.balanceCents, 0),
+      qb: { connected: qbOk, joined: qbOk, error: qbError },
+      note: qbOk
+        ? "Full open AR from QuickBooks (every unpaid invoice) plus app invoices not yet in QB."
+        : "QuickBooks unavailable right now — showing app invoices only. " + (qbError ?? ""),
     };
   }),
+
+  /**
+   * Executive asks the bookkeeper to work an invoice. Shows up in the
+   * Accounting → Collections queue; every action she logs comes back here.
+   */
+  collectionsRequest: executiveProcedure
+    .input(
+      z.object({
+        ref: z.string().regex(/^(qb:.{1,30}|app:\d+)$/),
+        note: z.string().max(500).optional(),
+        assignedTo: z.string().max(64).default("Bookkeeper"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const d = await db();
+      const key = refKey(input.ref);
+      const existing = await d.select().from(execCollections).where(key.where()).limit(1);
+      const fields = {
+        assignedTo: input.assignedTo,
+        requestNote: input.note ?? null,
+        requestedAt: new Date(),
+        workStatus: "requested",
+      };
+      if (existing[0]) {
+        await d.update(execCollections).set(fields).where(eq(execCollections.id, existing[0].id));
+      } else {
+        await d.insert(execCollections).values({ ...key.cols, ...fields });
+      }
+      await d.insert(collectionActivities).values({
+        ...key.cols,
+        actor: "Sofia",
+        action: "requested",
+        note: input.note ?? null,
+      });
+      await execAudit(ctx.user.email ?? "executive", "edit", `collections follow-up requested ${input.ref}`);
+      return { ok: true };
+    }),
+
+  /** Activity trail for one invoice (newest first). */
+  collectionsActivity: executiveProcedure
+    .input(z.object({ ref: z.string().regex(/^(qb:.{1,30}|app:\d+)$/) }))
+    .query(async ({ input }) => {
+      const d = await db();
+      const key = refKey(input.ref);
+      return d
+        .select()
+        .from(collectionActivities)
+        .where(key.whereActivities())
+        .orderBy(desc(collectionActivities.id))
+        .limit(50);
+    }),
+
+  /** Upsert the follow-up record for one invoice (promise, dispute, next step). */
+  collectionsUpdate: executiveProcedure
+    .input(
+      z.object({
+        ref: z.string().regex(/^(qb:.{1,30}|app:\d+)$/),
+        lastContact: z.string().max(10).nullable().optional(),
+        contactOutcome: z.string().max(300).nullable().optional(),
+        nextFollowUp: z.string().max(10).nullable().optional(),
+        responsible: z.string().max(64).nullable().optional(),
+        promiseToPay: z.boolean().optional(),
+        promiseDate: z.string().max(10).nullable().optional(),
+        dispute: z.boolean().optional(),
+        disputeNote: z.string().max(500).nullable().optional(),
+        riskLevel: z.enum(["low", "med", "high"]).optional(),
+        notes: z.string().max(4000).nullable().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const d = await db();
+      const { ref, ...fields } = input;
+      const key = refKey(ref);
+      const existing = await d.select().from(execCollections).where(key.where()).limit(1);
+      if (existing[0]) {
+        await d.update(execCollections).set(fields).where(eq(execCollections.id, existing[0].id));
+      } else {
+        await d.insert(execCollections).values({ ...key.cols, ...fields });
+      }
+      await execAudit(ctx.user.email ?? "executive", "edit", `collections ${ref}`);
+      return { ok: true };
+    }),
 
   /* ==================== F1d — QUICKBOOKS (READ-ONLY) ==================== */
 
@@ -1267,95 +1402,6 @@ export const atlasRouter = router({
     await execAudit(ctx.user.email ?? "executive", "view", "cmo");
     return out;
   }),
-
-  /**
-   * Executive asks the bookkeeper to work an invoice. Shows up in the
-   * Accounting → Collections queue; every action she logs comes back here.
-   */
-  collectionsRequest: executiveProcedure
-    .input(
-      z.object({
-        invoiceId: z.number().int(),
-        note: z.string().max(500).optional(),
-        assignedTo: z.string().max(64).default("Bookkeeper"),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const d = await db();
-      const existing = await d
-        .select()
-        .from(execCollections)
-        .where(eq(execCollections.invoiceId, input.invoiceId))
-        .limit(1);
-      const fields = {
-        assignedTo: input.assignedTo,
-        requestNote: input.note ?? null,
-        requestedAt: new Date(),
-        workStatus: "requested",
-      };
-      if (existing[0]) {
-        await d.update(execCollections).set(fields).where(eq(execCollections.invoiceId, input.invoiceId));
-      } else {
-        await d.insert(execCollections).values({ invoiceId: input.invoiceId, ...fields });
-      }
-      const { collectionActivities } = await import("../../drizzle/schema");
-      await d.insert(collectionActivities).values({
-        invoiceId: input.invoiceId,
-        actor: "Sofia",
-        action: "requested",
-        note: input.note ?? null,
-      });
-      await execAudit(ctx.user.email ?? "executive", "edit", `collections follow-up requested #${input.invoiceId}`);
-      return { ok: true };
-    }),
-
-  /** Activity trail for one invoice (newest first). */
-  collectionsActivity: executiveProcedure
-    .input(z.object({ invoiceId: z.number().int() }))
-    .query(async ({ input }) => {
-      const d = await db();
-      const { collectionActivities } = await import("../../drizzle/schema");
-      return d
-        .select()
-        .from(collectionActivities)
-        .where(eq(collectionActivities.invoiceId, input.invoiceId))
-        .orderBy(desc(collectionActivities.id))
-        .limit(50);
-    }),
-
-  /** Upsert the follow-up record for one invoice (promise, dispute, next step). */
-  collectionsUpdate: executiveProcedure
-    .input(
-      z.object({
-        invoiceId: z.number().int(),
-        lastContact: z.string().max(10).nullable().optional(),
-        contactOutcome: z.string().max(300).nullable().optional(),
-        nextFollowUp: z.string().max(10).nullable().optional(),
-        responsible: z.string().max(64).nullable().optional(),
-        promiseToPay: z.boolean().optional(),
-        promiseDate: z.string().max(10).nullable().optional(),
-        dispute: z.boolean().optional(),
-        disputeNote: z.string().max(500).nullable().optional(),
-        riskLevel: z.enum(["low", "med", "high"]).optional(),
-        notes: z.string().max(4000).nullable().optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const d = await db();
-      const { invoiceId, ...fields } = input;
-      const existing = await d
-        .select()
-        .from(execCollections)
-        .where(eq(execCollections.invoiceId, invoiceId))
-        .limit(1);
-      if (existing[0]) {
-        await d.update(execCollections).set(fields).where(eq(execCollections.invoiceId, invoiceId));
-      } else {
-        await d.insert(execCollections).values({ invoiceId, ...fields });
-      }
-      await execAudit(ctx.user.email ?? "executive", "edit", `collections invoice #${invoiceId}`);
-      return { ok: true };
-    }),
 
   /* ================== F1e — MY EXECUTIVE PRIORITIES ================== */
 
