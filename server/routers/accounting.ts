@@ -265,6 +265,20 @@ export const accountingRouter = router({
           if (Number.isFinite(n) && n > 0) permitCostCents = Math.round(n * 100);
         }
       }
+      // Fallback (Sofia, Sep 15 2026 — 1150 148 Ave NW): some jobs carry the
+      // cost inside "Permit #" instead, e.g. "SU-26-691135 ($473.60)". When
+      // "Permit Cost" is empty, read every $ amount from there.
+      if (costEntries.length === 0 && permitCostCents == null) {
+        const pn = rawGet("Permit #");
+        if (pn) {
+          for (const m of String(pn).matchAll(/\$\s*([\d,]+(?:\.\d{1,2})?)/g)) {
+            costEntries.push({
+              cents: Math.round(Number(m[1].replace(/,/g, "")) * 100),
+              dateText: null,
+            });
+          }
+        }
+      }
 
       // Cached SU permit schedules for this job (code + valid dates), in order.
       const { getPermitExtractionsMap } = await import("../opsDb");
