@@ -167,6 +167,30 @@ export default function Accounting() {
     }
     approve.mutate({ id });
   };
+  const returnInv = trpc.accounting.returnInvoice.useMutation({
+    onSuccess: () => {
+      utils.accounting.listInvoices.invalidate();
+      toast.success("Returned to the bookkeeper with your note");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const askReturn = async (id: number) => {
+    let unlocked = approvalQ.data?.unlocked;
+    if (!unlocked) {
+      const pin = window.prompt("José's approval PIN:");
+      if (!pin) return;
+      try {
+        await approvalUnlock.mutateAsync({ pin: pin.trim() });
+        approvalQ.refetch();
+      } catch (e: any) {
+        toast.error(e.message ?? "Wrong approval PIN.");
+        return;
+      }
+    }
+    const note = window.prompt("What should the bookkeeper fix?");
+    if (!note) return;
+    returnInv.mutate({ id, note: note.trim().slice(0, 300) });
+  };
   const setStatus = trpc.accounting.setInvoiceStatus.useMutation({
     onSuccess: () => utils.accounting.listInvoices.invalidate(),
     onError: (e) => toast.error(e.message),
@@ -870,10 +894,23 @@ export default function Accounting() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {listRows.map((r) => (
+                    {listRows.map((r) => {
+                      // Sofia (Oct 16): shade jobs finished >15 days ago red;
+                      // past a month they get an URGENT tag. Billed jobs are exempt.
+                      const billableDone = /ready to bill|picked|finished|completed/i.test(r.status ?? "") &&
+                        !/cancel|declined/i.test((r.status ?? "") + " " + (r.jobAddress ?? "") + " " + (r.company ?? ""));
+                      const endAge = billableDone && r.endDate && !invoicedByJob.has(r.id)
+                        ? Math.floor((Date.now() - new Date(String(r.endDate).slice(0, 10) + "T00:00:00").getTime()) / 86400000)
+                        : null;
+                      const isUrgent = endAge != null && endAge >= 30;
+                      const isLate = endAge != null && endAge > 15;
+                      return (
                       <tr
                         key={r.id}
-                        className="hover:bg-accent/40 cursor-pointer transition-colors"
+                        className={cn(
+                          "cursor-pointer transition-colors",
+                          isUrgent ? "bg-red-100/80 hover:bg-red-100" : isLate ? "bg-red-50 hover:bg-red-100/60" : "hover:bg-accent/40",
+                        )}
                         onClick={() => {
                           openNewInvoice(r);
                           void autoQuoteFor(r.id);
@@ -884,6 +921,18 @@ export default function Accounting() {
                           <div className="font-medium flex items-center gap-1.5 flex-wrap">
                             <Building2 className="size-3.5 text-muted-foreground shrink-0" />
                             {r.company ?? "—"}
+                            {isUrgent && (
+                              <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+                                title={`Finished ${endAge} days ago and still unbilled`}>
+                                URGENT
+                              </span>
+                            )}
+                            {isLate && !isUrgent && (
+                              <span className="rounded-full bg-red-200 px-2 py-0.5 text-[10px] font-bold text-red-800"
+                                title={`Finished ${endAge} days ago and still unbilled`}>
+                                {endAge}d unbilled
+                              </span>
+                            )}
                             {invoicedByJob.has(r.id) && (
                               <span
                                 className={cn(
@@ -941,7 +990,8 @@ export default function Accounting() {
                           </Button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1031,13 +1081,66 @@ export default function Accounting() {
                     )}
                     title="Drafts prepared by the bookkeeper waiting for José's approval"
                   >
-                    ⏳ For approval ({all.filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length})
+                    ⏳ José — approvals ({all.filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length})
                   </button>
                 </>
               );
             })()}
           </div>
         {showCollections && <CollectionsQueue q={collectionsQ} />}
+        {(invoicesView as any) === "pending" && (
+          <div className="rounded-2xl border border-amber-300 bg-card overflow-hidden">
+            <div className="px-4 py-2.5 bg-amber-600 text-white text-[12px] font-bold uppercase tracking-wider">
+              José's approval queue — drafts prepared by the bookkeeper, all in one place
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-muted-foreground border-b">
+                  <th className="text-left px-4 py-2">Invoice</th>
+                  <th className="text-left px-2">Client</th>
+                  <th className="text-right px-2">Total</th>
+                  <th className="text-left px-2">Prepared</th>
+                  <th className="px-3 text-right">Review</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(invoicesQ.data ?? [])
+                  .filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending")
+                  .map((inv: any) => (
+                    <tr key={inv.id} className="hover:bg-amber-50/50">
+                      <td className="px-4 py-2 font-semibold tabular-nums">{inv.invoiceNumber}</td>
+                      <td className="px-2">
+                        <div className="font-medium">{inv.clientName}</div>
+                        {inv.reviewNote && (
+                          <div className="text-[11px] text-red-600">↩ Returned: {inv.reviewNote}</div>
+                        )}
+                      </td>
+                      <td className="px-2 text-right tabular-nums font-semibold">{money(inv.totalCents)}</td>
+                      <td className="px-2 text-xs text-muted-foreground">{fmtDate(inv.issueDate)}</td>
+                      <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                        <Button size="sm" variant="outline" className="h-7 text-xs mr-1" onClick={() => openEditInvoice(inv)}>
+                          Open
+                        </Button>
+                        <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 mr-1"
+                          disabled={approve.isPending} onClick={() => askApprove(inv.id)}>
+                          ✓ Approve
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200"
+                          disabled={returnInv.isPending} onClick={() => askReturn(inv.id)}>
+                          ↩ Return
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                {(invoicesQ.data ?? []).filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    Queue empty — nothing waiting for approval ✔
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="rounded-2xl border border-border bg-card overflow-hidden">
           {invoicesQ.isLoading ? (
             <div className="flex items-center justify-center gap-2 p-12 text-sm text-muted-foreground">
@@ -1113,18 +1216,21 @@ export default function Accounting() {
                       </td>
                       <td className="px-3 py-2.5">
                         {(inv as any).reviewStatus === "pending" && inv.status !== "quote" ? (
-                          <button
-                            type="button"
-                            onClick={() => askApprove(inv.id)}
-                            title="Prepared by the bookkeeper — José approves it with his PIN to make it official"
-                            className="mb-1 block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 hover:bg-amber-200"
-                          >
-                            ⏳ Approve (José)
-                          </button>
-                        ) : inv.status !== "quote" && (inv as any).approvedBy ? (
-                          <span className="mb-1 block text-[10px] font-semibold text-emerald-700" title={(inv as any).approvedAt ? new Date((inv as any).approvedAt).toLocaleString() : ""}>
-                            ✓ Approved
+                          (inv as any).reviewNote ? (
+                            <span className="mb-1 block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700" title={(inv as any).reviewNote}>
+                              ↩ Returned: {(inv as any).reviewNote.slice(0, 24)}…
+                            </span>
+                          ) : (
+                            <span className="mb-1 block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800" title="In José's approval queue">
+                              ⏳ Waiting for José
+                            </span>
+                          )
+                        ) : inv.status === "draft" && (inv as any).approvedBy ? (
+                          <span className="mb-1 block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700" title={(inv as any).approvedAt ? "Approved " + new Date((inv as any).approvedAt).toLocaleString() : ""}>
+                            ✓ Ready to bill
                           </span>
+                        ) : inv.status !== "quote" && (inv as any).approvedBy ? (
+                          <span className="mb-1 block text-[10px] font-semibold text-emerald-700">✓ Approved</span>
                         ) : null}
                         <Select
                           value={inv.status}
@@ -1969,7 +2075,7 @@ export default function Accounting() {
                   {(createInvoice.isPending || updateInvoice.isPending) && (
                     <Loader2 className="size-4 mr-1 animate-spin" />
                   )}
-                  {editingInvoiceId != null ? "Save changes" : "Create invoice"}
+                  {editingInvoiceId != null ? "Save changes" : "Create draft for approval"}
                 </Button>
               </div>
             </div>

@@ -841,7 +841,7 @@ export const accountingRouter = router({
       const dbx = await db();
       await dbx
         .update(invoices)
-        .set({ reviewStatus: "approved", approvedBy: "José", approvedAt: new Date() })
+        .set({ reviewStatus: "approved", approvedBy: "José", approvedAt: new Date(), reviewNote: null })
         .where(eq(invoices.id, input.id));
       return { ok: true };
     }),
@@ -861,6 +861,21 @@ export const accountingRouter = router({
       await dbx
         .update(invoices)
         .set({ reviewStatus: "pending", approvedBy: null, approvedAt: null })
+        .where(eq(invoices.id, input.id));
+      return { ok: true };
+    }),
+
+  /** José sends a draft back to the bookkeeper with a note (same gate). */
+  returnInvoice: accountingProcedure
+    .input(z.object({ id: z.number().int(), note: z.string().min(1).max(300) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!isApprovalUnlocked(ctx as any)) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
+      }
+      const dbx = await db();
+      await dbx
+        .update(invoices)
+        .set({ reviewStatus: "pending", approvedBy: null, approvedAt: null, reviewNote: input.note })
         .where(eq(invoices.id, input.id));
       return { ok: true };
     }),

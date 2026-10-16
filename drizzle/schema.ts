@@ -691,6 +691,8 @@ export const invoices = mysqlTable("invoices", {
   reviewStatus: varchar("reviewStatus", { length: 16 }).default("pending").notNull(),
   approvedBy: varchar("approvedBy", { length: 64 }),
   approvedAt: timestamp("approvedAt"),
+  /** José's note when he returns a draft to the bookkeeper for fixes. */
+  reviewNote: varchar("reviewNote", { length: 300 }),
   /** Soft delete — trashed invoices are restorable until destroyed for real. */
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
