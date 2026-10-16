@@ -683,6 +683,14 @@ export const invoices = mysqlTable("invoices", {
    * the pricing rules to how FTS actually bills.
    */
   suggestedJson: text("suggestedJson"),
+  /**
+   * Approval workflow (Sofia, Oct 16 2026): the bookkeeper drafts ahead;
+   * José approves with his own PIN before an invoice can become official
+   * (sent / paid / in QB). pending → approved.
+   */
+  reviewStatus: varchar("reviewStatus", { length: 16 }).default("pending").notNull(),
+  approvedBy: varchar("approvedBy", { length: 64 }),
+  approvedAt: timestamp("approvedAt"),
   /** Soft delete — trashed invoices are restorable until destroyed for real. */
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

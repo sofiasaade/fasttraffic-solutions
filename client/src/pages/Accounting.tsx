@@ -142,6 +142,31 @@ export default function Accounting() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const approvalQ = trpc.accounting.approvalStatus.useQuery();
+  const approvalUnlock = trpc.accounting.approvalUnlock.useMutation();
+  const approve = trpc.accounting.approveInvoice.useMutation({
+    onSuccess: () => {
+      utils.accounting.listInvoices.invalidate();
+      toast.success("Approved ✓ — it can now be marked sent / in QB");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const askApprove = async (id: number) => {
+    let unlocked = approvalQ.data?.unlocked;
+    if (!unlocked) {
+      const pin = window.prompt("José's approval PIN:");
+      if (!pin) return;
+      try {
+        await approvalUnlock.mutateAsync({ pin: pin.trim() });
+        unlocked = true;
+        approvalQ.refetch();
+      } catch (e: any) {
+        toast.error(e.message ?? "Wrong approval PIN.");
+        return;
+      }
+    }
+    approve.mutate({ id });
+  };
   const setStatus = trpc.accounting.setInvoiceStatus.useMutation({
     onSuccess: () => utils.accounting.listInvoices.invalidate(),
     onError: (e) => toast.error(e.message),
@@ -995,6 +1020,19 @@ export default function Accounting() {
                   >
                     📞 Collections ({(collectionsQ.data ?? []).filter((r: any) => r.request?.workStatus === "requested" || r.request?.workStatus === "in_progress").length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("pending" as any)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      (invoicesView as any) === "pending"
+                        ? "bg-amber-600 text-white"
+                        : "bg-amber-100 text-amber-700 hover:bg-amber-200",
+                    )}
+                    title="Drafts prepared by the bookkeeper waiting for José's approval"
+                  >
+                    ⏳ For approval ({all.filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length})
+                  </button>
                 </>
               );
             })()}
@@ -1035,7 +1073,9 @@ export default function Accounting() {
                         ? inv.status === "in_qb"
                         : invoicesView === "trash"
                           ? true
-                          : inv.status !== "in_qb",
+                          : (invoicesView as any) === "pending"
+                            ? inv.status === "draft" && (inv as any).reviewStatus === "pending"
+                            : inv.status !== "in_qb",
                     )
                     .map((inv) => (
                     <tr key={inv.id} className="hover:bg-accent/40 transition-colors">
@@ -1072,6 +1112,20 @@ export default function Accounting() {
                         {inv.dueDate && <> · due {fmtDate(inv.dueDate)}</>}
                       </td>
                       <td className="px-3 py-2.5">
+                        {(inv as any).reviewStatus === "pending" && inv.status !== "quote" ? (
+                          <button
+                            type="button"
+                            onClick={() => askApprove(inv.id)}
+                            title="Prepared by the bookkeeper — José approves it with his PIN to make it official"
+                            className="mb-1 block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 hover:bg-amber-200"
+                          >
+                            ⏳ Approve (José)
+                          </button>
+                        ) : inv.status !== "quote" && (inv as any).approvedBy ? (
+                          <span className="mb-1 block text-[10px] font-semibold text-emerald-700" title={(inv as any).approvedAt ? new Date((inv as any).approvedAt).toLocaleString() : ""}>
+                            ✓ Approved
+                          </span>
+                        ) : null}
                         <Select
                           value={inv.status}
                           onValueChange={(v) =>

@@ -44,6 +44,30 @@ async function getAccountingPin(): Promise<string> {
   return DEFAULT_ACCT_PIN;
 }
 
+// ---- Approval gate (José): second PIN so only he can approve invoices ----
+const APPR_COOKIE = "fts_appr";
+const APPR_PIN_KEY = "approval_pin";
+const DEFAULT_APPR_PIN = "9753";
+
+function apprToken(userId: string | number): string {
+  const secret = process.env.JWT_SECRET || "fts-approval-gate";
+  return crypto.createHmac("sha256", secret).update(`appr:${userId}`).digest("hex");
+}
+
+function isApprovalUnlocked(ctx: { req: any; user: { id: string | number } }): boolean {
+  const raw = ctx.req?.headers?.cookie as string | undefined;
+  if (!raw) return false;
+  const tok = parseCookieHeader(raw)[APPR_COOKIE];
+  return !!tok && tok === apprToken(ctx.user.id);
+}
+
+async function getApprovalPin(): Promise<string> {
+  const pin = await getSetting(APPR_PIN_KEY);
+  if (pin) return pin;
+  await setSetting(APPR_PIN_KEY, DEFAULT_APPR_PIN);
+  return DEFAULT_APPR_PIN;
+}
+
 /** adminProcedure + the accounting PIN cookie — all data procs use this. */
 const accountingProcedure = adminProcedure.use(async ({ ctx, next }) => {
   if (!isUnlocked(ctx as any)) {
@@ -696,6 +720,17 @@ export const accountingRouter = router({
     )
     .mutation(async ({ input }) => {
       const dbx = await db();
+      // Approval gate: a draft can only become official (sent/paid/in QB)
+      // after José approves it.
+      if (input.status === "sent" || input.status === "paid" || input.status === "in_qb") {
+        const [inv] = await dbx.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
+        if (inv && inv.status !== "quote" && inv.reviewStatus !== "approved") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "This invoice needs José's approval before it can become official.",
+          });
+        }
+      }
       await dbx
         .update(invoices)
         .set({ status: input.status })
@@ -759,6 +794,74 @@ export const accountingRouter = router({
       }
       await dbx.delete(invoiceItems).where(eq(invoiceItems.invoiceId, input.id));
       await dbx.delete(invoices).where(eq(invoices.id, input.id));
+      return { ok: true };
+    }),
+
+  /* ============== INVOICE APPROVAL (José — Sofia, Oct 16) ============== */
+
+  approvalStatus: accountingProcedure.query(async ({ ctx }) => {
+    return { unlocked: isApprovalUnlocked(ctx as any) };
+  }),
+
+  /** José enters HIS pin once; the unlock lives in a session cookie (8 h). */
+  approvalUnlock: accountingProcedure
+    .input(z.object({ pin: z.string().regex(/^\d{4,8}$/) }))
+    .mutation(async ({ ctx, input }) => {
+      const expected = await getApprovalPin();
+      if (input.pin !== expected) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Wrong approval PIN." });
+      }
+      (ctx as any).res.cookie(APPR_COOKIE, apprToken(ctx.user.id), {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+        path: "/",
+        maxAge: UNLOCK_HOURS * 3600 * 1000,
+      });
+      return { ok: true as const };
+    }),
+
+  /** Change José's approval PIN (requires his unlock first). */
+  setApprovalPin: accountingProcedure
+    .input(z.object({ pin: z.string().regex(/^\d{4,8}$/) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!isApprovalUnlocked(ctx as any)) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Enter the current approval PIN first." });
+      }
+      await setSetting(APPR_PIN_KEY, input.pin);
+      return { ok: true as const };
+    }),
+
+  approveInvoice: accountingProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!isApprovalUnlocked(ctx as any)) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
+      }
+      const dbx = await db();
+      await dbx
+        .update(invoices)
+        .set({ reviewStatus: "approved", approvedBy: "José", approvedAt: new Date() })
+        .where(eq(invoices.id, input.id));
+      return { ok: true };
+    }),
+
+  /** Send an approved invoice back to pending (same gate). */
+  revokeApproval: accountingProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!isApprovalUnlocked(ctx as any)) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
+      }
+      const dbx = await db();
+      const [inv] = await dbx.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
+      if (inv && inv.status !== "draft" && inv.status !== "quote") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Move it back to draft first." });
+      }
+      await dbx
+        .update(invoices)
+        .set({ reviewStatus: "pending", approvedBy: null, approvedAt: null })
+        .where(eq(invoices.id, input.id));
       return { ok: true };
     }),
 
