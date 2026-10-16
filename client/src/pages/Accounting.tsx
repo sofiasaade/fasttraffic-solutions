@@ -39,6 +39,21 @@ import QuoteTool from "./QuoteTool";
 import { fmtDate, fmtTime12 } from "@/lib/format";
 import { pickPlans, pickPermits, pickOtherDocs } from "@shared/planDocs";
 import { docViewUrl } from "@/lib/docView";
+
+/**
+ * Billing urgency for an unbilled finished job (Sofia, Oct 16 2026):
+ * >15 days since the end date → "late" (red shading); 30+ days → "urgent".
+ * Cancelled jobs (status or the cancel marker people write into the address)
+ * and already-invoiced jobs never flag.
+ */
+function jobEndAge(r: { status?: string | null; endDate?: string | null; jobAddress?: string | null; company?: string | null }, invoiced: boolean): number | null {
+  if (invoiced || !r.endDate) return null;
+  const billableDone = /ready to bill|picked|finished|completed/i.test(r.status ?? "") &&
+    !/cancel|declined/i.test((r.status ?? "") + " " + (r.jobAddress ?? "") + " " + (r.company ?? ""));
+  if (!billableDone) return null;
+  return Math.floor((Date.now() - new Date(String(r.endDate).slice(0, 10) + "T00:00:00").getTime()) / 86400000);
+}
+
 import {
   parseSubmissionType,
   submissionTypeLabel,
@@ -245,7 +260,7 @@ export default function Accounting() {
   // ---- Airtable table (read-only) ----
   const READY = "Job Completed - Ready to Bill";
   const PICKED = "Setup Finished - Picked up";
-  const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "picked">(
+  const [statusFilter, setStatusFilter] = useState<"all" | "ready" | "picked" | "urgent">(
     "all",
   );
   // Second dimension: jobs that already have an FTS invoice vs not.
@@ -261,13 +276,15 @@ export default function Accounting() {
     return {
       ready: rows.filter((r) => r.status === READY).length,
       picked: rows.filter((r) => r.status === PICKED).length,
+      urgent: rows.filter((r) => (jobEndAge(r, invoicedByJob.has(r.id)) ?? 0) >= 30).length,
       all: rows.length,
     };
-  }, [airtableQ.data]);
+  }, [airtableQ.data, invoicedByJob]);
   const airtableRows = useMemo(() => {
     let rows = airtableQ.data ?? [];
     if (statusFilter === "ready") rows = rows.filter((r) => r.status === READY);
     if (statusFilter === "picked") rows = rows.filter((r) => r.status === PICKED);
+    if (statusFilter === "urgent") rows = rows.filter((r) => (jobEndAge(r, invoicedByJob.has(r.id)) ?? 0) >= 30);
     if (invoiceFilter === "invoiced") rows = rows.filter((r) => invoicedByJob.has(r.id));
     if (invoiceFilter === "not") rows = rows.filter((r) => !invoicedByJob.has(r.id));
     const ql = q.trim().toLowerCase();
@@ -829,6 +846,19 @@ export default function Accounting() {
               >
                 Picked up ({airtableQ.isLoading ? "…" : statusCounts.picked})
               </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter("urgent")}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                  statusFilter === "urgent"
+                    ? "bg-red-600 text-white"
+                    : "bg-red-100 text-red-700 hover:bg-red-200",
+                )}
+                title="Finished 30+ days ago and still unbilled"
+              >
+                🔴 Urgent ({airtableQ.isLoading ? "…" : statusCounts.urgent})
+              </button>
               {(() => {
                 const source = airtableQ.data;
                 const inv = (source ?? []).filter((r) => invoicedByJob.has(r.id)).length;
@@ -897,11 +927,7 @@ export default function Accounting() {
                     {listRows.map((r) => {
                       // Sofia (Oct 16): shade jobs finished >15 days ago red;
                       // past a month they get an URGENT tag. Billed jobs are exempt.
-                      const billableDone = /ready to bill|picked|finished|completed/i.test(r.status ?? "") &&
-                        !/cancel|declined/i.test((r.status ?? "") + " " + (r.jobAddress ?? "") + " " + (r.company ?? ""));
-                      const endAge = billableDone && r.endDate && !invoicedByJob.has(r.id)
-                        ? Math.floor((Date.now() - new Date(String(r.endDate).slice(0, 10) + "T00:00:00").getTime()) / 86400000)
-                        : null;
+                      const endAge = jobEndAge(r, invoicedByJob.has(r.id));
                       const isUrgent = endAge != null && endAge >= 30;
                       const isLate = endAge != null && endAge > 15;
                       return (
