@@ -720,9 +720,11 @@ export const accountingRouter = router({
     )
     .mutation(async ({ input }) => {
       const dbx = await db();
-      // Approval gate: a draft can only become official (sent/paid/in QB)
-      // after José approves it.
-      if (input.status === "sent" || input.status === "paid" || input.status === "in_qb") {
+      // Approval gate: a draft can only become official (sent/paid) after
+      // José approves it. "in_qb" is EXEMPT (Sofia, Oct 16): José sometimes
+      // bills directly in QuickBooks, and marking in_qb just records that
+      // fact — it doesn't issue anything from the app.
+      if (input.status === "sent" || input.status === "paid") {
         const [inv] = await dbx.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
         if (inv && inv.status !== "quote" && inv.reviewStatus !== "approved") {
           throw new TRPCError({
