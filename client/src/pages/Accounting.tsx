@@ -635,7 +635,7 @@ export default function Accounting() {
     return { sub, gst, total: sub + gst };
   }, [creating]);
 
-  const submitInvoice = () => {
+  const submitInvoice = (finalize = false) => {
     if (!creating) return;
     const multiPhase = phaseCount > 1;
     const pfx = (it: NewItem) => (multiPhase ? `Phase ${itPhase(it)} — ` : "");
@@ -695,6 +695,7 @@ export default function Accounting() {
       items,
       suggested: lastQuote,
       editFeedback,
+      finalize,
     });
   };
 
@@ -2145,14 +2146,25 @@ export default function Accounting() {
                 <Button variant="outline" onClick={() => setCreating(null)}>
                   Cancel
                 </Button>
+                {editingInvoiceId == null && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => submitInvoice(false)}
+                    disabled={createInvoice.isPending || updateInvoice.isPending}
+                    title="Bookkeeper flow — saves a draft that gets approved before sending"
+                  >
+                    Save draft for approval
+                  </Button>
+                )}
                 <Button
-                  onClick={submitInvoice}
+                  onClick={() => submitInvoice(editingInvoiceId != null ? false : true)}
                   disabled={createInvoice.isPending || updateInvoice.isPending}
+                  title={editingInvoiceId != null ? undefined : "José's flow — creates the final invoice, no extra approval"}
                 >
                   {(createInvoice.isPending || updateInvoice.isPending) && (
                     <Loader2 className="size-4 mr-1 animate-spin" />
                   )}
-                  {editingInvoiceId != null ? "Save changes" : "Create draft for approval"}
+                  {editingInvoiceId != null ? "Save changes" : "Create invoice"}
                 </Button>
               </div>
             </div>

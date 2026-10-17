@@ -582,6 +582,12 @@ export const accountingRouter = router({
           .optional(),
         /** Save as a QUOTE (own FTS-Q number) instead of an invoice. */
         asQuote: z.boolean().optional(),
+        /**
+         * José's direct path (Sofia, Oct 17 2026): create the invoice FINAL
+         * (status "sent") with no extra approval step. Without it the invoice
+         * is a draft for the bookkeeper's approval flow.
+         */
+        finalize: z.boolean().optional(),
         /** José's teaching note: why the final differs from the suggestion. */
         editFeedback: z.string().max(2000).nullable().optional(),
       }),
@@ -607,7 +613,7 @@ export const accountingRouter = router({
         jobAddress: input.jobAddress ?? null,
         issueDate: input.issueDate,
         dueDate: input.dueDate ?? null,
-        status: input.asQuote ? "quote" : "draft",
+        status: input.asQuote ? "quote" : input.finalize ? "sent" : "draft",
         gstRate: input.gstRate,
         notes: input.notes ?? null,
         suggestedJson: input.suggested ? JSON.stringify(input.suggested) : null,
