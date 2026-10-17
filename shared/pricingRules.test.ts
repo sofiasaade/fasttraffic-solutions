@@ -443,3 +443,25 @@ describe("service line order (Sofia, Sep 8 2026)", () => {
     expect(stock).toBeLessThan(setup);
   });
 });
+
+
+describe("ALSA client rules (Sofia, Oct 16 2026)", () => {
+  it("bills setup at $690 base PER DAY, replacing the impact matrix", () => {
+    const q = buildQuote({ ...baseInput(), company: "ALSA Road Construction Ltd.", days: 20, impact: "🔴 High" });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(69000);
+    expect(setup?.quantity).toBe(20);
+    expect(setup?.description).toMatch(/ALSA base rate/);
+  });
+  it("bills ALSA setup per day even for single/24h setups", () => {
+    const q = buildQuote({ ...baseInput(), company: "ALSA Road Construction", days: 7, setupDuration: "24 Hour Set Up" });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(69000);
+    expect(setup?.quantity).toBe(7);
+  });
+  it("does not touch other clients", () => {
+    const q = buildQuote({ ...baseInput(), company: "Kobi Construction LTD", impact: "🟢 Low" });
+    const setup = q.lines.find((l) => l.description.startsWith("Setup fee"));
+    expect(setup?.unitCents).toBe(6 * 9000);
+  });
+});

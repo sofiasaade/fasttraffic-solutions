@@ -95,6 +95,15 @@ const NIGHT_PREMIUM = 20000;
  * max 10 señales"); more than 10 with unknown impact uses the client card.
  */
 const BASIC_MAX_SIGNS = 10;
+
+/**
+ * ALSA (Sofia, Oct 16 2026): negotiated client rate — the setup bills at a
+ * $690 BASE PER DAY (replaces the impact matrix), and equipment rental runs
+ * from the first day to the last day inclusive (the caller passes span days).
+ */
+export const ALSA_SETUP_DAY_CENTS = 69000;
+export const isAlsaClient = (company: string | null | undefined) =>
+  /\balsa\b/i.test(company ?? "");
 const BASIC_HOURLY_CENTS = 9000;
 const IMPACT_HOURS = {
   basic: 5,
@@ -506,6 +515,25 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   // ---- Setup fee ----
   if (billSetup) {
   const night = isNight(input.setupDuration);
+  if (isAlsaClient(input.company)) {
+    // ALSA: $690 base per day, every day of the job.
+    let alsaSetup = ALSA_SETUP_DAY_CENTS;
+    let alsaWhy = "ALSA base rate $690/day";
+    if (night) {
+      alsaSetup += NIGHT_PREMIUM;
+      alsaWhy += " · night premium";
+    }
+    const alsaQty = Math.max(1, input.days);
+    lines.push({
+      description: `Setup fee — ${alsaWhy}`,
+      quantity: alsaQty,
+      unitCents: alsaSetup,
+      section: "service",
+    });
+    reasons.push(
+      `Setup ${money(alsaSetup)} × ${alsaQty} day(s) — ALSA negotiated base, bills every day first→last`,
+    );
+  } else {
   let setup: number | null = null;
   let setupWhy = "";
 
@@ -559,6 +587,7 @@ export function buildQuote(input: QuoteInput): QuoteResult {
   reasons.push(
     `Setup ${money(setup)} × ${setupQty}: ${setupWhy}${setupQty > 1 ? " — daily setup bills each day" : ""}`,
   );
+  }
   } // billSetup
 
   // ---- Equipment rental — per-category breakdown when we parsed the field ----

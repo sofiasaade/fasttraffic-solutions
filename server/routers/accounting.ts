@@ -177,6 +177,18 @@ export const accountingRouter = router({
         days = Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
       }
       if (!days) days = 1;
+      // ALSA (Sofia, Oct 16 2026): rental and the daily setup run from the
+      // FIRST day to the LAST day inclusive — the real date span wins over
+      // Airtable's "Number of Days" when it is longer.
+      {
+        const { isAlsaClient } = await import("../../shared/pricingRules");
+        if (isAlsaClient(job.company) && job.startDate && job.endDate) {
+          const s0 = new Date(job.startDate.slice(0, 10) + "T00:00:00");
+          const e0 = new Date(job.endDate.slice(0, 10) + "T00:00:00");
+          const span = Math.max(1, Math.round((e0.getTime() - s0.getTime()) / 86400000) + 1);
+          if (span > days) days = span;
+        }
+      }
 
       const start = job.startDate
         ? new Date(job.startDate.slice(0, 10) + "T00:00:00")
