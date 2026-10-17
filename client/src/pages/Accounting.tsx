@@ -276,7 +276,7 @@ export default function Accounting() {
     return {
       ready: rows.filter((r) => r.status === READY).length,
       picked: rows.filter((r) => r.status === PICKED).length,
-      urgent: rows.filter((r) => (jobEndAge(r, invoicedByJob.has(r.id)) ?? 0) >= 30).length,
+      urgent: rows.filter((r) => (jobEndAge(r, invoicedByJob.has(r.id)) ?? 0) > 15).length,
       all: rows.length,
     };
   }, [airtableQ.data, invoicedByJob]);
@@ -284,7 +284,7 @@ export default function Accounting() {
     let rows = airtableQ.data ?? [];
     if (statusFilter === "ready") rows = rows.filter((r) => r.status === READY);
     if (statusFilter === "picked") rows = rows.filter((r) => r.status === PICKED);
-    if (statusFilter === "urgent") rows = rows.filter((r) => (jobEndAge(r, invoicedByJob.has(r.id)) ?? 0) >= 30);
+    if (statusFilter === "urgent") rows = rows.filter((r) => (jobEndAge(r, invoicedByJob.has(r.id)) ?? 0) > 15);
     if (invoiceFilter === "invoiced") rows = rows.filter((r) => invoicedByJob.has(r.id));
     if (invoiceFilter === "not") rows = rows.filter((r) => !invoicedByJob.has(r.id));
     const ql = q.trim().toLowerCase();
@@ -855,9 +855,9 @@ export default function Accounting() {
                     ? "bg-red-600 text-white"
                     : "bg-red-100 text-red-700 hover:bg-red-200",
                 )}
-                title="Finished 30+ days ago and still unbilled"
+                title="Finished 15+ days ago and still unbilled — URGENT tags at 30+"
               >
-                🔴 Urgent ({airtableQ.isLoading ? "…" : statusCounts.urgent})
+                🔴 Urgent / late ({airtableQ.isLoading ? "…" : statusCounts.urgent})
               </button>
               {(() => {
                 const source = airtableQ.data;
