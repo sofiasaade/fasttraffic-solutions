@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -351,6 +351,14 @@ export default function Accounting() {
   const [editingInvoiceId, setEditingInvoiceId] = useState<number | null>(null);
   // Rental discount percentage (open — any %, default 25).
   const [discountPct, setDiscountPct] = useState("25");
+  // Teach-the-estimator (Sofia, Oct 16 2026): José explains WHY he edited the
+  // suggestion — one-tap reasons + optional note, saved with the invoice.
+  const [teachReasons, setTeachReasons] = useState<string[]>([]);
+  const [teachNote, setTeachNote] = useState("");
+  useEffect(() => {
+    if (!creating) { setTeachReasons([]); setTeachNote(""); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!creating]);
   // Out-of-city-limits fee — editable percentage of everything billed so far.
   const [ootPct, setOotPct] = useState("");
   // Multi-phase invoices: the editor shows ONE phase at a time; the saved
@@ -658,6 +666,10 @@ export default function Accounting() {
       .filter((x): x is { description: string; quantity: number; unitCents: number } => !!x);
     if (!creating.clientName.trim()) return toast.error("Client name is required");
     if (items.length === 0) return toast.error("Add at least one line with an amount");
+    const editFeedback =
+      teachReasons.length || teachNote.trim()
+        ? JSON.stringify({ reasons: teachReasons, note: teachNote.trim() })
+        : null;
     if (editingInvoiceId != null) {
       updateInvoice.mutate({
         id: editingInvoiceId,
@@ -668,6 +680,7 @@ export default function Accounting() {
         gstRate: Number(creating.gstRate) || 0,
         notes: creating.notes.trim() || null,
         items,
+        editFeedback,
       });
       return;
     }
@@ -681,6 +694,7 @@ export default function Accounting() {
       notes: creating.notes.trim() || null,
       items,
       suggested: lastQuote,
+      editFeedback,
     });
   };
 
@@ -2088,6 +2102,43 @@ export default function Accounting() {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Teach the estimator — feeds the billing-rules training loop */}
+              <div className={cn(
+                "rounded-xl border p-3 space-y-2",
+                (() => {
+                  const sug = (lastQuote ?? []).reduce((n: number, l: any) => n + (l.unitCents ?? 0) * (l.quantity ?? 1), 0);
+                  return sug > 0 && Math.abs(creatingTotals.sub - sug) / sug > 0.1
+                    ? "border-amber-300 bg-amber-50/60"
+                    : "border-border bg-muted/30";
+                })(),
+              )}>
+                <div className="text-xs font-bold flex items-center gap-1.5">
+                  📚 Teach the estimator
+                  {(() => {
+                    const sug = (lastQuote ?? []).reduce((n: number, l: any) => n + (l.unitCents ?? 0) * (l.quantity ?? 1), 0);
+                    if (sug > 0 && Math.abs(creatingTotals.sub - sug) / sug > 0.1) {
+                      const pct = Math.round(((creatingTotals.sub - sug) / sug) * 100);
+                      return <span className="font-semibold text-amber-700">— your total is {pct > 0 ? "+" : ""}{pct}% vs the suggestion. Why? One tap teaches the rules:</span>;
+                    }
+                    return <span className="font-normal text-muted-foreground">— changed something from the suggestion? Tell Claude why:</span>;
+                  })()}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {["More days than Airtable", "Extra visit / move", "Special client rate", "Plan only billed", "Quantities from the field", "Permit cost differs", "Extra equipment", "Discount agreed"].map((r) => (
+                    <button key={r} type="button"
+                      onClick={() => setTeachReasons((xs) => xs.includes(r) ? xs.filter((x) => x !== r) : [...xs, r])}
+                      className={cn("rounded-full px-2.5 py-1 text-[11px] font-medium border transition-colors",
+                        teachReasons.includes(r)
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-card text-muted-foreground border-border hover:border-primary/50")}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <Input value={teachNote} placeholder="Optional note — e.g. 'client kept signs over the weekend, billed 2 extra days'"
+                  onChange={(e) => setTeachNote(e.target.value)} className="h-8 text-xs" />
               </div>
 
               <div className="flex justify-end gap-2 pt-1">

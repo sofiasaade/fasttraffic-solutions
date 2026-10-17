@@ -693,6 +693,12 @@ export const invoices = mysqlTable("invoices", {
   approvedAt: timestamp("approvedAt"),
   /** José's note when he returns a draft to the bookkeeper for fixes. */
   reviewNote: varchar("reviewNote", { length: 300 }),
+  /**
+   * José's teaching note (Sofia, Oct 16 2026): JSON {reasons: string[], note}
+   * explaining WHY the final invoice differs from the auto-suggestion — read
+   * by the billing-rules training loop.
+   */
+  editFeedback: text("editFeedback"),
   /** Soft delete — trashed invoices are restorable until destroyed for real. */
   deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

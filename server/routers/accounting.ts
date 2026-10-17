@@ -582,6 +582,8 @@ export const accountingRouter = router({
           .optional(),
         /** Save as a QUOTE (own FTS-Q number) instead of an invoice. */
         asQuote: z.boolean().optional(),
+        /** José's teaching note: why the final differs from the suggestion. */
+        editFeedback: z.string().max(2000).nullable().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -609,6 +611,7 @@ export const accountingRouter = router({
         gstRate: input.gstRate,
         notes: input.notes ?? null,
         suggestedJson: input.suggested ? JSON.stringify(input.suggested) : null,
+        editFeedback: input.editFeedback ?? null,
         ...totals,
       });
       const invoiceId = (res as any).insertId as number;
@@ -667,6 +670,7 @@ export const accountingRouter = router({
         gstRate: z.number().min(0).max(30).default(5),
         notes: z.string().nullable().optional(),
         items: z.array(itemInput).min(1),
+        editFeedback: z.string().max(2000).nullable().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -693,6 +697,7 @@ export const accountingRouter = router({
           dueDate: input.dueDate ?? null,
           gstRate: input.gstRate,
           notes: input.notes ?? null,
+          editFeedback: input.editFeedback ?? null,
           ...totals,
         })
         .where(eq(invoices.id, input.id));
