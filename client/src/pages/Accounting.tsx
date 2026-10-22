@@ -1256,7 +1256,7 @@ export default function Accounting() {
                         {inv.dueDate && <> · due {fmtDate(inv.dueDate)}</>}
                       </td>
                       <td className="px-3 py-2.5">
-                        {(inv as any).reviewStatus === "pending" && inv.status !== "quote" ? (
+                        {(inv as any).reviewStatus === "pending" && inv.status === "draft" ? (
                           (inv as any).reviewNote ? (
                             <span className="mb-1 block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700" title={(inv as any).reviewNote}>
                               ↩ Returned: {(inv as any).reviewNote.slice(0, 24)}…
@@ -1270,7 +1270,7 @@ export default function Accounting() {
                           <span className="mb-1 block rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700" title={(inv as any).approvedAt ? "Approved " + new Date((inv as any).approvedAt).toLocaleString() : ""}>
                             ✓ Ready to bill
                           </span>
-                        ) : inv.status !== "quote" && (inv as any).approvedBy ? (
+                        ) : inv.status !== "quote" && inv.status !== "in_qb" && (inv as any).approvedBy ? (
                           <span className="mb-1 block text-[10px] font-semibold text-emerald-700">✓ Approved</span>
                         ) : null}
                         <Select

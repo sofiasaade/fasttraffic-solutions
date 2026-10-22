@@ -756,9 +756,16 @@ export const accountingRouter = router({
           });
         }
       }
+      // Sofia (Oct 22): "in QB" means the bookkeeper received confirmation the
+      // invoice went (or is going) to the client — a final, confirmed state.
+      // Record it as approved so nothing shows as waiting for José.
+      const extra =
+        input.status === "in_qb"
+          ? { reviewStatus: "approved", approvedBy: "Confirmed in QB", approvedAt: new Date(), reviewNote: null }
+          : {};
       await dbx
         .update(invoices)
-        .set({ status: input.status })
+        .set({ status: input.status, ...extra })
         .where(eq(invoices.id, input.id));
       return { ok: true };
     }),
