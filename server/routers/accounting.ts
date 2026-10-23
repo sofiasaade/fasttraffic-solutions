@@ -618,7 +618,7 @@ export const accountingRouter = router({
         jobAddress: input.jobAddress ?? null,
         issueDate: input.issueDate,
         dueDate: input.dueDate ?? null,
-        status: input.asQuote ? "quote" : input.finalize ? "sent" : "draft",
+        status: input.asQuote ? "quote" : "draft",
         ...(input.finalize && !input.asQuote
           ? { reviewStatus: "approved", approvedBy: "José", approvedAt: new Date() }
           : {}),

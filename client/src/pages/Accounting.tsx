@@ -1122,13 +1122,78 @@ export default function Accounting() {
                     )}
                     title="Drafts prepared by the bookkeeper waiting for José's approval"
                   >
-                    ⏳ José — approvals ({all.filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length})
+                    ⏳ 1 · For José ({all.filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("julie" as any)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      (invoicesView as any) === "julie"
+                        ? "bg-sky-600 text-white"
+                        : "bg-sky-100 text-sky-700 hover:bg-sky-200",
+                    )}
+                    title="Approved invoices waiting for Julie to enter them in QuickBooks"
+                  >
+                    📋 2 · For Julie → QB ({all.filter((i: any) => !i.deletedAt && i.reviewStatus === "approved" && (i.status === "draft" || i.status === "sent")).length})
                   </button>
                 </>
               );
             })()}
           </div>
         {showCollections && <CollectionsQueue q={collectionsQ} />}
+        {(invoicesView as any) === "julie" && (
+          <div className="rounded-2xl border border-sky-300 bg-card overflow-hidden">
+            <div className="px-4 py-2.5 bg-sky-600 text-white text-[12px] font-bold uppercase tracking-wider">
+              Julie's queue — approved invoices to enter in QuickBooks and send to the client
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-muted-foreground border-b">
+                  <th className="text-left px-4 py-2">Invoice</th>
+                  <th className="text-left px-2">Client</th>
+                  <th className="text-right px-2">Total</th>
+                  <th className="text-left px-2">Approved</th>
+                  <th className="px-3 text-right">QuickBooks</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(invoicesQ.data ?? [])
+                  .filter((i: any) => !i.deletedAt && i.reviewStatus === "approved" && (i.status === "draft" || i.status === "sent"))
+                  .map((inv: any) => (
+                    <tr key={inv.id} className="hover:bg-sky-50/50">
+                      <td className="px-4 py-2 font-semibold tabular-nums">{inv.invoiceNumber}</td>
+                      <td className="px-2 font-medium">{inv.clientName}</td>
+                      <td className="px-2 text-right tabular-nums font-semibold">{money(inv.totalCents)}</td>
+                      <td className="px-2 text-xs text-muted-foreground">
+                        {inv.approvedBy ?? ""}{inv.approvedAt ? " · " + fmtDate(String(inv.approvedAt).slice(0, 10)) : ""}
+                      </td>
+                      <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                        <Button size="sm" variant="outline" className="h-7 text-xs mr-1" onClick={() => openEditInvoice(inv)}>
+                          Open
+                        </Button>
+                        <Button size="sm" className="h-7 text-xs bg-teal-600 hover:bg-teal-700"
+                          disabled={setStatus.isPending || setQbNumber.isPending}
+                          onClick={() => {
+                            const qb = window.prompt("QuickBooks invoice number (confirmed sent to the client):", inv.qbNumber ?? "");
+                            if (qb === null) return;
+                            if (qb.trim()) setQbNumber.mutate({ id: inv.id, qbNumber: qb.trim() });
+                            setStatus.mutate({ id: inv.id, status: "in_qb" });
+                          }}>
+                          ✓ In QB
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                {(invoicesQ.data ?? []).filter((i: any) => !i.deletedAt && i.reviewStatus === "approved" && (i.status === "draft" || i.status === "sent")).length === 0 && (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    Nothing waiting — everything approved is already in QuickBooks ✔
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
         {(invoicesView as any) === "pending" && (
           <div className="rounded-2xl border border-amber-300 bg-card overflow-hidden">
             <div className="px-4 py-2.5 bg-amber-600 text-white text-[12px] font-bold uppercase tracking-wider">
@@ -2173,7 +2238,7 @@ export default function Accounting() {
                     submitInvoice(true);
                   }}
                   disabled={createInvoice.isPending || updateInvoice.isPending}
-                  title={editingInvoiceId != null ? undefined : "José's flow — his PIN, creates the final invoice directly"}
+                  title={editingInvoiceId != null ? undefined : "José's flow — his PIN; the approved invoice lands in Julie's → QB queue"}
                 >
                   {(createInvoice.isPending || updateInvoice.isPending) && (
                     <Loader2 className="size-4 mr-1 animate-spin" />
