@@ -2157,9 +2157,23 @@ export default function Accounting() {
                   </Button>
                 )}
                 <Button
-                  onClick={() => submitInvoice(editingInvoiceId != null ? false : true)}
+                  onClick={async () => {
+                    if (editingInvoiceId != null) return submitInvoice(false);
+                    if (!approvalQ.data?.unlocked) {
+                      const pin = window.prompt("José's approval PIN (Create invoice is José's button):");
+                      if (!pin) return;
+                      try {
+                        await approvalUnlock.mutateAsync({ pin: pin.trim() });
+                        approvalQ.refetch();
+                      } catch (e: any) {
+                        toast.error(e.message ?? "Wrong approval PIN.");
+                        return;
+                      }
+                    }
+                    submitInvoice(true);
+                  }}
                   disabled={createInvoice.isPending || updateInvoice.isPending}
-                  title={editingInvoiceId != null ? undefined : "José's flow — creates the final invoice, no extra approval"}
+                  title={editingInvoiceId != null ? undefined : "José's flow — his PIN, creates the final invoice directly"}
                 >
                   {(createInvoice.isPending || updateInvoice.isPending) && (
                     <Loader2 className="size-4 mr-1 animate-spin" />
