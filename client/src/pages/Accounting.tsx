@@ -166,22 +166,7 @@ export default function Accounting() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const askApprove = async (id: number) => {
-    let unlocked = approvalQ.data?.unlocked;
-    if (!unlocked) {
-      const pin = window.prompt("José's approval PIN:");
-      if (!pin) return;
-      try {
-        await approvalUnlock.mutateAsync({ pin: pin.trim() });
-        unlocked = true;
-        approvalQ.refetch();
-      } catch (e: any) {
-        toast.error(e.message ?? "Wrong approval PIN.");
-        return;
-      }
-    }
-    approve.mutate({ id });
-  };
+  const askApprove = (id: number) => approve.mutate({ id });
   const returnInv = trpc.accounting.returnInvoice.useMutation({
     onSuccess: () => {
       utils.accounting.listInvoices.invalidate();
@@ -189,19 +174,7 @@ export default function Accounting() {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const askReturn = async (id: number) => {
-    let unlocked = approvalQ.data?.unlocked;
-    if (!unlocked) {
-      const pin = window.prompt("José's approval PIN:");
-      if (!pin) return;
-      try {
-        await approvalUnlock.mutateAsync({ pin: pin.trim() });
-        approvalQ.refetch();
-      } catch (e: any) {
-        toast.error(e.message ?? "Wrong approval PIN.");
-        return;
-      }
-    }
+  const askReturn = (id: number) => {
     const note = window.prompt("What should the bookkeeper fix?");
     if (!note) return;
     returnInv.mutate({ id, note: note.trim().slice(0, 300) });
@@ -2225,23 +2198,9 @@ Drafts to approve — the bookkeeper prepared these; José reviews with his PIN
                   </Button>
                 )}
                 <Button
-                  onClick={async () => {
-                    if (editingInvoiceId != null) return submitInvoice(false);
-                    if (!approvalQ.data?.unlocked) {
-                      const pin = window.prompt("José's approval PIN (Create invoice is José's button):");
-                      if (!pin) return;
-                      try {
-                        await approvalUnlock.mutateAsync({ pin: pin.trim() });
-                        approvalQ.refetch();
-                      } catch (e: any) {
-                        toast.error(e.message ?? "Wrong approval PIN.");
-                        return;
-                      }
-                    }
-                    submitInvoice(true);
-                  }}
+                  onClick={() => submitInvoice(editingInvoiceId != null ? false : true)}
                   disabled={createInvoice.isPending || updateInvoice.isPending}
-                  title={editingInvoiceId != null ? undefined : "José's flow — his PIN; the approved invoice lands in Julie's → QB queue"}
+                  title={editingInvoiceId != null ? undefined : "José's button — the invoice lands in the Approved by José folder"}
                 >
                   {(createInvoice.isPending || updateInvoice.isPending) && (
                     <Loader2 className="size-4 mr-1 animate-spin" />

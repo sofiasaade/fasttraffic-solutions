@@ -594,11 +594,8 @@ export const accountingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const dbx = await db();
-      // "Create invoice" is José's button (Sofia, Oct 22): finalizing requires
-      // HIS approval PIN unlock — the bookkeeper's path is the draft button.
-      if (input.finalize && !input.asQuote && !isApprovalUnlocked(ctx as any)) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
-      }
+      // Sofia (Oct 23): the approval PIN was removed — "Create invoice" goes
+      // straight to the Approved-by-José folder with no extra key.
       // Quotes and invoices number independently: FTS-Q-0001 / FTS-INV-0001.
       const prefix = input.asQuote ? "FTS-Q-" : "FTS-INV-";
       const all = await dbx
@@ -874,10 +871,7 @@ export const accountingRouter = router({
 
   approveInvoice: accountingProcedure
     .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      if (!isApprovalUnlocked(ctx as any)) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
-      }
+    .mutation(async ({ input }) => {
       const dbx = await db();
       await dbx
         .update(invoices)
@@ -889,10 +883,7 @@ export const accountingRouter = router({
   /** Send an approved invoice back to pending (same gate). */
   revokeApproval: accountingProcedure
     .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ ctx, input }) => {
-      if (!isApprovalUnlocked(ctx as any)) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
-      }
+    .mutation(async ({ input }) => {
       const dbx = await db();
       const [inv] = await dbx.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
       if (inv && inv.status !== "draft" && inv.status !== "quote") {
@@ -908,10 +899,7 @@ export const accountingRouter = router({
   /** José sends a draft back to the bookkeeper with a note (same gate). */
   returnInvoice: accountingProcedure
     .input(z.object({ id: z.number().int(), note: z.string().min(1).max(300) }))
-    .mutation(async ({ ctx, input }) => {
-      if (!isApprovalUnlocked(ctx as any)) {
-        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "APPROVAL_PIN_REQUIRED" });
-      }
+    .mutation(async ({ input }) => {
       const dbx = await db();
       await dbx
         .update(invoices)
