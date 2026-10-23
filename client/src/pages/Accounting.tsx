@@ -1063,16 +1063,32 @@ export default function Accounting() {
                 <>
                   <button
                     type="button"
-                    onClick={() => setInvoicesView("active")}
+                    onClick={() => setInvoicesView("pending" as any)}
                     className={cn(
                       "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
-                      invoicesView === "active"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:bg-accent",
+                      (invoicesView as any) === "pending"
+                        ? "bg-amber-600 text-white"
+                        : "bg-amber-100 text-amber-700 hover:bg-amber-200",
                     )}
+                    title="Bookkeeper's drafts waiting for José's approval"
                   >
-                    Active ({all.length - qbN})
+                    ⏳ Drafts to approve ({all.filter((i: any) => i.status === "draft" && i.reviewStatus === "pending").length})
                   </button>
+                  <span className="text-muted-foreground text-xs">→</span>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("julie" as any)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      (invoicesView as any) === "julie"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
+                    )}
+                    title="Approved by José (queue or created by him) — the bookkeeper enters these in QuickBooks"
+                  >
+                    ✅ Approved by José ({all.filter((i: any) => i.reviewStatus === "approved" && (i.status === "draft" || i.status === "sent")).length})
+                  </button>
+                  <span className="text-muted-foreground text-xs">→</span>
                   <button
                     type="button"
                     onClick={() => setInvoicesView("qb")}
@@ -1083,59 +1099,46 @@ export default function Accounting() {
                         : "bg-teal-100 text-teal-700 hover:bg-teal-200",
                     )}
                   >
-                    ✓ In QuickBooks ({qbN})
+                    ✓ In QB ({qbN})
+                  </button>
+                  <span className="mx-1 text-muted-foreground">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setInvoicesView("active")}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      invoicesView === "active"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-accent",
+                    )}
+                  >
+                    All ({all.length - qbN})
                   </button>
                   <button
                     type="button"
                     onClick={() => setInvoicesView("trash")}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      "rounded-full px-2.5 py-1.5 text-xs font-semibold tabular-nums transition-colors",
                       invoicesView === "trash"
                         ? "bg-slate-600 text-white"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200",
                     )}
                     title="Deleted invoices — restorable any time"
                   >
-                    🗑 Trash ({trashN})
+                    🗑 {trashN > 0 ? trashN : ""}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowCollections((v) => !v)}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
+                      "rounded-full px-2.5 py-1.5 text-xs font-semibold tabular-nums transition-colors",
                       showCollections
-                        ? "bg-amber-600 text-white"
-                        : "bg-amber-100 text-amber-700 hover:bg-amber-200",
+                        ? "bg-amber-700 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200",
                     )}
                     title="Collections follow-up queue"
                   >
-                    📞 Collections ({(collectionsQ.data ?? []).filter((r: any) => r.request?.workStatus === "requested" || r.request?.workStatus === "in_progress").length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInvoicesView("pending" as any)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
-                      (invoicesView as any) === "pending"
-                        ? "bg-amber-600 text-white"
-                        : "bg-amber-100 text-amber-700 hover:bg-amber-200",
-                    )}
-                    title="Drafts prepared by the bookkeeper waiting for José's approval"
-                  >
-                    ⏳ 1 · For José ({all.filter((i: any) => !i.deletedAt && i.status === "draft" && i.reviewStatus === "pending").length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setInvoicesView("julie" as any)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold tabular-nums transition-colors",
-                      (invoicesView as any) === "julie"
-                        ? "bg-sky-600 text-white"
-                        : "bg-sky-100 text-sky-700 hover:bg-sky-200",
-                    )}
-                    title="Approved invoices waiting for Julie to enter them in QuickBooks"
-                  >
-                    📋 2 · For Julie → QB ({all.filter((i: any) => !i.deletedAt && i.reviewStatus === "approved" && (i.status === "draft" || i.status === "sent")).length})
+                    📞
                   </button>
                 </>
               );
@@ -1145,7 +1148,7 @@ export default function Accounting() {
         {(invoicesView as any) === "julie" && (
           <div className="rounded-2xl border border-sky-300 bg-card overflow-hidden">
             <div className="px-4 py-2.5 bg-sky-600 text-white text-[12px] font-bold uppercase tracking-wider">
-              Julie's queue — approved invoices to enter in QuickBooks and send to the client
+Approved by José — ready for the bookkeeper to enter in QuickBooks and mark ✓ In QB
             </div>
             <table className="w-full text-sm">
               <thead>
@@ -1197,7 +1200,7 @@ export default function Accounting() {
         {(invoicesView as any) === "pending" && (
           <div className="rounded-2xl border border-amber-300 bg-card overflow-hidden">
             <div className="px-4 py-2.5 bg-amber-600 text-white text-[12px] font-bold uppercase tracking-wider">
-              José's approval queue — drafts prepared by the bookkeeper, all in one place
+Drafts to approve — the bookkeeper prepared these; José reviews with his PIN
             </div>
             <table className="w-full text-sm">
               <thead>
